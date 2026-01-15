@@ -88,13 +88,13 @@ export async function removeStudent(prevState: any, formData: FormData): Promise
 
     // Verify Auth
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: "Unauthorized" }
+    if (!user) return { success: false, error: "Unauthorized" }
 
     const studentId = formData.get('studentId') as string
     const classroomId = formData.get('classroomId') as string
 
     const validated = RemoveStudentSchema.safeParse({ studentId, classroomId })
-    if (!validated.success) return { error: "Invalid data" }
+    if (!validated.success) return { success: false, error: "Invalid data" }
 
     // Verify teacher owns the classroom
     const { data: classroom } = await supabase
@@ -104,7 +104,7 @@ export async function removeStudent(prevState: any, formData: FormData): Promise
         .single()
 
     if (!classroom || classroom.teacher_id !== user.id) {
-        return { error: "Unauthorized to manage this classroom" }
+        return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
     // Remove enrollment
@@ -115,9 +115,56 @@ export async function removeStudent(prevState: any, formData: FormData): Promise
 
     if (error) {
         console.error(error)
-        return { error: 'Failed to remove student' }
+        return { success: false, error: 'Failed to remove student' }
     }
 
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
+}
+
+const EnrollStudentSchema = z.object({
+    studentId: z.string().uuid(),
+    classroomId: z.string().uuid(),
+})
+
+export async function enrollStudent(studentId: string, classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = EnrollStudentSchema.safeParse({ studentId, classroomId })
+    if (!validated.success) return { success: false, error: "Invalid data" }
+
+    const { data, error } = await supabase.rpc('enroll_student', {
+        p_student_id: studentId,
+        p_classroom_id: classroomId
+    })
+
+    if (error) return { success: false, error: error.message }
+
+    const result = data && data[0]
+
+    if (result && !result.success) {
+        return { success: false, error: result.message }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true, message: result?.message }
+}
+
+export async function getUnassignedStudents() {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase.rpc('get_unassigned_students')
+
+    if (error) {
+        console.error('Error fetching unassigned students:', error)
+        return []
+    }
+
+    return data
 }
