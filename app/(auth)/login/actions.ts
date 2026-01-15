@@ -67,3 +67,10 @@ export async function signup(formData: FormData) {
     revalidatePath('/', 'layout')
     redirect('/teacher') // Default redirect
 }
+
+export async function logout() {
+    const supabase = await createClient()
+    await supabase.auth.signOut()
+    revalidatePath('/', 'layout')
+    redirect('/login')
+}

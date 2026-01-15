@@ -33,7 +33,36 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // Protected routes pattern
+    const isProtectedRoute = request.nextUrl.pathname.startsWith('/teacher') || request.nextUrl.pathname.startsWith('/student')
+    const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
+
+    // 1. If user is NOT logged in and tries to access a protected route -> Redirect to Login
+    if (!user && isProtectedRoute) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        return NextResponse.redirect(url)
+    }
+
+    // 2. If user IS logged in and tries to access login page -> Redirect to Dashboard (defaulting to /teacher for now)
+    if (user && isAuthRoute) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/teacher'
+        return NextResponse.redirect(url)
+    }
+
+    // 3. Root Path Redirect: / -> /login or /teacher
+    if (request.nextUrl.pathname === '/') {
+        const url = request.nextUrl.clone()
+        if (user) {
+            url.pathname = '/teacher' // Default to teacher for now
+        } else {
+            url.pathname = '/login'
+        }
+        return NextResponse.redirect(url)
+    }
 
     return response
 }

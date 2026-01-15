@@ -51,6 +51,18 @@ export default function LoginPage() {
                             <Input id="password" name="password" type="password" required />
                         </div>
 
+                        {isLogin && (
+                            <div className="flex items-center space-x-2">
+                                <input type="checkbox" id="remember" name="remember" className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                                <label
+                                    htmlFor="remember"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    Remember me
+                                </label>
+                            </div>
+                        )}
+
                         {!isLogin && (
                             <div className="grid gap-2">
                                 <Label>I am a...</Label>
