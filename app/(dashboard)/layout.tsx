@@ -1,8 +1,22 @@
-import { Atom, BookOpen, Home, Settings, User } from "lucide-react";
+import { Atom, BookOpen, Home, Shield, User } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
+import { createClient } from "@/lib/supabase/server";
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    let isAdmin = false;
+    if (user) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single();
+        isAdmin = !!profile?.is_admin;
+    }
+
     return (
         <div className="flex min-h-screen flex-col md:flex-row bg-background">
             {/* Desktop Sidebar */}
@@ -17,8 +31,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <nav className="flex flex-1 flex-col gap-2">
                     <NavItem href="/student" icon={Home} label="Dashboard" />
                     <NavItem href="/student/courses" icon={BookOpen} label="Courses" />
-                    <NavItem href="/student/profile" icon={User} label="Profile" />
-                    <NavItem href="/student/settings" icon={Settings} label="Settings" />
+                    <NavItem href="/profile" icon={User} label="Profile" />
+                    {isAdmin && <NavItem href="/admin" icon={Shield} label="Admin" />}
                 </nav>
 
                 <div className="mt-auto">
@@ -37,7 +51,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-border/40 bg-background/80 px-4 backdrop-blur-md md:hidden">
                 <MobileNavItem href="/student" icon={Home} label="Home" />
                 <MobileNavItem href="/student/courses" icon={BookOpen} label="Courses" />
-                <MobileNavItem href="/student/profile" icon={User} label="Profile" />
+                <MobileNavItem href="/profile" icon={User} label="Profile" />
+                {isAdmin && <MobileNavItem href="/admin" icon={Shield} label="Admin" />}
             </nav>
         </div>
     );

@@ -1,6 +1,6 @@
 import { adminGetAllUsers } from "./actions"
 import { UserList } from "./UserList"
-import { LogoutButton } from "@/components/logout-button"
+
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -28,7 +28,6 @@ export default async function AdminDashboard() {
                             </Link>
                         </Button>
                         <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
-                        <LogoutButton />
                     </div>
                     <p className="text-muted-foreground mt-1">Manage users and platform settings.</p>
                 </div>

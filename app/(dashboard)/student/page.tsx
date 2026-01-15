@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { LogoutButton } from "@/components/logout-button"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen } from "lucide-react"
@@ -34,7 +34,7 @@ export default async function StudentDashboard() {
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <LogoutButton />
+                        {/* Logout moved to profile */}
                     </div>
                 </div>
 

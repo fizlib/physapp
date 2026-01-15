@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { LogoutButton } from "@/components/logout-button"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, Users, Settings } from "lucide-react"
@@ -49,13 +49,6 @@ export default async function TeacherDashboard() {
                             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                                 Instructor Hub
                             </h1>
-                            {profile?.is_admin && (
-                                <Link href="/admin">
-                                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/20">
-                                        Admin
-                                    </span>
-                                </Link>
-                            )}
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">
                             Manage your classrooms, assignments, and students.
@@ -90,7 +83,6 @@ export default async function TeacherDashboard() {
                                 </form>
                             </DialogContent>
                         </Dialog>
-                        <LogoutButton />
                     </div>
                 </div>
 
