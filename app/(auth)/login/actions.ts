@@ -31,8 +31,26 @@ export async function login(formData: FormData) {
         return { error: error.message }
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        if (profile?.role === 'student') {
+            revalidatePath('/', 'layout')
+            redirect('/student')
+        } else if (profile?.role === 'teacher') {
+            revalidatePath('/', 'layout')
+            redirect('/teacher')
+        }
+    }
+
     revalidatePath('/', 'layout')
-    redirect('/teacher') // Default redirect, can be logic based in future
+    redirect('/teacher') // Fallback
 }
 
 export async function signup(formData: FormData) {
@@ -65,7 +83,12 @@ export async function signup(formData: FormData) {
     }
 
     revalidatePath('/', 'layout')
-    redirect('/teacher') // Default redirect
+
+    if (data.role === 'student') {
+        redirect('/student')
+    } else {
+        redirect('/teacher')
+    }
 }
 
 export async function logout() {

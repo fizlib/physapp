@@ -5,6 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
   role TEXT CHECK (role IN ('teacher', 'student')) NOT NULL,
+  email TEXT, -- Added for display purposes
   is_admin BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -62,6 +63,35 @@ ON enrollments FOR SELECT USING (
 CREATE POLICY "Students can join classrooms"
 ON enrollments FOR INSERT WITH CHECK (
   auth.uid() = student_id
+  auth.uid() = student_id
+);
+
+-- Helper function to avoid RLS recursion
+CREATE OR REPLACE FUNCTION public.is_teacher_of_classroom(p_classroom_id UUID)
+RETURNS BOOLEAN
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 
+    FROM classrooms 
+    WHERE id = p_classroom_id 
+    AND teacher_id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+-- Teachers can view enrollments for their classrooms
+CREATE POLICY "Teachers can view enrollments"
+ON enrollments FOR SELECT USING (
+  public.is_teacher_of_classroom(classroom_id)
+);
+
+-- Teachers can delete enrollments
+CREATE POLICY "Teachers can delete enrollments"
+ON enrollments FOR DELETE USING (
+  public.is_teacher_of_classroom(classroom_id)
 );
 
 -- Allow students to view classrooms they are enrolled in

@@ -3,10 +3,11 @@
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, role)
+  INSERT INTO public.profiles (id, role, email)
   VALUES (
     new.id,
-    COALESCE(new.raw_user_meta_data->>'role', 'student') -- Default to 'student' if no role provided
+    COALESCE(new.raw_user_meta_data->>'role', 'student'), -- Default to 'student' if no role provided
+    new.email
   );
   RETURN new;
 END;

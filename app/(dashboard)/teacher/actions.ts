@@ -77,3 +77,47 @@ export async function addStudent(prevState: any, formData: FormData): Promise<Ac
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true, message: result?.message }
 }
+
+const RemoveStudentSchema = z.object({
+    studentId: z.string().uuid(),
+    classroomId: z.string().uuid(),
+})
+
+export async function removeStudent(prevState: any, formData: FormData): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Unauthorized" }
+
+    const studentId = formData.get('studentId') as string
+    const classroomId = formData.get('classroomId') as string
+
+    const validated = RemoveStudentSchema.safeParse({ studentId, classroomId })
+    if (!validated.success) return { error: "Invalid data" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { error: "Unauthorized to manage this classroom" }
+    }
+
+    // Remove enrollment
+    const { error } = await supabase
+        .from('enrollments')
+        .delete()
+        .match({ student_id: studentId, classroom_id: classroomId })
+
+    if (error) {
+        console.error(error)
+        return { error: 'Failed to remove student' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}

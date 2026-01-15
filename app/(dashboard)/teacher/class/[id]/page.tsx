@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AddStudentForm } from "./AddStudentForm"
+import { RemoveStudentButton } from "./RemoveStudentButton"
 
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
@@ -25,7 +26,7 @@ export default async function ClassroomPage({ params }: { params: Promise<{ id: 
     // 2. Fetch Students (joined via enrollments)
     const { data: enrollments } = await supabase
         .from('enrollments')
-        .select('*, profiles:student_id(id, role, created_at)')
+        .select('*, profiles:student_id(id, role, email, created_at)')
         .eq('classroom_id', id)
 
     return (
@@ -80,14 +81,23 @@ export default async function ClassroomPage({ params }: { params: Promise<{ id: 
                         <CardContent>
                             <ul className="space-y-2">
                                 {enrollments?.map((enrollment: any) => (
-                                    <li key={enrollment.id} className="text-sm p-2 bg-muted rounded-md flex justify-between items-center group">
-                                        <span className="font-mono text-xs text-muted-foreground truncate w-full">
-                                            {enrollment.student_id}
-                                        </span>
+                                    <li key={enrollment.id} className="text-sm p-3 bg-muted rounded-md flex justify-between items-center group">
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-foreground">
+                                                {enrollment.profiles?.email || "No email available"}
+                                            </span>
+                                            <span className="font-mono text-xs text-muted-foreground truncate max-w-[200px]" title={enrollment.student_id}>
+                                                ID: {enrollment.student_id.substring(0, 8)}...
+                                            </span>
+                                        </div>
+                                        <RemoveStudentButton
+                                            studentId={enrollment.student_id}
+                                            classroomId={id}
+                                        />
                                     </li>
                                 ))}
                                 {enrollments?.length === 0 && (
-                                    <li className="text-sm text-muted-foreground">No students enrolled.</li>
+                                    <li className="text-sm text-muted-foreground p-2">No students enrolled.</li>
                                 )}
                             </ul>
                         </CardContent>
