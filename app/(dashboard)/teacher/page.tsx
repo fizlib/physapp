@@ -24,6 +24,12 @@ export default async function TeacherDashboard() {
 
     if (!user) return <div>Please log in</div>
 
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single()
+
     const { data: classrooms } = await supabase
         .from('classrooms')
         .select('*')
@@ -36,6 +42,11 @@ export default async function TeacherDashboard() {
                 <div>
                     <div className="flex items-center gap-4">
                         <h1 className="text-3xl font-bold tracking-tight">Teacher Dashboard</h1>
+                        {profile?.is_admin && (
+                            <Button variant="outline" asChild>
+                                <Link href="/admin">Admin Panel</Link>
+                            </Button>
+                        )}
                         <LogoutButton />
                     </div>
                     <p className="text-muted-foreground mt-1">Manage your classrooms and assignments.</p>

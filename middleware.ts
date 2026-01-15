@@ -36,32 +36,55 @@ export async function middleware(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
 
     // Protected routes pattern
-    const isProtectedRoute = request.nextUrl.pathname.startsWith('/teacher') || request.nextUrl.pathname.startsWith('/student')
+    const isTeacherRoute = request.nextUrl.pathname.startsWith('/teacher')
+    const isStudentRoute = request.nextUrl.pathname.startsWith('/student')
     const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
+    const isRootRoute = request.nextUrl.pathname === '/'
 
     // 1. If user is NOT logged in and tries to access a protected route -> Redirect to Login
-    if (!user && isProtectedRoute) {
+    if (!user && (isTeacherRoute || isStudentRoute)) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
     }
 
-    // 2. If user IS logged in and tries to access login page -> Redirect to Dashboard (defaulting to /teacher for now)
-    if (user && isAuthRoute) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/teacher'
-        return NextResponse.redirect(url)
-    }
+    // 2. If user IS logged in
+    if (user) {
+        // Fetch user role
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
 
-    // 3. Root Path Redirect: / -> /login or /teacher
-    if (request.nextUrl.pathname === '/') {
-        const url = request.nextUrl.clone()
-        if (user) {
-            url.pathname = '/teacher' // Default to teacher for now
-        } else {
-            url.pathname = '/login'
+        const role = profile?.role
+
+        // 2a. If user tries to access login page -> Redirect to their Dashboard
+        if (isAuthRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = role === 'teacher' ? '/teacher' : '/student'
+            return NextResponse.redirect(url)
         }
-        return NextResponse.redirect(url)
+
+        // 2b. Root Path Redirect
+        if (isRootRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = role === 'teacher' ? '/teacher' : '/student'
+            return NextResponse.redirect(url)
+        }
+
+        // 2c. Role-based protection
+        if (role === 'student' && isTeacherRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/student'
+            return NextResponse.redirect(url)
+        }
+
+        if (role === 'teacher' && isStudentRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/teacher'
+            return NextResponse.redirect(url)
+        }
     }
 
     return response
