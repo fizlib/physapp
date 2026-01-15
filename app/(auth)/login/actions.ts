@@ -59,7 +59,9 @@ export async function signup(formData: FormData) {
     const data = {
         email: formData.get('email') as string,
         password: formData.get('password') as string,
-        role: formData.get('role') as string || 'student', // Capture role
+        firstName: formData.get('firstName') as string,
+        lastName: formData.get('lastName') as string,
+        role: 'student',
     }
 
     const validated = AuthSchema.safeParse({ email: data.email, password: data.password })
@@ -68,12 +70,19 @@ export async function signup(formData: FormData) {
         return { error: 'Invalid email or password format.' }
     }
 
+    // Basic validation for name fields (since they are required in UI)
+    if (!data.firstName || !data.lastName) {
+        return { error: 'Name and Surname are required.' }
+    }
+
     const { error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
             data: {
-                role: data.role, // Pass to Supabase Auth Metadata
+                role: data.role,
+                first_name: data.firstName,
+                last_name: data.lastName,
             },
         },
     })
