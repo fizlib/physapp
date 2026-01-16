@@ -3,8 +3,9 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, User, Plus, Users, Settings } from "lucide-react"
+import { ArrowLeft, BookOpen, Plus, Users, Settings } from "lucide-react"
 import { StudentManager } from "./StudentManager"
+import { JoinCodeCopy } from "./JoinCodeCopy"
 
 export default async function ClassroomPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ view?: string }> }) {
     const supabase = await createClient()
@@ -45,10 +46,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                 {classroom.name}
                             </h1>
                             <div className="mt-2 flex items-center gap-4">
-                                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs">
-                                    <span className="font-medium text-muted-foreground">Coordinates:</span>
-                                    <span className="font-mono font-bold text-primary">{classroom.join_code}</span>
-                                </div>
+                                <JoinCodeCopy code={classroom.join_code} />
                                 <div className="text-xs text-muted-foreground">
                                     {enrollments?.length || 0} students enrolled
                                 </div>

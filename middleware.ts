@@ -50,14 +50,31 @@ export async function middleware(request: NextRequest) {
 
     // 2. If user IS logged in
     if (user) {
-        // Fetch user role
+        // Fetch user profile with role and must_change_password
         const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, must_change_password')
             .eq('id', user.id)
             .single()
 
         const role = profile?.role
+        const mustChangePassword = profile?.must_change_password
+
+        // 2x. Forced Password Change Check
+        const isChangePasswordRoute = request.nextUrl.pathname === '/change-password'
+
+        if (mustChangePassword && !isChangePasswordRoute) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/change-password'
+            return NextResponse.redirect(url)
+        }
+
+        if (!mustChangePassword && isChangePasswordRoute) {
+            // If they don't need to change it, redirect to dashboard
+            const url = request.nextUrl.clone()
+            url.pathname = role === 'teacher' ? '/teacher' : '/student'
+            return NextResponse.redirect(url)
+        }
 
         // 2a. If user tries to access login page -> Redirect to their Dashboard
         if (isAuthRoute) {

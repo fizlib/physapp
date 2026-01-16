@@ -142,6 +142,18 @@ export async function adminCreateUser(formData: FormData) {
             return { success: false, error: error.message }
         }
 
+        // Set must_change_password = true
+        const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .update({ must_change_password: true })
+            .eq('id', user.user!.id)
+
+        if (profileError) {
+            console.error('Error updating profile for must_change_password:', profileError)
+            // We don't fail the whole request, but log it. 
+            // Ideally we should probably transaction this or ensure it happens.
+        }
+
         revalidatePath('/admin')
 
         // Construct the AdminUser object to return

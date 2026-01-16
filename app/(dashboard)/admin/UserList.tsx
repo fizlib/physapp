@@ -1,6 +1,7 @@
 'use client'
 
 import { AdminUser, adminConfirmUserEmail, adminCreateUser, adminDeleteUser, adminGenerateMagicLink } from "./actions"
+import { CopyButton } from "@/components/ui/copy-button"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -35,12 +36,28 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [generatedPassword, setGeneratedPassword] = useState<string>("")
 
     // New state for details view
     const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
     const [isLoadingLink, setIsLoadingLink] = useState(false)
+    const [copiedId, setCopiedId] = useState<string | null>(null)
 
     const router = useRouter()
+
+    const generatePassword = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+        let password = ''
+        for (let i = 0; i < 8; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+        setGeneratedPassword(password)
+    }
+
+    const openCreateDialog = () => {
+        generatePassword()
+        setIsDialogOpen(true)
+    }
 
     const handleConfirm = async (userId: string, e: React.MouseEvent) => {
         e.stopPropagation() // Prevent row click
@@ -122,6 +139,8 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
             const result = await adminGenerateMagicLink(userId)
             if (result.success && result.link) {
                 await navigator.clipboard.writeText(result.link)
+                setCopiedId(`link-${userId}`)
+                setTimeout(() => setCopiedId(null), 2000)
                 toast.success('Login link copied to clipboard')
             } else {
                 toast.error(result.error || 'Failed to generate login link')
@@ -217,10 +236,12 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                                     >
                                         {isLoadingLink ? (
                                             <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                        ) : copiedId === `link-${selectedUser.id}` ? (
+                                            <Check className="h-4 w-4 mr-1" />
                                         ) : (
                                             <Copy className="h-4 w-4 mr-1" />
                                         )}
-                                        Copy Login Link
+                                        {copiedId === `link-${selectedUser.id}` ? "Copied!" : "Copy Login Link"}
                                     </Button>
                                     <Button
                                         variant="destructive"
@@ -274,7 +295,7 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button>
+                        <Button onClick={openCreateDialog}>
                             <Plus className="mr-2 h-4 w-4" />
                             Add User
                         </Button>
@@ -302,8 +323,31 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                                 <Input id="email" name="email" type="email" required />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input id="password" name="password" type="password" required />
+                                <Label htmlFor="password">Generated Password</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="password"
+                                        name="password"
+                                        value={generatedPassword}
+                                        readOnly
+                                        className="bg-muted"
+                                    />
+                                    <CopyButton
+                                        value={generatedPassword}
+                                        successMessage="Password copied"
+                                        variant="outline"
+                                        size="icon"
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={generatePassword}
+                                    >
+                                        <Loader2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">This password will be required for the first login.</p>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="role">Role</Label>
