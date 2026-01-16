@@ -1,6 +1,6 @@
 'use client'
 
-import { AdminUser, adminConfirmUserEmail, adminCreateUser, adminDeleteUser } from "./actions"
+import { AdminUser, adminConfirmUserEmail, adminCreateUser, adminDeleteUser, adminGenerateMagicLink } from "./actions"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2, ArrowLeft, User } from "lucide-react"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -38,6 +38,7 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
 
     // New state for details view
     const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+    const [isLoadingLink, setIsLoadingLink] = useState(false)
 
     const router = useRouter()
 
@@ -112,6 +113,23 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
             toast.error('An error occurred')
         } finally {
             setIsDeleting(false)
+        }
+    }
+
+    const handleCopyMagicLink = async (userId: string) => {
+        setIsLoadingLink(true)
+        try {
+            const result = await adminGenerateMagicLink(userId)
+            if (result.success && result.link) {
+                await navigator.clipboard.writeText(result.link)
+                toast.success('Login link copied to clipboard')
+            } else {
+                toast.error(result.error || 'Failed to generate login link')
+            }
+        } catch (error) {
+            toast.error('Failed to copy link')
+        } finally {
+            setIsLoadingLink(false)
         }
     }
 
@@ -192,6 +210,18 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                                             Confirm Email
                                         </Button>
                                     )}
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => handleCopyMagicLink(selectedUser.id)}
+                                        disabled={isLoadingLink}
+                                    >
+                                        {isLoadingLink ? (
+                                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                        ) : (
+                                            <Copy className="h-4 w-4 mr-1" />
+                                        )}
+                                        Copy Login Link
+                                    </Button>
                                     <Button
                                         variant="destructive"
                                         onClick={() => setUserToDelete(selectedUser)}

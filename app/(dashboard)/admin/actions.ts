@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 
 export type AdminUser = {
     id: string
@@ -246,6 +247,50 @@ export async function adminDeleteUser(userId: string) {
 
     } catch (error) {
         console.error('Unexpected error in adminDeleteUser:', error)
+        return { success: false, error: 'Internal server error' }
+    }
+}
+
+export async function adminGenerateMagicLink(userId: string) {
+    try {
+        await checkAdmin()
+
+        const supabaseAdmin = createAdminClient()
+
+        // 1. Get user email
+        const { data: { user }, error: getError } = await supabaseAdmin.auth.admin.getUserById(userId)
+
+        if (getError || !user?.email) {
+            console.error('Error fetching user for magic link:', getError)
+            return { success: false, error: 'Failed to fetch user email' }
+        }
+
+        // 2. Generate magic link
+        const headersList = await headers()
+        const host = headersList.get('host')
+        const protocol = host?.includes('localhost') ? 'http' : 'https'
+        const redirectTo = `${protocol}://${host}/auth/callback`
+
+        const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: user.email,
+            options: {
+                redirectTo
+            }
+        })
+
+        if (error) {
+            console.error('Error generating magic link:', error)
+            return { success: false, error: 'Failed to generate magic link' }
+        }
+
+        // Manually construct the link to avoid double-consumption issues
+        const directLink = `${protocol}://${host}/auth/callback?token_hash=${data.properties.hashed_token}&type=magiclink`
+
+        return { success: true, link: directLink, error: null }
+
+    } catch (error) {
+        console.error('Unexpected error in adminGenerateMagicLink:', error)
         return { success: false, error: 'Internal server error' }
     }
 }
