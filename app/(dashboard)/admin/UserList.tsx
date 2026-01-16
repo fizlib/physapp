@@ -131,7 +131,9 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                             <div>
                                 <CardTitle className="text-2xl flex items-center gap-2">
                                     <User className="h-6 w-6" />
-                                    {selectedUser.email}
+                                    {selectedUser.first_name && selectedUser.last_name
+                                        ? `${selectedUser.first_name} ${selectedUser.last_name}`
+                                        : selectedUser.email}
                                 </CardTitle>
                                 <CardDescription className="mt-2">
                                     User ID: {selectedUser.id}
@@ -145,6 +147,18 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">First Name</Label>
+                                <div className="font-medium">{selectedUser.first_name || 'N/A'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">Last Name</Label>
+                                <div className="font-medium">{selectedUser.last_name || 'N/A'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">Email</Label>
+                                <div className="font-medium">{selectedUser.email}</div>
+                            </div>
                             <div className="space-y-1">
                                 <Label className="text-muted-foreground">Role</Label>
                                 <div className="font-medium capitalize">{selectedUser.role || 'N/A'}</div>

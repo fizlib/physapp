@@ -8,6 +8,8 @@ import { redirect } from "next/navigation"
 export type AdminUser = {
     id: string
     email: string | undefined
+    first_name: string | null
+    last_name: string | null
     role: string | null
     is_admin: boolean | null
     email_confirmed_at: string | null
@@ -65,6 +67,8 @@ export async function adminGetAllUsers(): Promise<{ users: AdminUser[], error: s
             return {
                 id: authUser.id,
                 email: authUser.email,
+                first_name: profile?.first_name || null,
+                last_name: profile?.last_name || null,
                 role: profile?.role || null,
                 is_admin: profile?.is_admin || false,
                 email_confirmed_at: authUser.email_confirmed_at || null,
@@ -143,6 +147,8 @@ export async function adminCreateUser(formData: FormData) {
         const newUser: AdminUser = {
             id: user.user!.id,
             email: user.user!.email,
+            first_name: firstName,
+            last_name: lastName,
             role: role,
             is_admin: false, // Default to false for new users
             email_confirmed_at: new Date().toISOString(), // We set email_confirm: true
