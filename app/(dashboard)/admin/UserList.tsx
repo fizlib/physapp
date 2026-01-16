@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2 } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -35,9 +35,14 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
     const [isDialogOpen, setIsDialogOpen] = useState(false)
     const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
+
+    // New state for details view
+    const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+
     const router = useRouter()
 
-    const handleConfirm = async (userId: string) => {
+    const handleConfirm = async (userId: string, e: React.MouseEvent) => {
+        e.stopPropagation() // Prevent row click
         setIsLoading(userId)
         try {
             const result = await adminConfirmUserEmail(userId)
@@ -47,6 +52,9 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                         ? { ...u, email_confirmed_at: new Date().toISOString() }
                         : u
                 ))
+                if (selectedUser?.id === userId) {
+                    setSelectedUser(prev => prev ? { ...prev, email_confirmed_at: new Date().toISOString() } : null)
+                }
                 toast.success('User confirmed successfully')
                 router.refresh()
             } else {
@@ -73,8 +81,6 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                 setIsDialogOpen(false)
                 setUsers([result.user, ...users])
                 router.refresh()
-                // You might want to refetch users here to update the list immediately
-                // but router.refresh() should handle it if this is a server component parent
             } else {
                 toast.error(result.error || 'Failed to create user')
             }
@@ -94,6 +100,9 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
             if (result.success) {
                 setUsers(users.filter(u => u.id !== userToDelete.id))
                 toast.success('User deleted successfully')
+                if (selectedUser?.id === userToDelete.id) {
+                    setSelectedUser(null)
+                }
                 setUserToDelete(null)
                 router.refresh()
             } else {
@@ -104,6 +113,112 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
         } finally {
             setIsDeleting(false)
         }
+    }
+
+    if (selectedUser) {
+        return (
+            <div className="space-y-6">
+                <Button variant="ghost" className="pl-0" onClick={() => {
+                    setSelectedUser(null)
+                }}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Users
+                </Button>
+
+                <Card>
+                    <CardHeader>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle className="text-2xl flex items-center gap-2">
+                                    <User className="h-6 w-6" />
+                                    {selectedUser.email}
+                                </CardTitle>
+                                <CardDescription className="mt-2">
+                                    User ID: {selectedUser.id}
+                                </CardDescription>
+                            </div>
+                            <Badge variant={selectedUser.email_confirmed_at ? "outline" : "secondary"}
+                                className={selectedUser.email_confirmed_at ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                                {selectedUser.email_confirmed_at ? "Confirmed" : "Pending Confirmation"}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">Role</Label>
+                                <div className="font-medium capitalize">{selectedUser.role || 'N/A'}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">Joined At</Label>
+                                <div className="font-medium">{new Date(selectedUser.created_at).toLocaleString()}</div>
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-muted-foreground">Admin Status</Label>
+                                <div className="font-medium">{selectedUser.is_admin ? 'Yes' : 'No'}</div>
+                            </div>
+                        </div>
+
+                        <div className="border-t pt-6 mt-6">
+                            <h3 className="text-lg font-semibold mb-4">Actions</h3>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    {!selectedUser.email_confirmed_at && (
+                                        <Button
+                                            variant="outline"
+                                            onClick={(e) => handleConfirm(selectedUser.id, e)}
+                                            disabled={isLoading === selectedUser.id}
+                                        >
+                                            {isLoading === selectedUser.id ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Check className="h-4 w-4 mr-1" />
+                                            )}
+                                            Confirm Email
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setUserToDelete(selectedUser)}
+                                    >
+                                        Delete User
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Delete User</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete {userToDelete?.email}? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setUserToDelete(null)}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleDeleteUser}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+        )
     }
 
     return (
@@ -188,7 +303,11 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                         </TableHeader>
                         <TableBody>
                             {users.map((user) => (
-                                <TableRow key={user.id}>
+                                <TableRow
+                                    key={user.id}
+                                    className="cursor-pointer hover:bg-muted/50"
+                                    onClick={() => setSelectedUser(user)}
+                                >
                                     <TableCell className="font-medium">
                                         {user.email}
                                         {user.is_admin && (
@@ -216,8 +335,9 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                                         {!user.email_confirmed_at && (
                                             <Button
                                                 size="sm"
-                                                onClick={() => handleConfirm(user.id)}
+                                                onClick={(e) => handleConfirm(user.id, e)}
                                                 disabled={isLoading === user.id}
+                                                className="mr-2"
                                             >
                                                 {isLoading === user.id ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -228,11 +348,13 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
                                             </Button>
                                         )}
                                         <Button
-                                            variant="destructive"
+                                            variant="ghost"
                                             size="sm"
-                                            className="ml-2"
-                                            onClick={() => setUserToDelete(user)}
-                                            disabled={isLoading === user.id}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setUserToDelete(user);
+                                            }}
+                                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                         >
                                             <Trash2 className="h-4 w-4" />
                                             <span className="sr-only">Delete</span>
