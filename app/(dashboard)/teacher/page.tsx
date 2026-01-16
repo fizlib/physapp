@@ -65,7 +65,10 @@ export default async function TeacherDashboard() {
                                 </Button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[425px]">
-                                <form action={createClassroom}>
+                                <form action={async (formData) => {
+                                    "use server"
+                                    await createClassroom(formData)
+                                }}>
                                     <DialogHeader>
                                         <DialogTitle className="font-serif text-2xl">Create Classroom</DialogTitle>
                                         <DialogDescription>
