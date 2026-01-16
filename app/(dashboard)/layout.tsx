@@ -1,7 +1,10 @@
 import { Atom, BookOpen, Home, Shield, User } from "lucide-react";
 import Link from "next/link";
+
 import { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/server";
+
+import { Logo } from "@/components/logo";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const supabase = await createClient();
@@ -21,11 +24,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <div className="flex min-h-screen flex-col md:flex-row bg-background">
             {/* Desktop Sidebar */}
             <aside className="hidden w-64 flex-col border-r border-border/40 bg-sidebar p-6 md:flex">
-                <div className="mb-8 flex items-center gap-2">
-                    <div className="rounded-full bg-primary/10 p-2 text-primary">
-                        <Atom className="h-5 w-5" />
-                    </div>
-                    <span className="font-serif text-xl font-bold tracking-tight">Physapp</span>
+                <div className="mb-8 px-2">
+                    <Logo />
                 </div>
 
                 <nav className="flex flex-1 flex-col gap-2">

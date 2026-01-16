@@ -9,6 +9,8 @@ import { useState } from "react"
 import { useFormStatus } from "react-dom"
 import { Atom } from "lucide-react"
 
+import { Logo } from "@/components/logo";
+
 function SubmitButton({ text }: { text: string }) {
     const { pending } = useFormStatus()
     return (
@@ -35,12 +37,7 @@ export default function LoginPage() {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
             <div className="mb-8 flex flex-col items-center gap-2 text-center">
-                <div className="rounded-full bg-primary/10 p-3 text-primary ring-1 ring-primary/20">
-                    <Atom className="h-8 w-8" />
-                </div>
-                <h1 className="text-3xl font-serif font-bold tracking-tight text-foreground">
-                    Physapp
-                </h1>
+                <Logo size="xl" />
                 <p className="text-muted-foreground text-sm">
                     Master the universe, one equation at a time.
                 </p>
@@ -133,7 +130,7 @@ export default function LoginPage() {
                                 onClick={() => setIsLogin(!isLogin)}
                                 className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
                             >
-                                {isLogin ? "New to Physapp? Create an account" : "Have an account? Sign in"}
+                                {isLogin ? "New to Gama? Create an account" : "Have an account? Sign in"}
                             </button>
                         </div>
                     </form>
