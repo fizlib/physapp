@@ -12,12 +12,23 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     if (!user) return <div>Please log in</div>
 
-    // 1. Fetch Classroom
-    const { data: classroom } = await supabase
-        .from('classrooms')
-        .select('*')
-        .eq('id', id)
-        .single()
+    // 1. Fetch Classroom and Published Assignments
+    const [classroomResult, assignmentsResult] = await Promise.all([
+        supabase
+            .from('classrooms')
+            .select('*')
+            .eq('id', id)
+            .single(),
+        supabase
+            .from('assignments')
+            .select('*, questions(count)')
+            .eq('classroom_id', id)
+            .eq('published', true)
+            .order('created_at', { ascending: false })
+    ])
+
+    const { data: classroom } = classroomResult
+    const { data: assignments } = assignmentsResult
 
     if (!classroom) notFound()
 
@@ -54,15 +65,38 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                             <h2 className="font-serif text-xl font-semibold tracking-tight">Active Exercises</h2>
                         </div>
 
-                        <Card className="border-dashed border-border/60 bg-muted/5 shadow-none">
-                            <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                                <div className="rounded-full bg-muted/30 p-4 mb-4">
-                                    <BookOpen className="h-8 w-8 opacity-40" />
-                                </div>
-                                <p className="text-sm font-medium">No exercises assigned yet.</p>
-                                <p className="text-xs opacity-70">Check back later for new modules.</p>
-                            </CardContent>
-                        </Card>
+                        {assignments && assignments.length > 0 ? (
+                            <div className="grid gap-4">
+                                {assignments.map((assignment) => (
+                                    <Link key={assignment.id} href={`/student/class/${id}/assignment/${assignment.id}`}>
+                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors">
+                                            <CardContent className="p-6 flex items-center justify-between">
+                                                <div className="space-y-1">
+                                                    <h3 className="font-semibold">{assignment.title}</h3>
+                                                    <div className="text-sm text-muted-foreground flex items-center gap-2">
+                                                        <Clock className="h-3 w-3" />
+                                                        <span>Posted {new Date(assignment.created_at).toLocaleDateString()}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs font-medium bg-secondary px-2.5 py-1 rounded-full">
+                                                    Start
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : (
+                            <Card className="border-dashed border-border/60 bg-muted/5 shadow-none">
+                                <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                                    <div className="rounded-full bg-muted/30 p-4 mb-4">
+                                        <BookOpen className="h-8 w-8 opacity-40" />
+                                    </div>
+                                    <p className="text-sm font-medium">No exercises assigned yet.</p>
+                                    <p className="text-xs opacity-70">Check back later for new modules.</p>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
 
                     {/* Sidebar (Stats/Info) */}

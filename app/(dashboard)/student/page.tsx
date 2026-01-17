@@ -49,9 +49,7 @@ export default async function StudentDashboard() {
                                     <CardTitle className="font-medium tracking-tight group-hover:text-primary">
                                         {classroom.name}
                                     </CardTitle>
-                                    <CardDescription className="font-mono text-xs tracking-wider opacity-70">
-                                        CODE: {classroom.join_code}
-                                    </CardDescription>
+
                                 </CardHeader>
                                 <CardContent>
                                     <div className="text-sm text-muted-foreground group-hover:text-foreground/80">
@@ -72,7 +70,7 @@ export default async function StudentDashboard() {
                                 <p className="text-sm">You aren't enrolled in any physics courses yet.</p>
                             </div>
                             <p className="max-w-xs text-xs opacity-70">
-                                Ask your instructor for a unique class code to join their laboratory.
+                                Contact your instructor to be added to their laboratory.
                             </p>
                         </div>
                     )}

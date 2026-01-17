@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 
 const CreateClassSchema = z.object({
     name: z.string().min(3),
@@ -207,3 +208,160 @@ export async function updateClassroomName(classroomId: string, name: string): Pr
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
 }
+
+const ExerciseSchema = z.object({
+    title: z.string(),
+    type: z.enum(['numerical', 'multiple_choice']),
+    latex_text: z.string(),
+    correct_value: z.number().nullable().optional(),
+    tolerance: z.number().nullable().optional(),
+    options: z.array(z.string()).nullable().optional(),
+    correct_answer: z.string().nullable().optional()
+})
+
+export async function generateExerciseFromImage(formData: FormData) {
+    console.log("Starting generateExerciseFromImage...")
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+        console.error("Missing GEMINI_API_KEY")
+        return { error: "Gemini API Key not found" }
+    }
+
+    const file = formData.get('image') as File
+    if (!file) {
+        console.error("No image file provided")
+        return { error: "No image file provided" }
+    }
+    console.log("File received:", file.name, file.size, file.type)
+
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    const base64Image = buffer.toString('base64')
+    console.log("Image length (base64):", base64Image.length)
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" })
+
+    const prompt = `
+  Analyze this physics/math problem image.
+  Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
+
+  Return a JSON object with this EXACT structure (do not wrap in markdown):
+  {
+    "type": "numerical" | "multiple_choice",
+    "title": "A short descriptive title for the problem",
+    "latex_text": "The question text, using LaTeX for math formulas",
+    "correct_value": number (if numerical, else null),
+    "tolerance": number (suggest a tolerance %, e.g., 5, else null),
+    "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null),
+    "correct_answer": "Option content" OR "A/B/C" (if multiple_choice, else null)
+  }
+  `
+
+    const imagePart: Part = {
+        inlineData: {
+            data: base64Image,
+            mimeType: file.type
+        }
+    }
+
+    try {
+        console.log("Calling Gemini API...")
+        const result = await model.generateContent([prompt, imagePart])
+        console.log("Gemini API call complete. Resolving response...")
+        const response = await result.response
+        const text = response.text()
+        console.log("Gemini Raw Response:", text)
+
+        // Clean up markdown code blocks if present
+        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+        const data = JSON.parse(jsonStr)
+        console.log("Parsed Data:", data)
+
+        return { success: true, data }
+    } catch (error: any) {
+        console.error("Gemini Error:", error)
+        return { success: false, error: error.message || "Failed to generate exercise" }
+    }
+}
+
+export async function createAssignmentWithQuestion(classroomId: string, exerciseData: any) {
+    const supabase = await createClient()
+
+    // 1. Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // 2. Validate Data
+    const validated = ExerciseSchema.safeParse(exerciseData)
+    if (!validated.success) {
+        console.error("Validation Error", validated.error)
+        return { success: false, error: "Invalid exercise data" }
+    }
+    const data = validated.data
+
+    // 3. Create Assignment
+    const { data: assignment, error: assignmentError } = await supabase
+        .from('assignments')
+        .insert({
+            classroom_id: classroomId,
+            title: data.title,
+            published: false
+        })
+        .select()
+        .single()
+
+    if (assignmentError || !assignment) {
+        console.error("Assignment Error", assignmentError)
+        return { success: false, error: "Failed to create assignment" }
+    }
+
+    // 4. Create Question
+    const { error: questionError } = await supabase
+        .from('questions')
+        .insert({
+            assignment_id: assignment.id,
+            latex_text: data.latex_text,
+            question_type: data.type,
+            correct_value: data.type === 'numerical' ? data.correct_value : null,
+            tolerance_percent: data.type === 'numerical' ? data.tolerance : null,
+            // @ts-ignore
+            options: data.type === 'multiple_choice' ? data.options : null,
+            // @ts-ignore
+            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null
+        })
+
+    if (questionError) {
+        console.error("Question Error", questionError)
+        return { success: false, error: "Failed to create question" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function toggleAssignmentPublish(assignmentId: string, classroomId: string, published: boolean) {
+    const supabase = await createClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom (skipping deep verification for speed, relying on RLS)
+    // Actually RLS might block if we don't own it, which is fine.
+
+    const { error } = await supabase
+        .from('assignments')
+        .update({ published: published })
+        .eq('id', assignmentId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: "Failed to update assignment" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
+    return { success: true }
+}
+
