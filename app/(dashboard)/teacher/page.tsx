@@ -17,10 +17,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClassroom } from "./actions"
 import { JoinCodeCopy } from "./class/[id]/JoinCodeCopy"
+import { getCachedUser, getCachedProfile } from "@/lib/data-service"
 
 export default async function TeacherDashboard() {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
 
     if (!user) return (
         <div className="flex h-screen items-center justify-center text-muted-foreground">
@@ -28,21 +29,14 @@ export default async function TeacherDashboard() {
         </div>
     )
 
-    const [profileResult, classroomsResult] = await Promise.all([
-        supabase
-            .from('profiles')
-            .select('is_admin')
-            .eq('id', user.id)
-            .single(),
+    const [profile, { data: classrooms }] = await Promise.all([
+        getCachedProfile(user.id),
         supabase
             .from('classrooms')
             .select('*')
             .eq('teacher_id', user.id)
             .order('created_at', { ascending: false })
     ])
-
-    const { data: profile } = profileResult
-    const { data: classrooms } = classroomsResult
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">

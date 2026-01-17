@@ -1,22 +1,15 @@
 import { Atom, BookOpen, Home, Shield, User } from "lucide-react";
 import Link from "next/link";
-
 import { ReactNode } from "react";
-import { createClient } from "@/lib/supabase/server";
-
 import { Logo } from "@/components/logo";
+import { getCachedUser, getCachedProfile } from "@/lib/data-service";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
 
     let isAdmin = false;
     if (user) {
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('is_admin')
-            .eq('id', user.id)
-            .single();
+        const profile = await getCachedProfile(user.id);
         isAdmin = !!profile?.is_admin;
     }
 

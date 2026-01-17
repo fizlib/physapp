@@ -13,21 +13,24 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     const { view } = await searchParams
     const currentView = view || 'assignments'
 
-    // 1. Fetch Classroom
-    const { data: classroom } = await supabase
-        .from('classrooms')
-        .select('*')
-        .eq('id', id)
-        .single()
+    // 1. Fetch Classroom and Students in parallel
+    const [classroomResult, enrollmentsResult] = await Promise.all([
+        supabase
+            .from('classrooms')
+            .select('*')
+            .eq('id', id)
+            .single(),
+        supabase
+            .from('enrollments')
+            .select('*, profiles:student_id(id, role, first_name, last_name, email, created_at)')
+            .eq('classroom_id', id)
+            .order('created_at', { ascending: false })
+    ])
+
+    const { data: classroom } = classroomResult
+    const { data: enrollments } = enrollmentsResult
 
     if (!classroom) notFound()
-
-    // 2. Fetch Students (joined via enrollments)
-    const { data: enrollments } = await supabase
-        .from('enrollments')
-        .select('*, profiles:student_id(id, role, first_name, last_name, email, created_at)')
-        .eq('classroom_id', id)
-        .order('created_at', { ascending: false })
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
