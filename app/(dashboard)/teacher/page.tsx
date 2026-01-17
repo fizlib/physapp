@@ -28,17 +28,21 @@ export default async function TeacherDashboard() {
         </div>
     )
 
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single()
+    const [profileResult, classroomsResult] = await Promise.all([
+        supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single(),
+        supabase
+            .from('classrooms')
+            .select('*')
+            .eq('teacher_id', user.id)
+            .order('created_at', { ascending: false })
+    ])
 
-    const { data: classrooms } = await supabase
-        .from('classrooms')
-        .select('*')
-        .eq('teacher_id', user.id)
-        .order('created_at', { ascending: false })
+    const { data: profile } = profileResult
+    const { data: classrooms } = classroomsResult
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
