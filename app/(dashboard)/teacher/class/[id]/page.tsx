@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ArrowLeft, BookOpen, Plus, Users, Settings } from "lucide-react"
 import { StudentManager } from "./StudentManager"
-import { JoinCodeCopy } from "./JoinCodeCopy"
+import { EditableClassroomTitle } from "./EditableClassroomTitle"
 
 export default async function ClassroomPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ view?: string }> }) {
     const supabase = await createClient()
@@ -45,11 +45,9 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                     </Button>
                     <div className="flex flex-col gap-4 border-b border-border/40 pb-6 md:flex-row md:items-start md:justify-between">
                         <div>
-                            <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                                {classroom.name}
-                            </h1>
+                            <EditableClassroomTitle classroomId={id} initialName={classroom.name} />
                             <div className="mt-2 flex items-center gap-4">
-                                <JoinCodeCopy code={classroom.join_code} />
+
                                 <div className="text-xs text-muted-foreground">
                                     {enrollments?.length || 0} students enrolled
                                 </div>

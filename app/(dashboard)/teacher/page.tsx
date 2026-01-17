@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClassroom } from "./actions"
-import { JoinCodeCopy } from "./class/[id]/JoinCodeCopy"
+
 import { getCachedUser, getCachedProfile } from "@/lib/data-service"
 
 export default async function TeacherDashboard() {
@@ -100,9 +100,7 @@ export default async function TeacherDashboard() {
                                         </CardTitle>
                                         <Settings className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                                     </div>
-                                    <CardDescription className="flex items-center gap-2 font-mono text-xs tracking-wider opacity-90">
-                                        <JoinCodeCopy code={classroom.join_code} />
-                                    </CardDescription>
+
                                 </CardHeader>
                                 <CardContent>
                                     <div className="flex items-center justify-between text-sm text-muted-foreground">

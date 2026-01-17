@@ -168,3 +168,42 @@ export async function getUnassignedStudents() {
 
     return data
 }
+
+const UpdateClassroomNameSchema = z.object({
+    classroomId: z.string().uuid(),
+    name: z.string().min(3),
+})
+
+export async function updateClassroomName(classroomId: string, name: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = UpdateClassroomNameSchema.safeParse({ classroomId, name })
+    if (!validated.success) return { success: false, error: "Invalid name" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('classrooms')
+        .update({ name: name })
+        .eq('id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update classroom name' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
