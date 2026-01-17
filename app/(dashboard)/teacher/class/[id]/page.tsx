@@ -57,7 +57,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                             <Button variant={currentView === 'assignments' ? "secondary" : "ghost"} size="sm" asChild>
                                 <Link href={`/teacher/class/${id}?view=assignments`}>
                                     <BookOpen className="mr-2 h-4 w-4" />
-                                    Missions
+                                    Exercises
                                 </Link>
                             </Button>
                             <Button variant={currentView === 'students' ? "secondary" : "ghost"} size="sm" asChild>
@@ -80,10 +80,10 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                     {currentView === 'assignments' && (
                         <div className="space-y-6 animate-fade-in-up">
                             <div className="flex items-center justify-between">
-                                <h2 className="font-serif text-xl font-semibold tracking-tight">Mission Modules & Assignments</h2>
+                                <h2 className="font-serif text-xl font-semibold tracking-tight">Exercise Modules & Assignments</h2>
                                 <Button size="sm">
                                     <Plus className="mr-2 h-4 w-4" />
-                                    New Mission
+                                    New Exercise
                                 </Button>
                             </div>
 
@@ -92,7 +92,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                     <div className="rounded-full bg-muted/30 p-4 mb-4">
                                         <BookOpen className="h-8 w-8 opacity-40" />
                                     </div>
-                                    <p className="text-sm font-medium">No active missions detected.</p>
+                                    <p className="text-sm font-medium">No active exercises detected.</p>
                                     <p className="text-xs opacity-70">Initialize a new assignment to challenge your students.</p>
                                 </CardContent>
                             </Card>

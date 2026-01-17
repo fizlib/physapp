@@ -51,7 +51,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                     {/* Main Content (Assignments) */}
                     <div className="space-y-6 lg:col-span-2">
                         <div className="flex items-center justify-between">
-                            <h2 className="font-serif text-xl font-semibold tracking-tight">Active Missions</h2>
+                            <h2 className="font-serif text-xl font-semibold tracking-tight">Active Exercises</h2>
                         </div>
 
                         <Card className="border-dashed border-border/60 bg-muted/5 shadow-none">
@@ -59,7 +59,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                 <div className="rounded-full bg-muted/30 p-4 mb-4">
                                     <BookOpen className="h-8 w-8 opacity-40" />
                                 </div>
-                                <p className="text-sm font-medium">No missions assigned yet.</p>
+                                <p className="text-sm font-medium">No exercises assigned yet.</p>
                                 <p className="text-xs opacity-70">Check back later for new modules.</p>
                             </CardContent>
                         </Card>
@@ -77,7 +77,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                             <CardContent className="space-y-6">
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Missions Completed</span>
+                                        <span className="text-muted-foreground">Exercises Completed</span>
                                         <span className="font-mono font-medium">0 / 0</span>
                                     </div>
                                     <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
