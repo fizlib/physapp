@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Check, X, AlertCircle } from "lucide-react"
+import MathDisplay from "@/components/MathDisplay"
 
 export function TestInterface({ question }: { question: any }) {
     const [numInput, setNumInput] = useState("")
@@ -39,7 +40,7 @@ export function TestInterface({ question }: { question: any }) {
                 return
             }
 
-            if (mcqInput === question.correct_answer) {
+            if (mcqInput === question.correct_answer?.trim().toUpperCase()) {
                 setResult('correct')
                 setFeedback("Correct option selected!")
             } else {
@@ -88,7 +89,9 @@ export function TestInterface({ question }: { question: any }) {
                                     <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${mcqInput === letter ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20'}`}>
                                         {letter}
                                     </div>
-                                    <span>{opt}</span>
+                                    <div className="flex-1">
+                                        <MathDisplay content={opt} />
+                                    </div>
                                 </div>
                             )
                         })}

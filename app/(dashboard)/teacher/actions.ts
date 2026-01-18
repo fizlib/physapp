@@ -94,26 +94,44 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         return { success: false, error: "Failed to update assignment" }
     }
 
-    // 5. Update Question
-    const { error: questionError } = await supabase
+    // 5. Update Questions
+    // Strategy: Delete existing questions and re-insert (simplest for multi-part changes)
+    // Warning: This wipes submissions for these questions.
+
+    // First, delete old questions
+    const { error: deleteError } = await supabase
         .from('questions')
-        .update({
-            latex_text: data.latex_text,
-            question_type: data.type,
-            correct_value: data.type === 'numerical' ? data.correct_value : null,
-            tolerance_percent: data.type === 'numerical' ? data.tolerance : null,
-            // @ts-ignore
-            options: data.type === 'multiple_choice' ? data.options : null,
-            // @ts-ignore
-            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null,
-            diagram_type: data.diagram_type || null,
-            diagram_svg: data.diagram_svg || null
-        })
+        .delete()
         .eq('assignment_id', assignmentId)
 
-    if (questionError) {
-        console.error("Question Update Error", questionError)
-        return { success: false, error: "Failed to update question" }
+    if (deleteError) {
+        console.error("Delete Questions Error", deleteError)
+        return { success: false, error: "Failed to update questions (delete step)" }
+    }
+
+    // Then insert new questions
+    const questionsToInsert = data.questions.map((q, index) => ({
+        assignment_id: assignmentId,
+        latex_text: q.latex_text,
+        question_type: q.type,
+        correct_value: q.type === 'numerical' ? q.correct_value : null,
+        tolerance_percent: q.type === 'numerical' ? q.tolerance : null,
+        // @ts-ignore
+        options: q.type === 'multiple_choice' ? q.options : null,
+        // @ts-ignore
+        correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
+        // Only save diagram for the first question
+        diagram_type: index === 0 ? (q.diagram_type || null) : null,
+        diagram_svg: index === 0 ? (q.diagram_svg || null) : null
+    }))
+
+    const { error: insertError } = await supabase
+        .from('questions')
+        .insert(questionsToInsert)
+
+    if (insertError) {
+        console.error("Insert Questions Error", insertError)
+        return { success: false, error: "Failed to update questions (insert step)" }
     }
 
     revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
@@ -359,10 +377,8 @@ export async function updateClassroomName(classroomId: string, name: string): Pr
     return { success: true }
 }
 
-const ExerciseSchema = z.object({
-    title: z.string(),
+const QuestionSchema = z.object({
     type: z.enum(['numerical', 'multiple_choice']),
-    category: z.enum(['homework', 'classwork']).default('homework'),
     latex_text: z.string(),
     correct_value: z.number().nullable().optional(),
     tolerance: z.number().nullable().optional(),
@@ -370,6 +386,12 @@ const ExerciseSchema = z.object({
     correct_answer: z.string().nullable().optional(),
     diagram_type: z.enum(['graph', 'scheme']).nullable().optional(),
     diagram_svg: z.string().nullable().optional()
+})
+
+const ExerciseSchema = z.object({
+    title: z.string(),
+    category: z.enum(['homework', 'classwork']).default('homework'),
+    questions: z.array(QuestionSchema)
 })
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -397,11 +419,14 @@ export async function generateExerciseFromImage(formData: FormData) {
 
     const prompt = `
   Analyze this physics/math problem image.
-  Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
+  Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
+  Generate a list of questions, one for each part found. If there is only one problem, generate a list with one item.
+
+  For each question:
+  - Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
+  - IMPORTANT: Check if the specific part involves any diagrams, graphs, or schemes.
   
-  IMPORTANT: Also check if the image contains any diagrams, graphs, or schemes (like coordinate plots, function graphs, circuit diagrams, force diagrams, geometric figures, etc.).
-  
-  If you find a diagram, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
+  If you find a diagram relevant to a question, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
   - Be self-contained with proper viewBox attribute
   - Use appropriate colors (black for lines, gray for grid, labeled axes)
   - Include text labels, axis labels, and any annotations from the original
@@ -410,15 +435,19 @@ export async function generateExerciseFromImage(formData: FormData) {
   
   Return a JSON object with this EXACT structure (do not wrap in markdown):
   {
-    "type": "numerical" | "multiple_choice",
-    "title": "A short descriptive title for the problem",
-    "latex_text": "The question text, using LaTeX for math formulas",
-    "correct_value": number (if numerical, else null),
-    "tolerance": number (suggest a tolerance %, e.g., 5, else null),
-    "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null),
-    "correct_answer": "Option content" OR "A/B/C" (if multiple_choice, else null),
-    "diagram_type": "graph" | "scheme" | null (null if no diagram found),
-    "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found)
+    "title": "A short descriptive title for the entire exercise",
+    "questions": [
+        {
+            "type": "numerical" | "multiple_choice",
+            "latex_text": "The question text for this part, using LaTeX for math formulas",
+            "correct_value": number (if numerical, else null),
+            "tolerance": number (suggest a tolerance %, e.g., 5, else null),
+            "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null... include strictly 4 options if possible, or as many as in the image),
+            "correct_answer": "A" | "B" | "C" | "D" (if multiple_choice, else null... MUST be a single upper-case letter corresponding to the correct option index 0=A, 1=B, etc.),
+            "diagram_type": "graph" | "scheme" | null (null if no diagram found),
+            "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found)
+        }
+    ]
   }
   `
 
@@ -441,6 +470,40 @@ export async function generateExerciseFromImage(formData: FormData) {
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
         const data = JSON.parse(jsonStr)
         console.log("Parsed Data:", data)
+
+        // Sanitize data
+        if (data.questions) {
+            data.questions = data.questions.map((q: any) => {
+                if (q.type === 'multiple_choice' && q.correct_answer) {
+                    let ans = q.correct_answer.trim().toUpperCase()
+                    // Handle markdown bold/italic
+                    ans = ans.replace(/\*/g, '').replace(/_/g, '')
+
+                    // If the answer is not A, B, C, D, try to find it in options
+                    if (!['A', 'B', 'C', 'D'].includes(ans)) {
+                        // Check if the answer text matches one of the options
+                        if (q.options && Array.isArray(q.options)) {
+                            const matchIndex = q.options.findIndex((opt: string) => opt.toLowerCase().trim() === ans.toLowerCase())
+                            if (matchIndex !== -1) {
+                                ans = ['A', 'B', 'C', 'D'][matchIndex]
+                            }
+                        }
+                    }
+
+                    // Final fallback: if still not valid, default to A or null (better than invalid string)
+                    if (!['A', 'B', 'C', 'D'].includes(ans)) {
+                        // Maybe it's like "Option A"
+                        const match = ans.match(/\b([A-D])\b/)
+                        if (match) {
+                            ans = match[1]
+                        }
+                    }
+
+                    q.correct_answer = ans
+                }
+                return q
+            })
+        }
 
         return { success: true, data }
     } catch (error: any) {
@@ -481,22 +544,25 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         return { success: false, error: "Failed to create assignment" }
     }
 
-    // 4. Create Question
+    // 4. Create Questions
+    const questionsToInsert = data.questions.map((q, index) => ({
+        assignment_id: assignment.id,
+        latex_text: q.latex_text,
+        question_type: q.type,
+        correct_value: q.type === 'numerical' ? q.correct_value : null,
+        tolerance_percent: q.type === 'numerical' ? q.tolerance : null,
+        // @ts-ignore
+        options: q.type === 'multiple_choice' ? q.options : null,
+        // @ts-ignore
+        correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
+        // Only save diagram for the first question
+        diagram_type: index === 0 ? (q.diagram_type || null) : null,
+        diagram_svg: index === 0 ? (q.diagram_svg || null) : null
+    }))
+
     const { error: questionError } = await supabase
         .from('questions')
-        .insert({
-            assignment_id: assignment.id,
-            latex_text: data.latex_text,
-            question_type: data.type,
-            correct_value: data.type === 'numerical' ? data.correct_value : null,
-            tolerance_percent: data.type === 'numerical' ? data.tolerance : null,
-            // @ts-ignore
-            options: data.type === 'multiple_choice' ? data.options : null,
-            // @ts-ignore
-            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null,
-            diagram_type: data.diagram_type || null,
-            diagram_svg: data.diagram_svg || null
-        })
+        .insert(questionsToInsert)
 
     if (questionError) {
         console.error("Question Error", questionError)

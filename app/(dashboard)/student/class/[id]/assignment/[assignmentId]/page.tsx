@@ -24,7 +24,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
 
     if (!assignment) notFound()
 
-    const question = assignment.questions?.[0]
+
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -46,36 +46,41 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     </div>
                 </div>
 
-                <div className="grid gap-8">
-                    {/* Question Display */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Question</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="text-lg leading-relaxed">
-                                <MathDisplay content={question.latex_text || "No question text"} />
-                            </div>
-                            <DiagramDisplay
-                                diagramType={question.diagram_type}
-                                diagramLatex={question.diagram_latex}
-                                diagramSvg={question.diagram_svg}
-                            />
-                        </CardContent>
-                    </Card>
+                <div className="grid gap-12">
+                    {assignment.questions?.map((question: any, index: number) => (
+                        <div key={question.id} className="space-y-8 border-t pt-8 first:border-t-0 first:pt-0">
+                            <h2 className="text-2xl font-bold tracking-tight">Question {index + 1}</h2>
+                            {/* Question Display */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Question</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-6">
+                                    <div className="text-lg leading-relaxed">
+                                        <MathDisplay content={question.latex_text || "No question text"} />
+                                    </div>
+                                    <DiagramDisplay
+                                        diagramType={question.diagram_type}
+                                        diagramLatex={question.diagram_latex}
+                                        diagramSvg={question.diagram_svg}
+                                    />
+                                </CardContent>
+                            </Card>
 
-                    {/* Interaction Area */}
-                    <Card className="border-2 border-primary/10">
-                        <CardHeader className="pb-4">
-                            <CardTitle className="text-primary">Your Answer</CardTitle>
-                            <CardDescription>
-                                Solve the problem above and check your answer.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <TestInterface question={question} />
-                        </CardContent>
-                    </Card>
+                            {/* Interaction Area */}
+                            <Card className="border-2 border-primary/10">
+                                <CardHeader className="pb-4">
+                                    <CardTitle className="text-primary">Your Answer</CardTitle>
+                                    <CardDescription>
+                                        Solve the problem above and check your answer.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <TestInterface question={question} />
+                                </CardContent>
+                            </Card>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
