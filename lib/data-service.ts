@@ -9,6 +9,18 @@ export const getCachedUser = cache(async () => {
     return user
 })
 
+// Cached Student Classroom Fetcher
+// Returns the first classroom ID the student is enrolled in
+export const getCachedStudentClassroom = cache(async (userId: string) => {
+    const supabase = await createClient()
+    const { data: enrollment } = await supabase
+        .from('enrollments')
+        .select('classroom_id')
+        .eq('student_id', userId)
+        .single()
+    return enrollment?.classroom_id
+})
+
 // Cached Profile Fetcher
 // Deduplicates requests for the profile object
 export const getCachedProfile = cache(async (userId: string) => {
