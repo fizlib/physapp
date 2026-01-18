@@ -1,12 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
-import { ArrowLeft, BookOpen } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import MathDisplay from "@/components/MathDisplay"
-import { DiagramDisplay } from "@/components/DiagramDisplay"
-import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
+import { BookOpen } from "lucide-react"
+import { StudentAssignmentInterface } from "./StudentAssignmentInterface"
 
 export default async function StudentAssignmentPage({ params }: { params: Promise<{ id: string, assignmentId: string }> }) {
     const supabase = await createClient()
@@ -19,24 +14,20 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
         .from('assignments')
         .select('*, questions(*)')
         .eq('id', assignmentId)
-        .eq('published', true) // Verify it's published
+        .eq('published', true)
+        .order('created_at', { foreignTable: 'questions', ascending: true })
         .single()
 
     if (!assignment) notFound()
 
-
+    // Ensure questions are sorted by sequence/order if applicable, or just rely on default order.
+    // Assuming questions array is the order.
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
             <div className="mx-auto max-w-4xl space-y-8">
                 {/* Header */}
                 <div className="space-y-4">
-                    <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
-                        <Link href={`/student/class/${id}`}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Class
-                        </Link>
-                    </Button>
                     <div className="border-b pb-6">
                         <h1 className="text-3xl font-serif font-bold tracking-tight">{assignment.title}</h1>
                         <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
@@ -46,42 +37,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     </div>
                 </div>
 
-                <div className="grid gap-12">
-                    {assignment.questions?.map((question: any, index: number) => (
-                        <div key={question.id} className="space-y-8 border-t pt-8 first:border-t-0 first:pt-0">
-                            <h2 className="text-2xl font-bold tracking-tight">Question {index + 1}</h2>
-                            {/* Question Display */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Question</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    <div className="text-lg leading-relaxed">
-                                        <MathDisplay content={question.latex_text || "No question text"} />
-                                    </div>
-                                    <DiagramDisplay
-                                        diagramType={question.diagram_type}
-                                        diagramLatex={question.diagram_latex}
-                                        diagramSvg={question.diagram_svg}
-                                    />
-                                </CardContent>
-                            </Card>
-
-                            {/* Interaction Area */}
-                            <Card className="border-2 border-primary/10">
-                                <CardHeader className="pb-4">
-                                    <CardTitle className="text-primary">Your Answer</CardTitle>
-                                    <CardDescription>
-                                        Solve the problem above and check your answer.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <TestInterface question={question} />
-                                </CardContent>
-                            </Card>
-                        </div>
-                    ))}
-                </div>
+                <StudentAssignmentInterface assignment={assignment} classId={id} />
             </div>
         </div>
     )

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Check, X, AlertCircle } from "lucide-react"
 import MathDisplay from "@/components/MathDisplay"
 
-export function TestInterface({ question }: { question: any }) {
+export function TestInterface({ question, onCorrect }: { question: any, onCorrect?: () => void }) {
     const [numInput, setNumInput] = useState("")
     const [mcqInput, setMcqInput] = useState<string | null>(null)
     const [result, setResult] = useState<'correct' | 'incorrect' | null>(null)
@@ -29,6 +29,7 @@ export function TestInterface({ question }: { question: any }) {
             if (Math.abs(val - correct) <= margin) {
                 setResult('correct')
                 setFeedback(`Correct! ${val} is within ${tolerance}% of the target.`)
+                onCorrect?.()
             } else {
                 setResult('incorrect')
                 setFeedback(`Incorrect. Please check your calculations and try again.`)
@@ -43,6 +44,7 @@ export function TestInterface({ question }: { question: any }) {
             if (mcqInput === question.correct_answer?.trim().toUpperCase()) {
                 setResult('correct')
                 setFeedback("Correct option selected!")
+                onCorrect?.()
             } else {
                 setResult('incorrect')
                 setFeedback(`Incorrect. Try another option.`)
