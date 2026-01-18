@@ -55,12 +55,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                                 {classroom.name}
                             </h1>
-                            <div className="mt-2 flex items-center gap-4">
-                                <div className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs">
-                                    <span className="font-medium text-muted-foreground">Status:</span>
-                                    <span className="font-medium text-emerald-500">Active</span>
-                                </div>
-                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -68,9 +63,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 <div className="space-y-8">
                     {/* Main Content (Assignments) */}
                     <div className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <h2 className="font-serif text-xl font-semibold tracking-tight">Active Exercises</h2>
-                        </div>
+
 
                         {/* Collections grouped by Category */}
                         {collections && collections.length > 0 ? (

@@ -9,6 +9,7 @@ import { EditableClassroomTitle } from "./EditableClassroomTitle"
 import { CreateExerciseDialog } from "./CreateExerciseDialog"
 import { CreateCollectionDialog } from "./CreateCollectionDialog"
 import { ClassSettingsDialog } from "./ClassSettingsDialog"
+import { DeleteCollectionButton } from "./DeleteCollectionButton"
 
 export default async function ClassroomPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ view?: string }> }) {
     const supabase = await createClient()
@@ -166,24 +167,32 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                         {collections && collections.filter((c: any) => c.category === 'classwork').length > 0 ? (
                                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                                 {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => (
-                                                    <Link key={collection.id} href={`/teacher/class/${id}/collection/${collection.id}`}>
-                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-                                                            <CardContent className="p-6 space-y-2">
-                                                                <div className="flex justify-between items-start">
-                                                                    <h3 className="font-semibold">{collection.title}</h3>
+                                                    <Card key={collection.id} className="relative group hover:border-primary/50 transition-colors h-full">
+                                                        <Link href={`/teacher/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                        <CardContent className="p-6 space-y-2">
+                                                            <div className="flex justify-between items-start pointer-events-none">
+                                                                <h3 className="font-semibold">{collection.title}</h3>
+                                                                <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Classwork</span>
+                                                                    <div className="pointer-events-auto">
+                                                                        <DeleteCollectionButton
+                                                                            collectionId={collection.id}
+                                                                            classroomId={id}
+                                                                            title={collection.title}
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-sm text-muted-foreground line-clamp-2">
-                                                                    {collection.assignments && collection.assignments.length > 0
-                                                                        ? `${collection.assignments.length} Exercise(s)`
-                                                                        : "Empty collection"}
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground pt-2">
-                                                                    Created {new Date(collection.created_at).toLocaleDateString()}
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    </Link>
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground line-clamp-2 pointer-events-none">
+                                                                {collection.assignments && collection.assignments.length > 0
+                                                                    ? `${collection.assignments.length} Exercise(s)`
+                                                                    : "Empty collection"}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                                Created {new Date(collection.created_at).toLocaleDateString()}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
                                                 ))}
                                             </div>
                                         ) : (
@@ -196,24 +205,32 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                         {collections && collections.filter((c: any) => c.category === 'homework' || !c.category).length > 0 ? (
                                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                                 {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => (
-                                                    <Link key={collection.id} href={`/teacher/class/${id}/collection/${collection.id}`}>
-                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-                                                            <CardContent className="p-6 space-y-2">
-                                                                <div className="flex justify-between items-start">
-                                                                    <h3 className="font-semibold">{collection.title}</h3>
+                                                    <Card key={collection.id} className="relative group hover:border-primary/50 transition-colors h-full">
+                                                        <Link href={`/teacher/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                        <CardContent className="p-6 space-y-2">
+                                                            <div className="flex justify-between items-start pointer-events-none">
+                                                                <h3 className="font-semibold">{collection.title}</h3>
+                                                                <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Homework</span>
+                                                                    <div className="pointer-events-auto">
+                                                                        <DeleteCollectionButton
+                                                                            collectionId={collection.id}
+                                                                            classroomId={id}
+                                                                            title={collection.title}
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                                <div className="text-sm text-muted-foreground line-clamp-2">
-                                                                    {collection.assignments && collection.assignments.length > 0
-                                                                        ? `${collection.assignments.length} Exercise(s)`
-                                                                        : "Empty collection"}
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground pt-2">
-                                                                    Created {new Date(collection.created_at).toLocaleDateString()}
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    </Link>
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground line-clamp-2 pointer-events-none">
+                                                                {collection.assignments && collection.assignments.length > 0
+                                                                    ? `${collection.assignments.length} Exercise(s)`
+                                                                    : "Empty collection"}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                                Created {new Date(collection.created_at).toLocaleDateString()}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
                                                 ))}
                                             </div>
                                         ) : (
@@ -226,24 +243,32 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                 collections && collections.length > 0 ? (
                                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                         {collections.map((collection: any) => (
-                                            <Link key={collection.id} href={`/teacher/class/${id}/collection/${collection.id}`}>
-                                                <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-                                                    <CardContent className="p-6 space-y-2">
-                                                        <div className="flex justify-between items-start">
-                                                            <h3 className="font-semibold">{collection.title}</h3>
+                                            <Card key={collection.id} className="relative group hover:border-primary/50 transition-colors h-full">
+                                                <Link href={`/teacher/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                <CardContent className="p-6 space-y-2">
+                                                    <div className="flex justify-between items-start pointer-events-none">
+                                                        <h3 className="font-semibold">{collection.title}</h3>
+                                                        <div className="flex items-center gap-2">
                                                             <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Collection</span>
+                                                            <div className="pointer-events-auto">
+                                                                <DeleteCollectionButton
+                                                                    collectionId={collection.id}
+                                                                    classroomId={id}
+                                                                    title={collection.title}
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="text-sm text-muted-foreground line-clamp-2">
-                                                            {collection.assignments && collection.assignments.length > 0
-                                                                ? `${collection.assignments.length} Exercise(s)`
-                                                                : "Empty collection"}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground pt-2">
-                                                            Created {new Date(collection.created_at).toLocaleDateString()}
-                                                        </div>
-                                                    </CardContent>
-                                                </Card>
-                                            </Link>
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground line-clamp-2 pointer-events-none">
+                                                        {collection.assignments && collection.assignments.length > 0
+                                                            ? `${collection.assignments.length} Exercise(s)`
+                                                            : "Empty collection"}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                        Created {new Date(collection.created_at).toLocaleDateString()}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
                                         ))}
                                     </div>
                                 ) : (

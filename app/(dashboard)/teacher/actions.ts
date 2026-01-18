@@ -804,6 +804,48 @@ export async function removeExerciseFromCollection(classroomId: string, collecti
     }
 
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
+export async function deleteCollection(collectionId: string, classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // 1. Unlink assignments (set collection_id to null)
+    const { error: unlinkError } = await supabase
+        .from('assignments')
+        .update({ collection_id: null })
+        .eq('collection_id', collectionId)
+
+    if (unlinkError) {
+        console.error("Unlink Error", unlinkError)
+        return { success: false, error: 'Failed to unlink exercises from collection' }
+    }
+
+    // 2. Delete Collection
+    const { error: deleteError } = await supabase
+        .from('collections')
+        .delete()
+        .eq('id', collectionId)
+
+    if (deleteError) {
+        console.error("Delete Error", deleteError)
+        return { success: false, error: 'Failed to delete collection' }
+    }
+
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
 }
