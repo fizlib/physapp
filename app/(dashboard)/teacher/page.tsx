@@ -4,18 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Plus, Users, Settings } from "lucide-react"
 import Link from "next/link"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-    DialogFooter,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClassroom } from "./actions"
+import { CreateClassroomDialog } from "./_components/CreateClassroomDialog"
 
 import { getCachedUser, getCachedProfile } from "@/lib/data-service"
 
@@ -55,52 +45,9 @@ export default async function TeacherDashboard() {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button className="gap-2 shadow-sm">
-                                    <Plus className="h-4 w-4" />
-                                    New Classroom
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[425px]">
-                                <form action={async (formData) => {
-                                    "use server"
-                                    await createClassroom(formData)
-                                }}>
-                                    <DialogHeader>
-                                        <DialogTitle className="font-serif text-2xl">Create Classroom</DialogTitle>
-                                        <DialogDescription>
-                                            Enter the name for your new class. A unique join code will be generated.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="grid gap-4 py-4">
-                                        <div className="grid gap-2">
-                                            <Label htmlFor="name" className="text-xs uppercase tracking-wider text-muted-foreground">Classroom Name</Label>
-                                            <Input id="name" name="name" placeholder="e.g. Advanced Quantum Mechanics" required className="bg-muted/30" />
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Classroom Type</Label>
-                                            <div className="flex gap-4">
-                                                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                                    <input type="radio" name="type" value="school_class" defaultChecked className="accent-primary" />
-                                                    School Class
-                                                </label>
-                                                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                                    <input type="radio" name="type" value="private_student" className="accent-primary" />
-                                                    Private Student
-                                                </label>
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground">
-                                                School Classes have Classwork/Homework. Private Students only have Homework.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <DialogFooter>
-                                        <Button type="submit">Create Laboratory</Button>
-                                    </DialogFooter>
-                                </form>
-                            </DialogContent>
-                        </Dialog>
+                        <div className="flex items-center gap-4">
+                            <CreateClassroomDialog />
+                        </div>
                     </div>
                 </div>
 

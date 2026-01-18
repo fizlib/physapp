@@ -28,7 +28,6 @@ CREATE TABLE classrooms (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   teacher_id UUID REFERENCES profiles(id) NOT NULL,
   name TEXT NOT NULL,
-  join_code TEXT UNIQUE NOT NULL,
   type TEXT CHECK (type IN ('private_student', 'school_class')) DEFAULT 'school_class',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

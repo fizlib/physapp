@@ -24,8 +24,6 @@ export async function createClassroom(formData: FormData) {
     if (!user) return { error: "Unauthorized" }
 
     const name = formData.get('name') as string
-    const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase() // Simple random code
-
     const type = formData.get('type') as 'private_student' | 'school_class' || 'school_class'
 
     const validated = CreateClassSchema.safeParse({ name, type })
@@ -34,7 +32,6 @@ export async function createClassroom(formData: FormData) {
     const { error } = await supabase.from('classrooms').insert({
         teacher_id: user.id,
         name: name,
-        join_code: joinCode,
         type: validated.data.type
     })
 
