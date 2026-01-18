@@ -9,6 +9,17 @@ interface MathDisplayProps {
 }
 
 export default function MathDisplay({ content }: { content: string }) {
+    if (!content) return null
+
+    // If the content contains LaTeX but no delimiters ($ or $$), wrap the whole thing in InlineMath
+    // Common LaTeX hints: \text, \frac, \sqrt, \alpha, \beta, etc. or just a backslash
+    const hasDelimiters = content.includes('$') || content.includes('$$')
+    const hasLatexHints = /\\/.test(content)
+
+    if (!hasDelimiters && hasLatexHints) {
+        return <InlineMath math={content} />
+    }
+
     // Split by $$...$$ or $...$
     const parts = content.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g)
 

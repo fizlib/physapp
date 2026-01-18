@@ -30,7 +30,7 @@ interface QuestionData {
 
 interface ExerciseData {
     title: string
-    category: 'homework' | 'classwork'
+    // category: 'homework' | 'classwork' // Removed
     questions: QuestionData[]
 }
 
@@ -58,7 +58,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
 
     const [data, setData] = useState<ExerciseData>({
         title: '',
-        category: 'homework',
+        // category: 'homework',
         questions: [{ ...DEFAULT_QUESTION }]
     })
 
@@ -77,7 +77,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
             })) || [{ ...DEFAULT_QUESTION }]
 
             setData({
-                category: initialData.category || 'homework',
+                // category: initialData.category || 'homework',
                 title: initialData.title || '',
                 questions: mappedQuestions
             })
@@ -167,33 +167,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Category</Label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="category"
-                                        value="classwork"
-                                        checked={data.category === 'classwork'}
-                                        onChange={() => setData({ ...data, category: 'classwork' })}
-                                        className="accent-primary"
-                                    />
-                                    Classwork
-                                </label>
-                                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                    <input
-                                        type="radio"
-                                        name="category"
-                                        value="homework"
-                                        checked={data.category === 'homework'}
-                                        onChange={() => setData({ ...data, category: 'homework' })}
-                                        className="accent-primary"
-                                    />
-                                    Homework
-                                </label>
-                            </div>
-                        </div>
+                        {/* Category functionality removed */}
+
                     </div>
 
                     {/* Questions List */}

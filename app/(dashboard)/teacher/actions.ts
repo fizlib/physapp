@@ -11,6 +11,12 @@ const CreateClassSchema = z.object({
     type: z.enum(['private_student', 'school_class']).default('school_class'),
 })
 
+const CreateCollectionSchema = z.object({
+    title: z.string().min(3),
+    classroomId: z.string().uuid(),
+    category: z.enum(['homework', 'classwork']).default('homework'),
+})
+
 const AddStudentSchema = z.object({
     email: z.string().email(),
     classroomId: z.string().uuid(),
@@ -387,7 +393,9 @@ const QuestionSchema = z.object({
 
 const ExerciseSchema = z.object({
     title: z.string(),
-    category: z.enum(['homework', 'classwork']).default('homework'),
+    // Category is now handled at the collection level, but keeping optional for backward compat if needed, or just removing.
+    // We'll default to 'homework' for the DB constraint but it won't be used for logic.
+    category: z.enum(['homework', 'classwork']).default('homework').optional(),
     questions: z.array(QuestionSchema)
 })
 
@@ -417,11 +425,21 @@ export async function generateExerciseFromImage(formData: FormData) {
     const prompt = `
   Analyze this physics/math problem image.
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
+  
+  CRITICAL: If a single problem text asks for multiple distinct values (e.g., "Find the velocity and acceleration", "Calculate the time for each worker", "Find x and y"), you MUST SPLIT this into separate questions for each value requested.
+  
   Generate a list of questions, one for each part found. If there is only one problem, generate a list with one item.
-
+ 
   For each question:
   - Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
   - IMPORTANT: Check if the specific part involves any diagrams, graphs, or schemes.
+  - LATEX FORMATTING: Use LaTeX for ALL math formulas, units, and symbols. 
+  - IMPORTANT: For multiple_choice options, you MUST wrap any LaTeX content in single dollar signs, e.g., "$l = 12\\text{ m}$".
+  
+  CRITICAL INSTRUCTION FOR MULTI-PART PROBLEMS (Explicit numbered parts OR Implicit split parts):
+  If the problem has a common description/background text followed by multiple parts:
+  - For the FIRST question (part a, 1, or first value): Include the FULL common description text + the specific question text for this part.
+  - For the SUBSEQUENT questions (part b, c, or next values): Include ONLY the specific question text for that part (e.g. "Find the acceleration", "How long for the second worker?"). DO NOT repeat the common description text.
   
   If you find a diagram relevant to a question, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
   - Be self-contained with proper viewBox attribute
@@ -436,10 +454,10 @@ export async function generateExerciseFromImage(formData: FormData) {
     "questions": [
         {
             "type": "numerical" | "multiple_choice",
-            "latex_text": "The question text for this part, using LaTeX for math formulas",
+            "latex_text": "The question text.",
             "correct_value": number (if numerical, else null),
             "tolerance": number (suggest a tolerance %, e.g., 5, else null),
-            "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null... include strictly 4 options if possible, or as many as in the image),
+            "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null... include strictly 4 options if possible, or as many as in the image. Wrap LaTeX in $),
             "correct_answer": "A" | "B" | "C" | "D" (if multiple_choice, else null... MUST be a single upper-case letter corresponding to the correct option index 0=A, 1=B, etc.),
             "diagram_type": "graph" | "scheme" | null (null if no diagram found),
             "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found)
@@ -509,7 +527,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     }
 }
 
-export async function createAssignmentWithQuestion(classroomId: string, exerciseData: any) {
+export async function createAssignmentWithQuestion(classroomId: string, exerciseData: any, collectionId?: string) {
     const supabase = await createClient()
 
     // 1. Verify Auth
@@ -530,8 +548,9 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         .insert({
             classroom_id: classroomId,
             title: data.title,
-            category: data.category,
-            published: false
+            // category: data.category, // We let it default or set to 'homework' as placeholder since it's now generic
+            published: true,
+            collection_id: collectionId || null
         })
         .select()
         .single()
@@ -567,6 +586,9 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
     }
 
     revalidatePath(`/teacher/class/${classroomId}`)
+    if (collectionId) {
+        revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    }
     return { success: true }
 }
 
@@ -685,3 +707,103 @@ export async function deleteClassroom(classroomId: string): Promise<ActionState>
     return { success: true }
 }
 
+
+export async function createCollection(classroomId: string, title: string, category: 'homework' | 'classwork' = 'homework'): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = CreateCollectionSchema.safeParse({ title, classroomId, category })
+    if (!validated.success) return { success: false, error: "Invalid data" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase.from('collections').insert({
+        classroom_id: classroomId,
+        title: title,
+        category: category
+    })
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to create collection' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function addExerciseToCollection(classroomId: string, collectionId: string, assignmentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('assignments')
+        .update({ collection_id: collectionId })
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to add exercise to collection' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
+export async function removeExerciseFromCollection(classroomId: string, collectionId: string, assignmentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('assignments')
+        .update({ collection_id: null })
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to remove exercise from collection' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}

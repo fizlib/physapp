@@ -11,7 +11,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-export function StudentAssignmentInterface({ assignment, classId }: { assignment: any, classId: string }) {
+export function StudentAssignmentInterface({ assignment, classId, onFinish, compact = false }: { assignment: any, classId: string, onFinish?: () => void, compact?: boolean }) {
     const [currentIndex, setCurrentIndex] = useState(0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
@@ -47,26 +47,30 @@ export function StudentAssignmentInterface({ assignment, classId }: { assignment
 
     return (
         <div className="space-y-8">
-            {/* Header / Navigation */}
-            <div className="flex items-center justify-between">
-                <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
-                    <Link href={`/student/class/${classId}`}>
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Class
-                    </Link>
-                </Button>
-                <div className="text-sm font-medium text-muted-foreground">
-                    Question {currentIndex + 1} of {totalQuestions}
-                </div>
-            </div>
+            {/* Header / Navigation - Only show if NOT compact */}
+            {!compact && (
+                <>
+                    <div className="flex items-center justify-between">
+                        <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                            <Link href={`/student/class/${classId}`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Class
+                            </Link>
+                        </Button>
+                        <div className="text-sm font-medium text-muted-foreground">
+                            Question {currentIndex + 1} of {totalQuestions}
+                        </div>
+                    </div>
 
-            <div className="space-y-2">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Progress</span>
-                    <span>{Math.round(progress)}%</span>
-                </div>
-                <Progress value={progress} className="h-2" />
-            </div>
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Progress</span>
+                            <span>{Math.round(progress)}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                    </div>
+                </>
+            )}
 
             {/* Persistent Diagram Section */}
             {showPersistentDiagram && (
@@ -154,9 +158,15 @@ export function StudentAssignmentInterface({ assignment, classId }: { assignment
                                     disabled={!canProceed}
                                     variant="default"
                                     className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                                    onClick={() => router.push(`/student/class/${classId}`)}
+                                    onClick={() => {
+                                        if (onFinish) {
+                                            onFinish()
+                                        } else {
+                                            router.push(`/student/class/${classId}`)
+                                        }
+                                    }}
                                 >
-                                    Finish Assignment
+                                    {onFinish ? "Next Exercise" : "Finish Assignment"}
                                     <CheckCircle2 className="h-4 w-4" />
                                 </Button>
                             )}

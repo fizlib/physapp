@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, Activity } from "lucide-react"
+import { ArrowLeft, BookOpen, Clock, Activity, Layers } from "lucide-react"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -12,8 +12,8 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     if (!user) return <div>Please log in</div>
 
-    // 1. Fetch Classroom and Published Assignments
-    const [classroomResult, assignmentsResult] = await Promise.all([
+    // 1. Fetch Classroom, Published Standalone Assignments, and Collections
+    const [classroomResult, assignmentsResult, collectionsResult] = await Promise.all([
         supabase
             .from('classrooms')
             .select('*')
@@ -24,11 +24,18 @@ export default async function StudentClassroomPage({ params }: { params: Promise
             .select('*, questions(count)')
             .eq('classroom_id', id)
             .eq('published', true)
+            .is('collection_id', null) // Only show standalone assignments here
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('collections')
+            .select('*, assignments(*)')
+            .eq('classroom_id', id)
             .order('created_at', { ascending: false })
     ])
 
     const { data: classroom } = classroomResult
     const { data: assignments } = assignmentsResult
+    const { data: collections } = collectionsResult
 
     if (!classroom) notFound()
 
@@ -58,12 +65,91 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+                <div className="space-y-8">
                     {/* Main Content (Assignments) */}
-                    <div className="space-y-6 lg:col-span-2">
+                    <div className="space-y-6">
                         <div className="flex items-center justify-between">
                             <h2 className="font-serif text-xl font-semibold tracking-tight">Active Exercises</h2>
                         </div>
+
+                        {/* Collections grouped by Category */}
+                        {collections && collections.length > 0 ? (
+                            <div className="space-y-8 mb-8">
+                                {/* Classwork Section */}
+                                {collections.some((c: any) => c.category === 'classwork') && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-medium text-foreground/80 flex items-center gap-2 text-primary">
+                                            <Layers className="h-4 w-4" />
+                                            Classwork
+                                        </h3>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => (
+                                                <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
+                                                    <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
+                                                        <CardContent className="p-6">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <h3 className="font-semibold">{collection.title}</h3>
+                                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Classwork</span>
+                                                            </div>
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {collection.assignments?.length || 0} Exercises
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 border-t border-border/40 pt-2">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    <span>Posted {new Date(collection.created_at).toLocaleDateString()}</span>
+                                                                </div>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Homework Section */}
+                                {collections.some((c: any) => c.category === 'homework' || !c.category) && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-medium text-foreground/80 flex items-center gap-2 text-indigo-500">
+                                            <Layers className="h-4 w-4" />
+                                            Homework
+                                        </h3>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => (
+                                                <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
+                                                    <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
+                                                        <CardContent className="p-6">
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <h3 className="font-semibold">{collection.title}</h3>
+                                                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Homework</span>
+                                                            </div>
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {collection.assignments?.length || 0} Exercises
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 border-t border-border/40 pt-2">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    <span>Posted {new Date(collection.created_at).toLocaleDateString()}</span>
+                                                                </div>
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="mb-8">
+                                <p className="text-sm text-muted-foreground italic">No collections assigned yet.</p>
+                            </div>
+                        )}
+
+                        {/* 
+                        Hide Individual Exercises
+                        <h3 className="text-lg font-medium text-foreground/80">Individual Exercises</h3>
 
                         {assignments && assignments.length > 0 ? (
                             <div className="grid gap-4">
@@ -97,30 +183,10 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                 </CardContent>
                             </Card>
                         )}
+                        */}
                     </div>
 
-                    {/* Sidebar (Stats/Info) */}
-                    <div className="space-y-6">
-                        <Card className="shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                                    <Activity className="h-4 w-4 text-primary" />
-                                    Your Progress
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-muted-foreground">Exercises Completed</span>
-                                        <span className="font-mono font-medium">0 / 0</span>
-                                    </div>
-                                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                                        <div className="h-full bg-primary w-0" />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    {/* Sidebar (Stats/Info) removed */}
                 </div>
             </div>
         </div>

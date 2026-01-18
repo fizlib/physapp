@@ -29,7 +29,7 @@ interface QuestionData {
 
 interface ExerciseData {
     title: string
-    category: 'homework' | 'classwork'
+    // category: 'homework' | 'classwork' // Removed
     questions: QuestionData[]
 }
 
@@ -44,13 +44,13 @@ const DEFAULT_QUESTION: QuestionData = {
     diagram_svg: null
 }
 
-export function CreateExerciseDialog({ classroomId, classroomType }: { classroomId: string, classroomType: string }) {
+export function CreateExerciseDialog({ classroomId, classroomType, collectionId }: { classroomId: string, classroomType: string, collectionId?: string }) {
     const [open, setOpen] = useState(false)
     const [step, setStep] = useState<'upload' | 'edit'>('upload')
     const [loading, setLoading] = useState(false)
     const [data, setData] = useState<ExerciseData>({
         title: '',
-        category: 'homework',
+        // category: 'homework',
         questions: [{ ...DEFAULT_QUESTION }]
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -147,7 +147,7 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
     const handleSave = async () => {
         setLoading(true)
         try {
-            const result = await createAssignmentWithQuestion(classroomId, data)
+            const result = await createAssignmentWithQuestion(classroomId, data, collectionId)
             if (result.success) {
                 toast.success("Exercise created successfully!")
                 setOpen(false)
@@ -156,7 +156,7 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
                 setImagePreview(null)
                 setData({
                     title: '',
-                    category: 'homework',
+                    // category: 'homework',
                     questions: [{ ...DEFAULT_QUESTION }]
                 })
             } else {
@@ -242,35 +242,8 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
                                 />
                             </div>
 
-                            {classroomType === 'school_class' && (
-                                <div className="space-y-2">
-                                    <Label>Category</Label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="category"
-                                                value="classwork"
-                                                checked={data.category === 'classwork'}
-                                                onChange={() => setData({ ...data, category: 'classwork' })}
-                                                className="accent-primary"
-                                            />
-                                            Classwork
-                                        </label>
-                                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                                            <input
-                                                type="radio"
-                                                name="category"
-                                                value="homework"
-                                                checked={data.category === 'homework'}
-                                                onChange={() => setData({ ...data, category: 'homework' })}
-                                                className="accent-primary"
-                                            />
-                                            Homework
-                                        </label>
-                                    </div>
-                                </div>
-                            )}
+                            {/* Category selection removed - Exercises are generic */}
+
                         </div>
 
                         {/* Questions List */}
