@@ -18,6 +18,7 @@ import { toast } from "sonner" // Assuming sonner is installed/used
 
 interface ExerciseData {
     type: 'numerical' | 'multiple_choice'
+    category?: 'homework' | 'classwork'
     title: string
     latex_text: string
     correct_value?: number | null
@@ -26,7 +27,7 @@ interface ExerciseData {
     correct_answer?: string | null
 }
 
-export function CreateExerciseDialog({ classroomId }: { classroomId: string }) {
+export function CreateExerciseDialog({ classroomId, classroomType }: { classroomId: string, classroomType: string }) {
     const [open, setOpen] = useState(false)
     const [step, setStep] = useState<'upload' | 'edit'>('upload')
     const [loading, setLoading] = useState(false)
@@ -37,7 +38,9 @@ export function CreateExerciseDialog({ classroomId }: { classroomId: string }) {
         correct_value: 0,
         tolerance: 5,
         options: ['', '', '', ''],
-        correct_answer: 'A'
+        correct_answer: 'A',
+        // @ts-ignore
+        category: 'homework'
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
 
@@ -100,7 +103,9 @@ export function CreateExerciseDialog({ classroomId }: { classroomId: string }) {
                     correct_value: 0,
                     tolerance: 5,
                     options: ['', '', '', ''],
-                    correct_answer: 'A'
+                    correct_answer: 'A',
+                    // @ts-ignore
+                    category: 'homework'
                 })
             } else {
                 toast.error(result.error || "Failed to save exercise")
@@ -190,6 +195,40 @@ export function CreateExerciseDialog({ classroomId }: { classroomId: string }) {
                                 />
                             </div>
                         </div>
+
+                        {classroomType === 'school_class' && (
+                            <div className="space-y-2">
+                                <Label>Category</Label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="category"
+                                            value="classwork"
+                                            // @ts-ignore
+                                            checked={data.category === 'classwork'}
+                                            // @ts-ignore
+                                            onChange={() => setData({ ...data, category: 'classwork' })}
+                                            className="accent-primary"
+                                        />
+                                        Classwork
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="category"
+                                            value="homework"
+                                            // @ts-ignore
+                                            checked={data.category === 'homework'}
+                                            // @ts-ignore
+                                            onChange={() => setData({ ...data, category: 'homework' })}
+                                            className="accent-primary"
+                                        />
+                                        Homework
+                                    </label>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-2">
                             <Label htmlFor="latex">Question (LaTeX)</Label>

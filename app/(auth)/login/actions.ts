@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { getSiteSetting } from '@/app/(dashboard)/admin/settings/actions'
+
 
 const AuthSchema = z.object({
     email: z.string().email(),
@@ -62,6 +64,11 @@ export async function signup(formData: FormData) {
         firstName: formData.get('firstName') as string,
         lastName: formData.get('lastName') as string,
         role: 'student',
+    }
+
+    const registrationEnabledStr = await getSiteSetting('registration_enabled')
+    if (registrationEnabledStr === 'false') {
+        return { error: 'Registration is currently closed.' }
     }
 
     const validated = AuthSchema.safeParse({ email: data.email, password: data.password })

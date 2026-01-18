@@ -29,6 +29,7 @@ CREATE TABLE classrooms (
   teacher_id UUID REFERENCES profiles(id) NOT NULL,
   name TEXT NOT NULL,
   join_code TEXT UNIQUE NOT NULL,
+  type TEXT CHECK (type IN ('private_student', 'school_class')) DEFAULT 'school_class',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -43,6 +44,12 @@ ON classrooms FOR INSERT WITH CHECK (
 -- Teachers can view their own classrooms
 CREATE POLICY "Teachers can view own classrooms"
 ON classrooms FOR SELECT USING (
+  auth.uid() = teacher_id
+);
+
+-- Teachers can delete their own classrooms
+CREATE POLICY "Teachers can delete own classrooms"
+ON classrooms FOR DELETE USING (
   auth.uid() = teacher_id
 );
 
@@ -113,6 +120,7 @@ CREATE TABLE assignments (
   title TEXT NOT NULL,
   due_date TIMESTAMP WITH TIME ZONE,
   published BOOLEAN DEFAULT false,
+  category TEXT CHECK (category IN ('homework', 'classwork')) DEFAULT 'homework',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -199,8 +207,13 @@ ON submissions FOR SELECT USING (
 );
 
 -- Teachers can view submissions for their assignments
-CREATE POLICY "Teachers can view submissions"
-ON submissions FOR SELECT USING (
+    AND classrooms.teacher_id = auth.uid()
+  )
+);
+
+-- Teachers can delete submissions for their assignments
+CREATE POLICY "Teachers can delete submissions"
+ON submissions FOR DELETE USING (
   EXISTS (
     SELECT 1 FROM assignments
     JOIN classrooms ON assignments.classroom_id = classrooms.id

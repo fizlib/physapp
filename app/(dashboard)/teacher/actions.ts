@@ -8,6 +8,7 @@ import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 
 const CreateClassSchema = z.object({
     name: z.string().min(3),
+    type: z.enum(['private_student', 'school_class']).default('school_class'),
 })
 
 const AddStudentSchema = z.object({
@@ -25,13 +26,16 @@ export async function createClassroom(formData: FormData) {
     const name = formData.get('name') as string
     const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase() // Simple random code
 
-    const validated = CreateClassSchema.safeParse({ name })
-    if (!validated.success) return { error: "Invalid name" }
+    const type = formData.get('type') as 'private_student' | 'school_class' || 'school_class'
+
+    const validated = CreateClassSchema.safeParse({ name, type })
+    if (!validated.success) return { error: "Invalid name or type" }
 
     const { error } = await supabase.from('classrooms').insert({
         teacher_id: user.id,
         name: name,
-        join_code: joinCode
+        join_code: joinCode,
+        type: validated.data.type
     })
 
     if (error) {
@@ -212,6 +216,7 @@ export async function updateClassroomName(classroomId: string, name: string): Pr
 const ExerciseSchema = z.object({
     title: z.string(),
     type: z.enum(['numerical', 'multiple_choice']),
+    category: z.enum(['homework', 'classwork']).default('homework'),
     latex_text: z.string(),
     correct_value: z.number().nullable().optional(),
     tolerance: z.number().nullable().optional(),
@@ -306,6 +311,7 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         .insert({
             classroom_id: classroomId,
             title: data.title,
+            category: data.category,
             published: false
         })
         .select()
@@ -362,6 +368,96 @@ export async function toggleAssignmentPublish(assignmentId: string, classroomId:
 
     revalidatePath(`/teacher/class/${classroomId}`)
     revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
+    return { success: true }
+}
+
+export async function updateClassroomType(classroomId: string, type: 'private_student' | 'school_class'): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('classrooms')
+        .update({ type: type })
+        .eq('id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update classroom type' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function deleteClassroom(classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Manual Cascade Delete
+    // 1. Submissions (via assignments)
+    // 2. Questions (via assignments)
+    // 3. Assignments
+    // 4. Enrollments
+    // 5. Classroom
+
+    // Note: This is a heavy operation. Ideally, use ON DELETE CASCADE in Postgres, 
+    // but doing it manually here since we haven't set that up yet.
+
+    // 1. Get Assignment IDs
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('classroom_id', classroomId)
+
+    const assignmentIds = assignments?.map(a => a.id) || []
+
+    if (assignmentIds.length > 0) {
+        // Delete Submissions
+        await supabase.from('submissions').delete().in('assignment_id', assignmentIds)
+        // Delete Questions
+        await supabase.from('questions').delete().in('assignment_id', assignmentIds)
+        // Delete Assignments
+        await supabase.from('assignments').delete().in('id', assignmentIds)
+    }
+
+    // Delete Enrollments
+    await supabase.from('enrollments').delete().eq('classroom_id', classroomId)
+
+    // Delete Classroom
+    const { error } = await supabase.from('classrooms').delete().eq('id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to delete classroom' }
+    }
+
+    revalidatePath('/teacher')
     return { success: true }
 }
 

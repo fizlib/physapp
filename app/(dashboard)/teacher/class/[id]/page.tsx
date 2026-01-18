@@ -7,6 +7,7 @@ import { ArrowLeft, BookOpen, Plus, Users, Settings } from "lucide-react"
 import { StudentManager } from "./StudentManager"
 import { EditableClassroomTitle } from "./EditableClassroomTitle"
 import { CreateExerciseDialog } from "./CreateExerciseDialog"
+import { ClassSettingsDialog } from "./ClassSettingsDialog"
 
 export default async function ClassroomPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ view?: string }> }) {
     const supabase = await createClient()
@@ -73,10 +74,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                     Manage Students
                                 </Link>
                             </Button>
-                            <Button variant="outline" size="sm" disabled>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Settings
-                            </Button>
+                            <ClassSettingsDialog classroomId={id} currentType={classroom.type} />
                         </div>
                     </div>
                 </div>
@@ -88,46 +86,119 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                         <div className="space-y-6 animate-fade-in-up">
                             <div className="flex items-center justify-between">
                                 <h2 className="font-serif text-xl font-semibold tracking-tight">Exercise Modules & Assignments</h2>
-                                <CreateExerciseDialog classroomId={id} />
+                                <CreateExerciseDialog classroomId={id} classroomType={classroom.type} />
                             </div>
 
-                            {assignments && assignments.length > 0 ? (
-                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                    {assignments.map((assignment) => (
-                                        <Link key={assignment.id} href={`/teacher/class/${id}/assignment/${assignment.id}`}>
-                                            <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
-                                                <CardContent className="p-6 space-y-2">
-                                                    <div className="flex justify-between items-start">
-                                                        <h3 className="font-semibold">{assignment.title}</h3>
-                                                        {assignment.published ? (
-                                                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
-                                                        ) : (
-                                                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground line-clamp-2">
-                                                        {assignment.questions && assignment.questions.length > 0
-                                                            ? `${assignment.questions.length} Question(s)`
-                                                            : "No questions"}
-                                                    </div>
-                                                    <div className="text-xs text-muted-foreground pt-2">
-                                                        Created {new Date(assignment.created_at).toLocaleDateString()}
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        </Link>
-                                    ))}
-                                </div>
+                            {classroom.type === 'school_class' ? (
+                                <>
+                                    <div className="space-y-4">
+                                        <h3 className="text-lg font-medium text-primary">Classwork</h3>
+                                        {assignments?.filter((a: any) => a.category === 'classwork').length ? (
+                                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                {assignments.filter((a: any) => a.category === 'classwork').map((assignment) => (
+                                                    <Link key={assignment.id} href={`/teacher/class/${id}/assignment/${assignment.id}`}>
+                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
+                                                            <CardContent className="p-6 space-y-2">
+                                                                <div className="flex justify-between items-start">
+                                                                    <h3 className="font-semibold">{assignment.title}</h3>
+                                                                    {assignment.published ? (
+                                                                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-sm text-muted-foreground line-clamp-2">
+                                                                    {assignment.questions && assignment.questions.length > 0
+                                                                        ? `${assignment.questions.length} Question(s)`
+                                                                        : "No questions"}
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground pt-2">
+                                                                    Created {new Date(assignment.created_at).toLocaleDateString()}
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No classwork yet.</p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <h3 className="text-lg font-medium text-primary">Homework</h3>
+                                        {assignments?.filter((a: any) => a.category === 'homework' || !a.category).length ? (
+                                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                {assignments.filter((a: any) => a.category === 'homework' || !a.category).map((assignment) => (
+                                                    <Link key={assignment.id} href={`/teacher/class/${id}/assignment/${assignment.id}`}>
+                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
+                                                            <CardContent className="p-6 space-y-2">
+                                                                <div className="flex justify-between items-start">
+                                                                    <h3 className="font-semibold">{assignment.title}</h3>
+                                                                    {assignment.published ? (
+                                                                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-sm text-muted-foreground line-clamp-2">
+                                                                    {assignment.questions && assignment.questions.length > 0
+                                                                        ? `${assignment.questions.length} Question(s)`
+                                                                        : "No questions"}
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground pt-2">
+                                                                    Created {new Date(assignment.created_at).toLocaleDateString()}
+                                                                </div>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No homework yet.</p>
+                                        )}
+                                    </div>
+                                </>
                             ) : (
-                                <Card className="border-dashed border-border/60 bg-muted/5 shadow-none">
-                                    <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                                        <div className="rounded-full bg-muted/30 p-4 mb-4">
-                                            <BookOpen className="h-8 w-8 opacity-40" />
-                                        </div>
-                                        <p className="text-sm font-medium">No active exercises detected.</p>
-                                        <p className="text-xs opacity-70">Initialize a new assignment to challenge your students.</p>
-                                    </CardContent>
-                                </Card>
+                                /* Private Student View (Just List) */
+                                assignments && assignments.length > 0 ? (
+                                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                        {assignments.map((assignment) => (
+                                            <Link key={assignment.id} href={`/teacher/class/${id}/assignment/${assignment.id}`}>
+                                                <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
+                                                    <CardContent className="p-6 space-y-2">
+                                                        <div className="flex justify-between items-start">
+                                                            <h3 className="font-semibold">{assignment.title}</h3>
+                                                            {assignment.published ? (
+                                                                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
+                                                            ) : (
+                                                                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground line-clamp-2">
+                                                            {assignment.questions && assignment.questions.length > 0
+                                                                ? `${assignment.questions.length} Question(s)`
+                                                                : "No questions"}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground pt-2">
+                                                            Created {new Date(assignment.created_at).toLocaleDateString()}
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <Card className="border-dashed border-border/60 bg-muted/5 shadow-none">
+                                        <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                                            <div className="rounded-full bg-muted/30 p-4 mb-4">
+                                                <BookOpen className="h-8 w-8 opacity-40" />
+                                            </div>
+                                            <p className="text-sm font-medium">No active exercises detected.</p>
+                                            <p className="text-xs opacity-70">Initialize a new assignment to challenge your students.</p>
+                                        </CardContent>
+                                    </Card>
+                                )
                             )}
                         </div>
                     )}
