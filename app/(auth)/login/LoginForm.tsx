@@ -49,7 +49,7 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                         {isLogin ? 'Welcome back' : 'Create an account'}
                     </CardTitle>
                     <CardDescription>
-                        {isLogin ? 'Enter your credentials to access your lab.' : 'Start your journey into physics today.'}
+                        {isLogin ? 'Enter your credentials to access your lab.' : 'Start your journey today.'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

@@ -5,9 +5,12 @@ import Link from "next/link"
 import { ArrowLeft, Check, CheckCircle2, XCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
+import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { Badge } from "@/components/ui/badge"
 import { TestInterface } from "./TestInterface"
+import { DeleteAssignmentDialog } from "./DeleteAssignmentDialog"
 import { PublishToggle } from "./PublishToggle"
+import { EditExerciseDialog } from "./EditExerciseDialog"
 
 export default async function AssignmentPage({ params }: { params: Promise<{ id: string, assignmentId: string }> }) {
     const supabase = await createClient()
@@ -46,11 +49,19 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                                 </span>
                             </div>
                         </div>
-                        <PublishToggle
-                            assignmentId={assignmentId}
-                            classroomId={id}
-                            initialPublished={assignment.published}
-                        />
+                        <div className="flex items-center gap-2">
+                            <PublishToggle
+                                assignmentId={assignmentId}
+                                classroomId={id}
+                                initialPublished={assignment.published}
+                            />
+                            <EditExerciseDialog
+                                classroomId={id}
+                                assignmentId={assignmentId}
+                                initialData={assignment}
+                            />
+                            <DeleteAssignmentDialog assignmentId={assignmentId} classroomId={id} />
+                        </div>
                     </div>
                 </div>
 
@@ -67,6 +78,11 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                             <div className="text-lg leading-relaxed">
                                 <MathDisplay content={question.latex_text || "No question text"} />
                             </div>
+                            <DiagramDisplay
+                                diagramType={question.diagram_type}
+                                diagramLatex={question.diagram_latex}
+                                diagramSvg={question.diagram_svg}
+                            />
                         </CardContent>
                     </Card>
 

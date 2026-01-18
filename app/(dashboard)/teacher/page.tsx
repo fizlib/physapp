@@ -70,7 +70,7 @@ export default async function TeacherDashboard() {
                                     <DialogHeader>
                                         <DialogTitle className="font-serif text-2xl">Create Classroom</DialogTitle>
                                         <DialogDescription>
-                                            Enter the name for your new physics laboratory. A unique join code will be generated.
+                                            Enter the name for your new class. A unique join code will be generated.
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="grid gap-4 py-4">
@@ -125,7 +125,7 @@ export default async function TeacherDashboard() {
                                             <span>Manage Students</span>
                                         </span>
                                         <span className="text-xs opacity-50 group-hover:opacity-100 transition-opacity">
-                                            Enter Lab &rarr;
+                                            Enter Class &rarr;
                                         </span>
                                     </div>
                                 </CardContent>
@@ -140,7 +140,7 @@ export default async function TeacherDashboard() {
                             </div>
                             <div className="space-y-1">
                                 <h3 className="text-lg font-medium text-foreground">No classrooms yet</h3>
-                                <p className="text-sm">Create your first physics laboratory to get started.</p>
+                                <p className="text-sm">Create your first class to get started.</p>
                             </div>
                         </div>
                     )}

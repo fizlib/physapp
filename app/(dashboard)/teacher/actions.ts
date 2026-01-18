@@ -43,11 +43,157 @@ export async function createClassroom(formData: FormData) {
         return { error: 'Failed to create classroom' }
     }
 
+
     revalidatePath('/teacher')
     return { success: true }
 }
 
+const UpdateAssignmentTitleSchema = z.object({
+    assignmentId: z.string().uuid(),
+    title: z.string().min(1),
+})
 
+export async function updateAssignmentWithQuestion(assignmentId: string, classroomId: string, exerciseData: any): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // 1. Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // 2. Validate Data
+    const validated = ExerciseSchema.safeParse(exerciseData)
+    if (!validated.success) {
+        console.error("Validation Error", validated.error)
+        return { success: false, error: "Invalid exercise data" }
+    }
+    const data = validated.data
+
+    // 3. Verify Ownership
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // 4. Update Assignment
+    const { error: assignmentError } = await supabase
+        .from('assignments')
+        .update({
+            title: data.title,
+            category: data.category
+        })
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+
+    if (assignmentError) {
+        console.error("Assignment Update Error", assignmentError)
+        return { success: false, error: "Failed to update assignment" }
+    }
+
+    // 5. Update Question
+    const { error: questionError } = await supabase
+        .from('questions')
+        .update({
+            latex_text: data.latex_text,
+            question_type: data.type,
+            correct_value: data.type === 'numerical' ? data.correct_value : null,
+            tolerance_percent: data.type === 'numerical' ? data.tolerance : null,
+            // @ts-ignore
+            options: data.type === 'multiple_choice' ? data.options : null,
+            // @ts-ignore
+            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null,
+            diagram_type: data.diagram_type || null,
+            diagram_svg: data.diagram_svg || null
+        })
+        .eq('assignment_id', assignmentId)
+
+    if (questionError) {
+        console.error("Question Update Error", questionError)
+        return { success: false, error: "Failed to update question" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function updateAssignmentTitle(assignmentId: string, classroomId: string, title: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = UpdateAssignmentTitleSchema.safeParse({ assignmentId, title })
+    if (!validated.success) return { success: false, error: "Invalid title" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('assignments')
+        .update({ title: title })
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId) // Extra safety
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update assignment title' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function deleteAssignment(assignmentId: string, classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Manual Cascade Delete
+    // 1. Submissions
+    // 2. Questions
+    // 3. Assignment
+
+    // Delete Submissions
+    await supabase.from('submissions').delete().eq('assignment_id', assignmentId)
+    // Delete Questions
+    await supabase.from('questions').delete().eq('assignment_id', assignmentId)
+    // Delete Assignment
+    const { error } = await supabase.from('assignments').delete().eq('id', assignmentId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to delete assignment' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
 export type ActionState = {
     success: boolean
     message?: string
@@ -221,7 +367,9 @@ const ExerciseSchema = z.object({
     correct_value: z.number().nullable().optional(),
     tolerance: z.number().nullable().optional(),
     options: z.array(z.string()).nullable().optional(),
-    correct_answer: z.string().nullable().optional()
+    correct_answer: z.string().nullable().optional(),
+    diagram_type: z.enum(['graph', 'scheme']).nullable().optional(),
+    diagram_svg: z.string().nullable().optional()
 })
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -250,7 +398,16 @@ export async function generateExerciseFromImage(formData: FormData) {
     const prompt = `
   Analyze this physics/math problem image.
   Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
-
+  
+  IMPORTANT: Also check if the image contains any diagrams, graphs, or schemes (like coordinate plots, function graphs, circuit diagrams, force diagrams, geometric figures, etc.).
+  
+  If you find a diagram, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
+  - Be self-contained with proper viewBox attribute
+  - Use appropriate colors (black for lines, gray for grid, labeled axes)
+  - Include text labels, axis labels, and any annotations from the original
+  - For graphs: draw the coordinate system, gridlines, axis arrows, tick marks, and plot the curves/lines accurately
+  - For schemes: recreate the components (resistors, forces, objects) with proper labels
+  
   Return a JSON object with this EXACT structure (do not wrap in markdown):
   {
     "type": "numerical" | "multiple_choice",
@@ -259,7 +416,9 @@ export async function generateExerciseFromImage(formData: FormData) {
     "correct_value": number (if numerical, else null),
     "tolerance": number (suggest a tolerance %, e.g., 5, else null),
     "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null),
-    "correct_answer": "Option content" OR "A/B/C" (if multiple_choice, else null)
+    "correct_answer": "Option content" OR "A/B/C" (if multiple_choice, else null),
+    "diagram_type": "graph" | "scheme" | null (null if no diagram found),
+    "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found)
   }
   `
 
@@ -334,7 +493,9 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             // @ts-ignore
             options: data.type === 'multiple_choice' ? data.options : null,
             // @ts-ignore
-            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null
+            correct_answer: data.type === 'multiple_choice' ? data.correct_answer : null,
+            diagram_type: data.diagram_type || null,
+            diagram_svg: data.diagram_svg || null
         })
 
     if (questionError) {

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, BookOpen } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
+import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 
 export default async function StudentAssignmentPage({ params }: { params: Promise<{ id: string, assignmentId: string }> }) {
@@ -55,6 +56,11 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                             <div className="text-lg leading-relaxed">
                                 <MathDisplay content={question.latex_text || "No question text"} />
                             </div>
+                            <DiagramDisplay
+                                diagramType={question.diagram_type}
+                                diagramLatex={question.diagram_latex}
+                                diagramSvg={question.diagram_svg}
+                            />
                         </CardContent>
                     </Card>
 

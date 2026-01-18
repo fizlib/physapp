@@ -25,6 +25,8 @@ interface ExerciseData {
     tolerance?: number | null
     options?: string[] | null
     correct_answer?: string | null
+    diagram_type?: 'graph' | 'scheme' | null
+    diagram_svg?: string | null
 }
 
 export function CreateExerciseDialog({ classroomId, classroomType }: { classroomId: string, classroomType: string }) {
@@ -40,7 +42,9 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
         options: ['', '', '', ''],
         correct_answer: 'A',
         // @ts-ignore
-        category: 'homework'
+        category: 'homework',
+        diagram_type: null,
+        diagram_svg: null
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
 
@@ -105,7 +109,9 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
                     options: ['', '', '', ''],
                     correct_answer: 'A',
                     // @ts-ignore
-                    category: 'homework'
+                    category: 'homework',
+                    diagram_type: null,
+                    diagram_svg: null
                 })
             } else {
                 toast.error(result.error || "Failed to save exercise")
@@ -181,9 +187,28 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
                     <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Detected Type</Label>
-                                <div className="px-3 py-2 rounded-md border bg-muted text-sm font-medium capitalize">
-                                    {data.type.replace('_', ' ')}
+                                <Label htmlFor="type">Exercise Type</Label>
+                                <div className="relative">
+                                    <select
+                                        id="type"
+                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
+                                        value={data.type}
+                                        onChange={(e) => {
+                                            const newType = e.target.value as 'numerical' | 'multiple_choice';
+                                            const updates: Partial<ExerciseData> = { type: newType };
+                                            if (newType === 'multiple_choice' && (!data.options || data.options.length === 0)) {
+                                                updates.options = ['', '', '', ''];
+                                                updates.correct_answer = 'A';
+                                            }
+                                            setData({ ...data, ...updates });
+                                        }}
+                                    >
+                                        <option value="numerical">Numerical</option>
+                                        <option value="multiple_choice">Multiple Choice</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-muted-foreground">
+                                        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4"><path d="M4.93179 5.43179C4.75605 5.60753 4.75605 5.89245 4.93179 6.06819C5.10753 6.24392 5.39245 6.24392 5.56819 6.06819L7.49999 4.13638L9.43179 6.06819C9.60753 6.24392 9.89245 6.24392 10.0682 6.06819C10.2439 5.89245 10.2439 5.60753 10.0682 5.43179L7.81819 3.18179C7.73379 3.0974 7.61933 3.04999 7.49999 3.04999C7.38064 3.04999 7.26618 3.0974 7.18179 3.18179L4.93179 5.43179ZM10.0682 9.56819C10.2439 9.39245 10.2439 9.10753 10.0682 8.93179C9.89245 8.75606 9.60753 8.75606 9.43179 8.93179L7.49999 10.8636L5.56819 8.93179C5.39245 8.75606 5.10753 8.75606 4.93179 8.93179C4.75605 9.10753 4.75605 9.39245 4.93179 9.56819L7.18179 11.8182C7.26618 11.9026 7.38064 11.95 7.49999 11.95C7.61933 11.95 7.73379 11.9026 7.81819 11.8182L10.0682 9.56819Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                                    </div>
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -294,6 +319,39 @@ export function CreateExerciseDialog({ classroomId, classroomType }: { classroom
                                         </Button>
                                     </div>
                                 ))}
+                            </div>
+                        )}
+
+                        {/* Diagram Section */}
+                        {data.diagram_type && data.diagram_svg && (
+                            <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+                                <div className="flex items-center justify-between">
+                                    <Label className="flex items-center gap-2">
+                                        <span className="text-lg">📊</span>
+                                        Detected {data.diagram_type === 'graph' ? 'Graph' : 'Diagram'}
+                                    </Label>
+                                </div>
+
+                                {/* SVG Preview */}
+                                <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
+                                    <div
+                                        dangerouslySetInnerHTML={{ __html: data.diagram_svg }}
+                                        className="max-w-full [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:max-h-[300px]"
+                                    />
+                                </div>
+
+                                {/* Editable SVG Code */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="diagram-code" className="text-sm text-muted-foreground">
+                                        Edit SVG Code
+                                    </Label>
+                                    <textarea
+                                        id="diagram-code"
+                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        value={data.diagram_svg || ''}
+                                        onChange={(e) => setData({ ...data, diagram_svg: e.target.value })}
+                                    />
+                                </div>
                             </div>
                         )}
 

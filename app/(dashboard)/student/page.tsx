@@ -27,7 +27,7 @@ export default async function StudentDashboard() {
                 <div className="flex flex-col gap-4 border-b border-border/40 pb-6 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                            My Physics Lab
+                            My Classes
                         </h1>
                         <p className="mt-2 text-sm text-muted-foreground">
                             Welcome back. Continue your exploration of the universe.
@@ -67,10 +67,10 @@ export default async function StudentDashboard() {
                             </div>
                             <div className="space-y-1">
                                 <h3 className="text-lg font-medium text-foreground">No classrooms found</h3>
-                                <p className="text-sm">You aren't enrolled in any physics courses yet.</p>
+                                <p className="text-sm">You aren't enrolled in any classes yet.</p>
                             </div>
                             <p className="max-w-xs text-xs opacity-70">
-                                Contact your instructor to be added to their laboratory.
+                                Contact your instructor to be added to their class.
                             </p>
                         </div>
                     )}
