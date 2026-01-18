@@ -20,9 +20,10 @@ import { useRouter } from "next/navigation"
 interface ClassSettingsDialogProps {
     classroomId: string
     currentType: 'private_student' | 'school_class'
+    trigger?: React.ReactNode
 }
 
-export function ClassSettingsDialog({ classroomId, currentType }: ClassSettingsDialogProps) {
+export function ClassSettingsDialog({ classroomId, currentType, trigger }: ClassSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
@@ -68,10 +69,12 @@ export function ClassSettingsDialog({ classroomId, currentType }: ClassSettingsD
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                </Button>
+                {trigger ? trigger : (
+                    <Button variant="outline" size="sm">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>

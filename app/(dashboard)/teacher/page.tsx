@@ -2,10 +2,9 @@ import { createClient } from "@/lib/supabase/server"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Users, Settings } from "lucide-react"
-import Link from "next/link"
-import { Label } from "@/components/ui/label"
+import { Plus } from "lucide-react"
 import { CreateClassroomDialog } from "./_components/CreateClassroomDialog"
+import { ClassroomCard } from "./_components/ClassroomCard"
 
 import { getCachedUser, getCachedProfile } from "@/lib/data-service"
 
@@ -54,30 +53,7 @@ export default async function TeacherDashboard() {
                 {/* Grid Section */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {classrooms?.map((classroom) => (
-                        <Link href={`/teacher/class/${classroom.id}`} key={classroom.id} className="group h-full">
-                            <Card className="h-full border-border/60 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
-                                <CardHeader className="space-y-1">
-                                    <div className="flex items-start justify-between">
-                                        <CardTitle className="font-medium tracking-tight group-hover:text-primary">
-                                            {classroom.name}
-                                        </CardTitle>
-                                        <Settings className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                                    </div>
-
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                        <span className="flex items-center gap-1.5">
-                                            <Users className="h-3.5 w-3.5" />
-                                            <span>Manage Students</span>
-                                        </span>
-                                        <span className="text-xs opacity-50 group-hover:opacity-100 transition-opacity">
-                                            Enter Class &rarr;
-                                        </span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </Link>
+                        <ClassroomCard key={classroom.id} classroom={classroom} />
                     ))}
 
                     {classrooms?.length === 0 && (

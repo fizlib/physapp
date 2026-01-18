@@ -48,7 +48,7 @@ export function CreateClassroomDialog() {
                     <DialogHeader>
                         <DialogTitle className="font-serif text-2xl">Create Classroom</DialogTitle>
                         <DialogDescription>
-                            Enter the name for your new class. A unique join code will be generated.
+                            Enter the name for your new class.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
