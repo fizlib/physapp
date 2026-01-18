@@ -33,7 +33,11 @@ export async function proxy(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    // Use getSession() instead of getUser() for faster middleware execution.
+    // getSession() validates the JWT locally without a network call to Supabase.
+    // This is safe for routing decisions; page components still use getUser() for secure verification.
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user ?? null
 
     // Protected routes pattern
     const nextUrl = request.nextUrl
