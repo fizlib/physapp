@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Check, X, AlertCircle } from "lucide-react"
 import MathDisplay from "@/components/MathDisplay"
 
@@ -53,28 +52,24 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             {question.question_type === 'numerical' ? (
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                    <Label htmlFor="answer">Your Answer</Label>
-                    <div className="flex gap-2">
-                        <Input
-                            type="number"
-                            id="answer"
-                            placeholder="Enter value..."
-                            value={numInput}
-                            onChange={(e) => {
-                                setNumInput(e.target.value)
-                                setResult(null)
-                                setFeedback("")
-                            }}
-                        />
-                        <Button onClick={checkAnswer}>Check</Button>
-                    </div>
+                <div className="flex w-full max-w-sm items-center gap-2">
+                    <Input
+                        type="number"
+                        id="answer"
+                        placeholder="Enter your answer..."
+                        value={numInput}
+                        onChange={(e) => {
+                            setNumInput(e.target.value)
+                            setResult(null)
+                            setFeedback("")
+                        }}
+                    />
+                    <Button onClick={checkAnswer}>Check</Button>
                 </div>
             ) : (
                 <div className="space-y-3">
-                    <Label>Select an Option</Label>
                     <div className="grid gap-2">
                         {question.options?.map((opt: string, i: number) => {
                             const letter = ['A', 'B', 'C', 'D'][i]
@@ -98,7 +93,7 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
                             )
                         })}
                     </div>
-                    <Button className="mt-2" onClick={checkAnswer} disabled={!mcqInput}>
+                    <Button className="mt-1" onClick={checkAnswer} disabled={!mcqInput}>
                         Check Answer
                     </Button>
                 </div>

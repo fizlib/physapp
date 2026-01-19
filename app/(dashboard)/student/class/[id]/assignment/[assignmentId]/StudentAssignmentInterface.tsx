@@ -44,39 +44,34 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
     const progress = (completedIndices.size / totalQuestions) * 100
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 max-w-3xl mx-auto">
             {/* Header / Navigation - Only show if NOT compact */}
             {!compact && (
-                <>
-                    <div className="flex items-center justify-between">
-                        <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
-                            <Link href={`/student/class/${classId}`}>
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Class
-                            </Link>
-                        </Button>
+                <div className="flex items-center justify-between">
+                    <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                        <Link href={`/student/class/${classId}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Back to Class
+                        </Link>
+                    </Button>
+                    <div className="flex items-center gap-4">
                         <div className="text-sm font-medium text-muted-foreground">
-                            {showAll ? `${totalQuestions} Questions` : `Question ${currentIndex + 1} of ${totalQuestions}`}
+                            {Math.round(progress)}%
                         </div>
+                        <Progress value={progress} className="w-24 h-2" />
                     </div>
-
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Progress</span>
-                            <span>{Math.round(progress)}%</span>
-                        </div>
-                        <Progress value={progress} className="h-2" />
-                    </div>
-                </>
+                </div>
             )}
 
             {/* Persistent Diagram Section (Paginated specific) */}
             {showPersistentDiagram && (
                 <Card className="bg-muted/30 border-dashed">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium text-muted-foreground">Scenario Reference</CardTitle>
+                    <CardHeader className="py-3 px-4">
+                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            Scenario Reference
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-4 pb-4">
                         <DiagramDisplay
                             diagramType={firstQuestion.diagram_type}
                             diagramLatex={firstQuestion.diagram_latex}
@@ -91,48 +86,43 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
 
             {showAll ? (
                 /* One Page View */
-                <div className="space-y-12">
+                <div className="space-y-8">
                     {questions.map((q: any, index: number) => {
                         const isCorrect = completedIndices.has(index)
                         return (
-                            <div key={index} className="space-y-6 pt-6 border-t first:border-0 first:pt-0">
-                                <h2 className="text-2xl font-bold tracking-tight">Question {index + 1}</h2>
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Question</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-6">
-                                        <div className="text-lg leading-relaxed">
-                                            <MathDisplay content={q.latex_text || "No question text"} />
+                            <Card key={index} className={`transition-all ${isCorrect ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                                <CardContent className="p-6">
+                                    <div className="flex gap-4">
+                                        <div className="flex-none pt-1">
+                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                                                {index + 1}
+                                            </span>
                                         </div>
-                                        <DiagramDisplay
-                                            diagramType={q.diagram_type}
-                                            diagramLatex={q.diagram_latex}
-                                            diagramSvg={q.diagram_svg}
-                                        />
-                                    </CardContent>
-                                </Card>
+                                        <div className="flex-1 space-y-6">
+                                            <div className="text-lg leading-relaxed">
+                                                <MathDisplay content={q.latex_text || "No question text"} />
+                                            </div>
+                                            <DiagramDisplay
+                                                diagramType={q.diagram_type}
+                                                diagramLatex={q.diagram_latex}
+                                                diagramSvg={q.diagram_svg}
+                                            />
 
-                                <Card className={`border-2 transition-colors ${isCorrect ? 'border-green-500/20 bg-green-50/30' : 'border-primary/10'}`}>
-                                    <CardHeader className="pb-4">
-                                        <CardTitle className="text-primary flex items-center justify-between">
-                                            <span>Your Answer</span>
-                                            {isCorrect && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <TestInterface
-                                            key={q.id || index}
-                                            question={q}
-                                            onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
-                                        />
-                                    </CardContent>
-                                </Card>
-                            </div>
+                                            <div className="pt-2">
+                                                <TestInterface
+                                                    key={q.id || index}
+                                                    question={q}
+                                                    onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
                         )
                     })}
 
-                    <div className="flex justify-end pt-8 sticky bottom-4">
+                    <div className="flex justify-end pt-4 sticky bottom-4">
                         <Button
                             disabled={completedIndices.size !== totalQuestions}
                             variant="default"
@@ -152,39 +142,27 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                     </div>
                 </div>
             ) : (
-                /* Paginated View (Original) */
-                <div className="space-y-8">
-                    <div>
-                        <h2 className="text-2xl font-bold tracking-tight mb-4">Question {currentIndex + 1}</h2>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Question</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="text-lg leading-relaxed">
-                                    <MathDisplay content={questions[currentIndex].latex_text || "No question text"} />
-                                </div>
-                                <DiagramDisplay
-                                    diagramType={questions[currentIndex].diagram_type}
-                                    diagramLatex={questions[currentIndex].diagram_latex}
-                                    diagramSvg={questions[currentIndex].diagram_svg}
-                                />
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <Card className={`border-2 transition-colors ${canProceed ? 'border-green-500/20 bg-green-50/30' : 'border-primary/10'}`}>
-                        <CardHeader className="pb-4">
-                            <CardTitle className="text-primary flex items-center justify-between">
-                                <span>Your Answer</span>
-                                {canProceed && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                            </CardTitle>
+                /* Paginated View */
+                <Card className={`transition-all ${canProceed ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                    <CardHeader className="flex flex-row items-start justify-between pb-2">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl">Question {currentIndex + 1}</CardTitle>
                             <CardDescription>
-                                Solve the problem above and check your answer.
+                                {totalQuestions > 1 ? `Step ${currentIndex + 1} of ${totalQuestions}` : 'Solve the problem below'}
                             </CardDescription>
-                        </CardHeader>
-                        <CardContent>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="text-lg leading-relaxed">
+                            <MathDisplay content={questions[currentIndex].latex_text || "No question text"} />
+                        </div>
+                        <DiagramDisplay
+                            diagramType={questions[currentIndex].diagram_type}
+                            diagramLatex={questions[currentIndex].diagram_latex}
+                            diagramSvg={questions[currentIndex].diagram_svg}
+                        />
+
+                        <div className="pt-6 border-t">
                             <TestInterface
                                 key={questions[currentIndex].id || currentIndex}
                                 question={questions[currentIndex]}
@@ -219,9 +197,9 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                                     </Button>
                                 )}
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </div>
+                    </CardContent>
+                </Card>
             )}
         </div>
     )
