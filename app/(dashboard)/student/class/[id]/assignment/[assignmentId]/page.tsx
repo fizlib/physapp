@@ -23,6 +23,17 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
     // Ensure questions are sorted by sequence/order if applicable, or just rely on default order.
     // Assuming questions array is the order.
 
+    // Fetch progress
+    const { data: progress } = await supabase
+        .from('assignment_progress')
+        .select('*')
+        .eq('assignment_id', assignmentId)
+        .eq('student_id', user.id)
+        .single()
+
+    const initialCompletedIndices = progress?.completed_question_indices || []
+    const initialIsCompleted = progress?.is_completed || false
+
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
             <div className="mx-auto max-w-4xl space-y-8">
@@ -37,7 +48,12 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     </div>
                 </div>
 
-                <StudentAssignmentInterface assignment={assignment} classId={id} />
+                <StudentAssignmentInterface
+                    assignment={assignment}
+                    classId={id}
+                    initialCompletedIndices={initialCompletedIndices}
+                    initialIsCompleted={initialIsCompleted}
+                />
             </div>
         </div>
     )

@@ -10,11 +10,30 @@ import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { upsertAssignmentProgress } from "../../../../actions"
 
-export function StudentAssignmentInterface({ assignment, classId, onFinish, onPrevious, canSkip = false, compact = false }: { assignment: any, classId: string, onFinish?: () => void, onPrevious?: () => void, canSkip?: boolean, compact?: boolean }) {
+export function StudentAssignmentInterface({
+    assignment,
+    classId,
+    onFinish,
+    onPrevious,
+    canSkip = false,
+    compact = false,
+    initialCompletedIndices = [],
+    initialIsCompleted = false
+}: {
+    assignment: any,
+    classId: string,
+    onFinish?: () => void,
+    onPrevious?: () => void,
+    canSkip?: boolean,
+    compact?: boolean,
+    initialCompletedIndices?: number[],
+    initialIsCompleted?: boolean
+}) {
     const [currentIndex, setCurrentIndex] = useState(0)
     // track which questions have been answered correctly
-    const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
+    const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const router = useRouter()
 
     const questions = assignment.questions || []
@@ -27,8 +46,16 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, onPr
     // Show persistent diagram if we are NOT on the first question AND the first question has a diagram AND we are NOT showing all questions
     const showPersistentDiagram = !showAll && currentIndex > 0 && hasPersistentDiagram
 
-    const handleCorrect = () => {
-        setCompletedIndices(prev => new Set(prev).add(currentIndex))
+    const handleCorrect = async () => {
+        const newSet = new Set(completedIndices).add(currentIndex)
+        setCompletedIndices(newSet)
+
+        // Save progress
+        await upsertAssignmentProgress(
+            assignment.id,
+            Array.from(newSet),
+            false
+        )
     }
 
     const canProceed = canSkip || completedIndices.has(currentIndex)
@@ -139,7 +166,14 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, onPr
                             variant="default"
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
-                            onClick={() => {
+                            onClick={async () => {
+                                // Save completion status
+                                await upsertAssignmentProgress(
+                                    assignment.id,
+                                    Array.from(completedIndices),
+                                    true
+                                )
+
                                 if (onFinish) {
                                     onFinish()
                                 } else {
@@ -205,7 +239,14 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, onPr
                                         disabled={!canProceed}
                                         variant="default"
                                         className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                                        onClick={() => {
+                                        onClick={async () => {
+                                            // Save completion status
+                                            await upsertAssignmentProgress(
+                                                assignment.id,
+                                                Array.from(completedIndices),
+                                                true
+                                            )
+
                                             if (onFinish) {
                                                 onFinish()
                                             } else {

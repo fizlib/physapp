@@ -42,7 +42,22 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         })
     }
 
+    // Fetch progress
+    const assignmentIds = collection.assignments?.map((a: any) => a.id) || []
+    let progressData: any[] = []
+
+    if (assignmentIds.length > 0) {
+        const { data: progress } = await supabase
+            .from('assignment_progress')
+            .select('*')
+            .in('assignment_id', assignmentIds)
+
+        if (progress) {
+            progressData = progress
+        }
+    }
+
     return (
-        <CollectionPlayer collection={collection} classroomId={id} />
+        <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} />
     )
 }

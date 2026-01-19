@@ -20,18 +20,85 @@ import {
 interface CollectionPlayerProps {
     collection: any
     classroomId: string
+    progressData?: any[]
 }
 
-export function CollectionPlayer({ collection, classroomId }: CollectionPlayerProps) {
-    const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(0)
-    const [maxReachedIndex, setMaxReachedIndex] = useState(0)
-    const [isCompleted, setIsCompleted] = useState(false)
+export function CollectionPlayer({ collection, classroomId, progressData = [] }: CollectionPlayerProps) {
+    const assignments = collection.assignments || []
+
+    // Determine initial state based on progress
+    // Create a map for easy lookup
+    const progressMap = new Map()
+    progressData.forEach(p => {
+        progressMap.set(p.assignment_id, p)
+    })
+
+    // Find the first incomplete assignment
+    let firstIncompleteIndex = 0
+    let lastCompletedIndex = -1
+
+    for (let i = 0; i < assignments.length; i++) {
+        const assign = assignments[i]
+        const progress = progressMap.get(assign.id)
+
+        if (progress && progress.is_completed) {
+            lastCompletedIndex = i
+        } else {
+            firstIncompleteIndex = i
+            break
+        }
+    }
+
+    // If all completed, maybe show completion screen or last one?
+    // Let's go to max index if all completed, but `isCompleted` state will handle the finish screen.
+    // If truly all completed, firstIncompleteIndex loop will finish at assignments.length ?? No, the loop breaks or finishes.
+    // If loop finishes without break, firstIncompleteIndex is actually not set to length.
+    // Let's fix loop logic.
+
+    if (lastCompletedIndex === assignments.length - 1) {
+        // All done
+        firstIncompleteIndex = assignments.length - 1 // Show last one? Or show completion?
+        // Actually, if I want to show completion screen immediately:
+        // setIsCompleted(true)
+        // But let's just show the last one effectively, or handle `isCompleted` state initialization.
+    }
+
+    // But wait, if lastCompletedIndex is 0, it means 0 is done. We should be at 1.
+    // If loop didn't break, it means all were completed. 
+    // If I ran loop: 0 completed, 1 completed. 
+    // i=0: completed. last=0.
+    // i=1: completed. last=1.
+    // i=2 (len): loop ends.
+    // firstIncompleteIndex remains 0 (initial). This is WRONG.
+
+    // Better logic:
+    let initialIndex = 0
+    let allDone = false
+
+    for (let i = 0; i < assignments.length; i++) {
+        const p = progressMap.get(assignments[i].id)
+        if (!p || !p.is_completed) {
+            initialIndex = i
+            break
+        }
+        if (i === assignments.length - 1) {
+            allDone = true
+            initialIndex = i // Stay at last one
+        }
+    }
+
+    const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(initialIndex)
+    const [maxReachedIndex, setMaxReachedIndex] = useState(Math.max(0, allDone ? assignments.length - 1 : initialIndex))
+    const [isCompleted, setIsCompleted] = useState(allDone)
     const router = useRouter()
     const { width, height } = useWindowSize()
-
-    const assignments = collection.assignments || []
     const totalAssignments = assignments.length
     const currentAssignment = assignments[currentAssignmentIndex]
+
+    // Get progress for current assignment
+    const currentProgress = progressMap.get(currentAssignment?.id)
+    const currentCompletedIndices = currentProgress?.completed_question_indices || []
+    const currentIsCompleted = currentProgress?.is_completed || false
 
     const handleAssignmentFinish = () => {
         if (currentAssignmentIndex < totalAssignments - 1) {
@@ -66,7 +133,11 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
         )
     }
 
-    if (isCompleted) {
+    // State to toggle between completion screen and review mode
+    // If allDone is true initially, it means we are revisiting a completed collection, so start in review mode.
+    const [isReviewing, setIsReviewing] = useState(allDone)
+
+    if (isCompleted && !isReviewing) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background p-8">
                 <Confetti
@@ -89,13 +160,16 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
                         <Button onClick={() => router.push(`/student/class/${classroomId}`)} size="lg" className="w-full">
                             Return to Class
                         </Button>
+                        <Button onClick={() => setIsReviewing(true)} variant="outline" size="lg" className="w-full">
+                            Review Collection
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
         )
     }
 
-    const progress = ((maxReachedIndex) / totalAssignments) * 100
+    const progress = isCompleted ? 100 : ((maxReachedIndex) / totalAssignments) * 100
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -152,6 +226,8 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
                     onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
                     canSkip={currentAssignmentIndex < maxReachedIndex}
                     compact={true}
+                    initialCompletedIndices={currentCompletedIndices}
+                    initialIsCompleted={currentIsCompleted}
                 />
             </div>
         </div>
