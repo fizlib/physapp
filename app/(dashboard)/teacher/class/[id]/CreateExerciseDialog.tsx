@@ -35,6 +35,27 @@ interface ExerciseData {
     show_all_questions: boolean
 }
 
+function sanitizeSvg(svg: string): string {
+    let result = svg
+    result = result.replace(/&lt;/g, '<')
+    result = result.replace(/&gt;/g, '>')
+    result = result.replace(/&amp;/g, '&')
+    result = result.replace(/&quot;/g, '"')
+    result = result.replace(/&#39;/g, "'")
+    result = result.replace(/&#x27;/g, "'")
+    result = result.replace(/&#x2F;/g, '/')
+    result = result.replace(/\\n/g, '\n')
+    result = result.replace(/\\r/g, '')
+    result = result.trim()
+
+    // Add width and height to SVG if not present (needed for proper rendering)
+    if (result.includes('<svg') && !result.match(/<svg[^>]*\swidth\s*=/i)) {
+        result = result.replace(/<svg/i, '<svg width="100%" height="auto" style="max-height: 300px;"')
+    }
+
+    return result
+}
+
 const DEFAULT_QUESTION: QuestionData = {
     type: 'numerical',
     latex_text: '',
@@ -54,7 +75,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
         title: '',
         // category: 'homework',
         questions: [{ ...DEFAULT_QUESTION }],
-        show_all_questions: false
+        show_all_questions: true
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -193,7 +214,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                     title: '',
                     // category: 'homework',
                     questions: [{ ...DEFAULT_QUESTION }],
-                    show_all_questions: false
+                    show_all_questions: true
                 })
             } else {
                 toast.error(result.error || "Failed to save exercise")
@@ -395,8 +416,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
 
                                                 <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
                                                     <div
-                                                        dangerouslySetInnerHTML={{ __html: q.diagram_svg }}
-                                                        className="max-w-full [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:max-h-[300px]"
+                                                        dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg) }}
+                                                        className="w-full max-w-[300px]"
                                                     />
                                                 </div>
 

@@ -491,6 +491,25 @@ export async function generateExerciseFromImage(formData: FormData) {
         // Sanitize data
         if (data.questions) {
             data.questions = data.questions.map((q: any) => {
+                // Sanitize SVG content - unescape any escaped characters
+                if (q.diagram_svg && typeof q.diagram_svg === 'string') {
+                    // Unescape common HTML entities that might be in the SVG
+                    let svg = q.diagram_svg
+                    svg = svg.replace(/&lt;/g, '<')
+                    svg = svg.replace(/&gt;/g, '>')
+                    svg = svg.replace(/&amp;/g, '&')
+                    svg = svg.replace(/&quot;/g, '"')
+                    svg = svg.replace(/&#39;/g, "'")
+                    svg = svg.replace(/&#x27;/g, "'")
+                    svg = svg.replace(/&#x2F;/g, '/')
+                    // Remove any escaped newlines that might break rendering
+                    svg = svg.replace(/\\n/g, '\n')
+                    svg = svg.replace(/\\r/g, '')
+                    // Ensure the SVG is trimmed
+                    svg = svg.trim()
+                    q.diagram_svg = svg
+                }
+
                 if (q.type === 'multiple_choice' && q.correct_answer) {
                     let ans = q.correct_answer.trim().toUpperCase()
                     // Handle markdown bold/italic

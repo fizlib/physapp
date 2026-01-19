@@ -3,7 +3,8 @@ import { notFound } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, Activity, Layers } from "lucide-react"
+import { ArrowLeft, BookOpen, Clock, Activity, Layers, CheckCircle2 } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -36,6 +37,29 @@ export default async function StudentClassroomPage({ params }: { params: Promise
     const { data: classroom } = classroomResult
     const { data: assignments } = assignmentsResult
     const { data: collections } = collectionsResult
+
+    // Fetch progress for all assignments in collections
+    const allCollectionAssignmentIds = collections?.flatMap((c: any) => c.assignments.map((a: any) => a.id)) || []
+
+    let completedAssignmentIds = new Set<string>()
+    if (allCollectionAssignmentIds.length > 0) {
+        const { data: progressData } = await supabase
+            .from('assignment_progress')
+            .select('assignment_id, is_completed')
+            .in('assignment_id', allCollectionAssignmentIds)
+            .eq('student_id', user.id)
+            .eq('is_completed', true)
+
+        if (progressData) {
+            progressData.forEach((p: any) => completedAssignmentIds.add(p.assignment_id))
+        }
+    }
+
+    const getCollectionProgress = (collection: any) => {
+        if (!collection.assignments || collection.assignments.length === 0) return 0
+        const completedCount = collection.assignments.filter((a: any) => completedAssignmentIds.has(a.id)).length
+        return (completedCount / collection.assignments.length) * 100
+    }
 
     if (!classroom) notFound()
 
@@ -76,27 +100,46 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                             Classwork
                                         </h3>
                                         <div className="grid gap-4 md:grid-cols-2">
-                                            {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => (
-                                                <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
-                                                    <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
-                                                        <CardContent className="p-6">
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <h3 className="font-semibold">{collection.title}</h3>
-                                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Classwork</span>
-                                                            </div>
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="text-sm text-muted-foreground">
-                                                                    {collection.assignments?.length || 0} Exercises
+                                            {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
+                                                const progress = getCollectionProgress(collection)
+                                                return (
+                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
+                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
+                                                            <CardContent className="p-6 space-y-4">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="space-y-1.5 flex-1 pr-4">
+                                                                        <h3 className="font-semibold leading-none">{collection.title}</h3>
+                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                                                            <span>{collection.assignments?.length || 0} Exercises</span>
+                                                                            <span>•</span>
+                                                                            <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Classwork</span>
                                                                 </div>
-                                                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 border-t border-border/40 pt-2">
-                                                                    <Clock className="h-3 w-3" />
-                                                                    <span>Posted {new Date(collection.created_at).toLocaleDateString()}</span>
+
+                                                                {/* Progress Section */}
+                                                                <div className="space-y-2">
+                                                                    {progress > 0 && progress < 100 && (
+                                                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                                                            <span>{Math.round(progress)}% Complete</span>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {progress === 100 ? (
+                                                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
+                                                                            <CheckCircle2 className="h-4 w-4" />
+                                                                            <span className="text-xs font-medium">Completed</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <Progress value={progress} className="h-1.5" />
+                                                                    )}
                                                                 </div>
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                </Link>
-                                            ))}
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Link>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -109,27 +152,46 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                             Homework
                                         </h3>
                                         <div className="grid gap-4 md:grid-cols-2">
-                                            {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => (
-                                                <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
-                                                    <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
-                                                        <CardContent className="p-6">
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <h3 className="font-semibold">{collection.title}</h3>
-                                                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Homework</span>
-                                                            </div>
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="text-sm text-muted-foreground">
-                                                                    {collection.assignments?.length || 0} Exercises
+                                            {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => {
+                                                const progress = getCollectionProgress(collection)
+                                                return (
+                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
+                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
+                                                            <CardContent className="p-6 space-y-4">
+                                                                <div className="flex justify-between items-start">
+                                                                    <div className="space-y-1.5 flex-1 pr-4">
+                                                                        <h3 className="font-semibold leading-none">{collection.title}</h3>
+                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                                                            <span>{collection.assignments?.length || 0} Exercises</span>
+                                                                            <span>•</span>
+                                                                            <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Homework</span>
                                                                 </div>
-                                                                <div className="text-xs text-muted-foreground flex items-center gap-1.5 border-t border-border/40 pt-2">
-                                                                    <Clock className="h-3 w-3" />
-                                                                    <span>Posted {new Date(collection.created_at).toLocaleDateString()}</span>
+
+                                                                {/* Progress Section */}
+                                                                <div className="space-y-2">
+                                                                    {progress > 0 && progress < 100 && (
+                                                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                                                            <span>{Math.round(progress)}% Complete</span>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {progress === 100 ? (
+                                                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
+                                                                            <CheckCircle2 className="h-4 w-4" />
+                                                                            <span className="text-xs font-medium">Completed</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <Progress value={progress} className="h-1.5" />
+                                                                    )}
                                                                 </div>
-                                                            </div>
-                                                        </CardContent>
-                                                    </Card>
-                                                </Link>
-                                            ))}
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Link>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
