@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -57,11 +57,11 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
         show_all_questions: false
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
+    const [selectedFile, setSelectedFile] = useState<File | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]
-        if (!file) return
-
+    const handleFileSelection = (file: File) => {
+        setSelectedFile(file)
         const reader = new FileReader()
         reader.onloadend = () => {
             setImagePreview(reader.result as string)
@@ -69,11 +69,42 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
         reader.readAsDataURL(file)
     }
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        handleFileSelection(file)
+    }
+
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            if (step !== 'upload' || !open) return
+
+            const items = e.clipboardData?.items
+            if (!items) return
+
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const file = item.getAsFile()
+                    if (file) {
+                        e.preventDefault()
+                        handleFileSelection(file)
+                        if (fileInputRef.current) {
+                            fileInputRef.current.value = ''
+                        }
+                        toast.success("Image pasted from clipboard")
+                    }
+                    break
+                }
+            }
+        }
+
+        window.addEventListener('paste', handlePaste)
+        return () => window.removeEventListener('paste', handlePaste)
+    }, [step, open])
+
     const handleGenerate = async (e: React.FormEvent) => {
         e.preventDefault()
-        const fileInput = document.getElementById('exercise-image') as HTMLInputElement
-        const file = fileInput?.files?.[0]
-        if (!file) {
+        if (!selectedFile) {
             toast.error("Please upload an image first")
             return
         }
@@ -81,7 +112,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
         setLoading(true)
         try {
             const formData = new FormData()
-            formData.append('image', file)
+            formData.append('image', selectedFile)
             const result = await generateExerciseFromImage(formData)
 
             if (result.success && result.data) {
@@ -157,6 +188,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                 // Reset state
                 setStep('upload')
                 setImagePreview(null)
+                setSelectedFile(null)
                 setData({
                     title: '',
                     // category: 'homework',
@@ -204,6 +236,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                             <div className="grid w-full items-center gap-1.5">
                                 <Label htmlFor="exercise-image">Problem Image</Label>
                                 <Input
+                                    ref={fileInputRef}
                                     id="exercise-image"
                                     type="file"
                                     accept="image/*"

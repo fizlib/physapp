@@ -54,20 +54,27 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
     return (
         <div className="space-y-4">
             {question.question_type === 'numerical' ? (
-                <div className="flex w-full max-w-sm items-center gap-2">
+                <form
+                    className="flex w-full max-w-sm items-center gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault()
+                        checkAnswer()
+                    }}
+                >
                     <Input
                         type="number"
                         id="answer"
                         placeholder="Enter your answer..."
                         value={numInput}
+                        onWheel={(e) => e.currentTarget.blur()}
                         onChange={(e) => {
                             setNumInput(e.target.value)
                             setResult(null)
                             setFeedback("")
                         }}
                     />
-                    <Button onClick={checkAnswer}>Check</Button>
-                </div>
+                    <Button type="submit">Check</Button>
+                </form>
             ) : (
                 <div className="space-y-3">
                     <div className="grid gap-2">
