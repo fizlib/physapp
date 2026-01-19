@@ -1,10 +1,14 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { GoogleGenerativeAI, Part } from '@google/generative-ai'
+
+// ... (keep existing code) ...
+
 
 const CreateClassSchema = z.object({
     name: z.string().min(3),
@@ -828,6 +832,70 @@ export async function removeExerciseFromCollection(classroomId: string, collecti
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
     return { success: true }
 }
+
+export async function getStudentClassroomProgress(classroomId: string, studentId: string) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    // Verify teacher owns the classroom (optional but good practice)
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return null
+    }
+
+    // 1. Fetch Collections
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('*, assignments(id)')
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: false })
+
+    if (!collections) return []
+
+    // 2. Fetch Progress for this student
+    const allAssignmentIds = collections.flatMap((c: any) => c.assignments.map((a: any) => a.id))
+
+    // Use Admin Client to bypass RLS for reading other users' progress
+    const supabaseAdmin = createAdminClient()
+
+    let completedAssignmentIds = new Set<string>()
+    if (allAssignmentIds.length > 0) {
+        const { data: progressData } = await supabaseAdmin
+            .from('assignment_progress')
+            .select('assignment_id, is_completed')
+            .in('assignment_id', allAssignmentIds)
+            .eq('student_id', studentId)
+            .eq('is_completed', true)
+        if (progressData) {
+            progressData.forEach((p: any) => completedAssignmentIds.add(p.assignment_id))
+        }
+    }
+
+    // 3. calculate progress
+    const collectionsWithProgress = collections.map((collection: any) => {
+        const total = collection.assignments.length
+        const completed = collection.assignments.filter((a: any) => completedAssignmentIds.has(a.id)).length
+        const progress = total === 0 ? 0 : (completed / total) * 100
+
+        return {
+            ...collection,
+            progress,
+            totalAssignments: total,
+            completedAssignments: completed
+        }
+    })
+
+    return collectionsWithProgress
+}
+
+
 
 export async function deleteCollection(collectionId: string, classroomId: string): Promise<ActionState> {
     const supabase = await createClient()

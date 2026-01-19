@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ArrowLeft, UserPlus, Search, Loader2, Users, X } from "lucide-react"
 import { getUnassignedStudents, enrollStudent } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
+import { StudentProgressDialog } from "./StudentProgressDialog"
 
 interface Student {
     id: string
@@ -29,6 +30,7 @@ export function StudentManager({ classroomId, initialEnrollments }: StudentManag
     const [isLoading, setIsLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
     const [addingId, setAddingId] = useState<string | null>(null)
+    const [selectedStudent, setSelectedStudent] = useState<{ id: string, name: string } | null>(null)
 
     const fetchUnassignedStudents = async () => {
         setIsLoading(true)
@@ -154,6 +156,12 @@ export function StudentManager({ classroomId, initialEnrollments }: StudentManag
     // LIST VIEW
     return (
         <div className="space-y-6 animate-fade-in-up">
+            <StudentProgressDialog
+                classroomId={classroomId}
+                student={selectedStudent}
+                onClose={() => setSelectedStudent(null)}
+            />
+
             <div className="flex items-center justify-between">
                 <h2 className="font-serif text-xl font-semibold tracking-tight">Enrolled Students</h2>
                 <Button size="sm" onClick={handleSwitchToAdd}>
@@ -170,31 +178,41 @@ export function StudentManager({ classroomId, initialEnrollments }: StudentManag
                             <span>Actions</span>
                         </div>
                         <div className="divide-y divide-border/40">
-                            {initialEnrollments?.map((enrollment: any) => (
-                                <div key={enrollment.id} className="flex items-center justify-between py-3 px-2 group hover:bg-muted/30 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                            {enrollment.profiles?.first_name
-                                                ? enrollment.profiles.first_name[0]
-                                                : enrollment.profiles?.email?.charAt(0).toUpperCase() || "?"}
+                            {initialEnrollments?.map((enrollment: any) => {
+                                const name = (enrollment.profiles?.first_name || enrollment.profiles?.last_name)
+                                    ? `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
+                                    : enrollment.profiles?.email || "Unknown"
+
+                                return (
+                                    <div
+                                        key={enrollment.id}
+                                        className="flex items-center justify-between py-3 px-2 group hover:bg-muted/30 transition-colors cursor-pointer rounded-md"
+                                        onClick={() => setSelectedStudent({ id: enrollment.student_id, name })}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                                {enrollment.profiles?.first_name
+                                                    ? enrollment.profiles.first_name[0]
+                                                    : enrollment.profiles?.email?.charAt(0).toUpperCase() || "?"}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium text-foreground">
+                                                    {name}
+                                                </span>
+                                                <span className="font-mono text-[10px] text-muted-foreground opacity-70">
+                                                    {enrollment.profiles?.email}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-foreground">
-                                                {(enrollment.profiles?.first_name || enrollment.profiles?.last_name)
-                                                    ? `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
-                                                    : enrollment.profiles?.email || "Unknown"}
-                                            </span>
-                                            <span className="font-mono text-[10px] text-muted-foreground opacity-70">
-                                                {enrollment.profiles?.email}
-                                            </span>
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <RemoveStudentButton
+                                                studentId={enrollment.student_id}
+                                                classroomId={classroomId}
+                                            />
                                         </div>
                                     </div>
-                                    <RemoveStudentButton
-                                        studentId={enrollment.student_id}
-                                        classroomId={classroomId}
-                                    />
-                                </div>
-                            ))}
+                                )
+                            })}
                             {initialEnrollments?.length === 0 && (
                                 <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                                     <div className="rounded-full bg-muted/30 p-3 mb-3">
@@ -210,3 +228,4 @@ export function StudentManager({ classroomId, initialEnrollments }: StudentManag
         </div>
     )
 }
+
