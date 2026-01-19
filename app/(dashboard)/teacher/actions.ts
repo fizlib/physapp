@@ -87,7 +87,8 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         .from('assignments')
         .update({
             title: data.title,
-            category: data.category
+            category: data.category,
+            show_all_questions: data.show_all_questions || false
         })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
@@ -396,7 +397,8 @@ const ExerciseSchema = z.object({
     // Category is now handled at the collection level, but keeping optional for backward compat if needed, or just removing.
     // We'll default to 'homework' for the DB constraint but it won't be used for logic.
     category: z.enum(['homework', 'classwork']).default('homework').optional(),
-    questions: z.array(QuestionSchema)
+    questions: z.array(QuestionSchema),
+    show_all_questions: z.boolean().default(false).optional()
 })
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -550,7 +552,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             title: data.title,
             // category: data.category, // We let it default or set to 'homework' as placeholder since it's now generic
             published: true,
-            collection_id: collectionId || null
+            collection_id: collectionId || null,
+            show_all_questions: data.show_all_questions || false
         })
         .select()
         .single()

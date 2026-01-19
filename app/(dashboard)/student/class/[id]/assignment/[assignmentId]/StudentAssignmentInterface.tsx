@@ -19,13 +19,13 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
 
     const questions = assignment.questions || []
     const totalQuestions = questions.length
-    const currentQuestion = questions[currentIndex]
+    const showAll = assignment.show_all_questions
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
     const hasPersistentDiagram = firstQuestion?.diagram_type && firstQuestion.diagram_type !== 'none'
-    // Show persistent diagram if we are NOT on the first question AND the first question has a diagram
-    const showPersistentDiagram = currentIndex > 0 && hasPersistentDiagram
+    // Show persistent diagram if we are NOT on the first question AND the first question has a diagram AND we are NOT showing all questions
+    const showPersistentDiagram = !showAll && currentIndex > 0 && hasPersistentDiagram
 
     const handleCorrect = () => {
         setCompletedIndices(prev => new Set(prev).add(currentIndex))
@@ -40,9 +40,7 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
         }
     }
 
-    // Progress calculation: (completed questions / total questions) * 100
-    // Or based on current index? "Also add progress bar" Usually means global progress.
-    // If they are on Q3 of 5, progress is mostly about how many they finished.
+    // Progress calculation
     const progress = (completedIndices.size / totalQuestions) * 100
 
     return (
@@ -58,7 +56,7 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                             </Link>
                         </Button>
                         <div className="text-sm font-medium text-muted-foreground">
-                            Question {currentIndex + 1} of {totalQuestions}
+                            {showAll ? `${totalQuestions} Questions` : `Question ${currentIndex + 1} of ${totalQuestions}`}
                         </div>
                     </div>
 
@@ -72,7 +70,7 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                 </>
             )}
 
-            {/* Persistent Diagram Section */}
+            {/* Persistent Diagram Section (Paginated specific) */}
             {showPersistentDiagram && (
                 <Card className="bg-muted/30 border-dashed">
                     <CardHeader className="pb-2">
@@ -91,89 +89,140 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                 </Card>
             )}
 
-            {/* Current Question */}
-            <div className="space-y-8">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight mb-4">Question {currentIndex + 1}</h2>
+            {showAll ? (
+                /* One Page View */
+                <div className="space-y-12">
+                    {questions.map((q: any, index: number) => {
+                        const isCorrect = completedIndices.has(index)
+                        return (
+                            <div key={index} className="space-y-6 pt-6 border-t first:border-0 first:pt-0">
+                                <h2 className="text-2xl font-bold tracking-tight">Question {index + 1}</h2>
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Question</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-6">
+                                        <div className="text-lg leading-relaxed">
+                                            <MathDisplay content={q.latex_text || "No question text"} />
+                                        </div>
+                                        <DiagramDisplay
+                                            diagramType={q.diagram_type}
+                                            diagramLatex={q.diagram_latex}
+                                            diagramSvg={q.diagram_svg}
+                                        />
+                                    </CardContent>
+                                </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Question</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="text-lg leading-relaxed">
-                                <MathDisplay content={currentQuestion.latex_text || "No question text"} />
+                                <Card className={`border-2 transition-colors ${isCorrect ? 'border-green-500/20 bg-green-50/30' : 'border-primary/10'}`}>
+                                    <CardHeader className="pb-4">
+                                        <CardTitle className="text-primary flex items-center justify-between">
+                                            <span>Your Answer</span>
+                                            {isCorrect && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <TestInterface
+                                            key={q.id || index}
+                                            question={q}
+                                            onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
+                                        />
+                                    </CardContent>
+                                </Card>
                             </div>
-                            {/* Only show the current diagram if it's NOT the first question (since first question diagram is handled by persistence logic above?) 
-                                Wait, if we are on Q1 (index 0), we want to show it here. 
-                                If we are on Q2, we showed Q1 above. Does Q2 have its own diagram? Maybe. 
-                                So we should always show the current question's diagram. 
-                                EXCEPT if it's the SAME diagram? 
-                                The requirement says: "if there is a some svg diagram or scheme in first question, then this scheme should be displayed at the top for each of the following questions"
-                                It implies the first question sets the scene.
-                             */}
-                            <DiagramDisplay
-                                diagramType={currentQuestion.diagram_type}
-                                diagramLatex={currentQuestion.diagram_latex}
-                                diagramSvg={currentQuestion.diagram_svg}
+                        )
+                    })}
+
+                    <div className="flex justify-end pt-8 sticky bottom-4">
+                        <Button
+                            disabled={completedIndices.size !== totalQuestions}
+                            variant="default"
+                            size="lg"
+                            className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
+                            onClick={() => {
+                                if (onFinish) {
+                                    onFinish()
+                                } else {
+                                    router.push(`/student/class/${classId}`)
+                                }
+                            }}
+                        >
+                            {onFinish ? "Next Exercise" : "Finish Assignment"}
+                            <CheckCircle2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                /* Paginated View (Original) */
+                <div className="space-y-8">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight mb-4">Question {currentIndex + 1}</h2>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Question</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="text-lg leading-relaxed">
+                                    <MathDisplay content={questions[currentIndex].latex_text || "No question text"} />
+                                </div>
+                                <DiagramDisplay
+                                    diagramType={questions[currentIndex].diagram_type}
+                                    diagramLatex={questions[currentIndex].diagram_latex}
+                                    diagramSvg={questions[currentIndex].diagram_svg}
+                                />
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card className={`border-2 transition-colors ${canProceed ? 'border-green-500/20 bg-green-50/30' : 'border-primary/10'}`}>
+                        <CardHeader className="pb-4">
+                            <CardTitle className="text-primary flex items-center justify-between">
+                                <span>Your Answer</span>
+                                {canProceed && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                            </CardTitle>
+                            <CardDescription>
+                                Solve the problem above and check your answer.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <TestInterface
+                                key={questions[currentIndex].id || currentIndex}
+                                question={questions[currentIndex]}
+                                onCorrect={handleCorrect}
                             />
+
+                            <div className="mt-6 flex justify-end">
+                                {!isLastQuestion ? (
+                                    <Button
+                                        onClick={handleNext}
+                                        disabled={!canProceed}
+                                        className="gap-2"
+                                    >
+                                        Next Question
+                                        <ArrowRight className="h-4 w-4" />
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        disabled={!canProceed}
+                                        variant="default"
+                                        className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                                        onClick={() => {
+                                            if (onFinish) {
+                                                onFinish()
+                                            } else {
+                                                router.push(`/student/class/${classId}`)
+                                            }
+                                        }}
+                                    >
+                                        {onFinish ? "Next Exercise" : "Finish Assignment"}
+                                        <CheckCircle2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
-
-                {/* Interaction Area */}
-                <Card className={`border-2 transition-colors ${canProceed ? 'border-green-500/20 bg-green-50/30' : 'border-primary/10'}`}>
-                    <CardHeader className="pb-4">
-                        <CardTitle className="text-primary flex items-center justify-between">
-                            <span>Your Answer</span>
-                            {canProceed && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                        </CardTitle>
-                        <CardDescription>
-                            Solve the problem above and check your answer.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {/* We use a key here to reset state when question changes if needed, 
-                            BUT TestInterface manages its own inputs. 
-                            We want inputs to clear on new question. 
-                            So key={currentQuestion.id} is crucial. */}
-                        <TestInterface
-                            key={currentQuestion.id}
-                            question={currentQuestion}
-                            onCorrect={handleCorrect}
-                        />
-
-                        <div className="mt-6 flex justify-end">
-                            {!isLastQuestion ? (
-                                <Button
-                                    onClick={handleNext}
-                                    disabled={!canProceed}
-                                    className="gap-2"
-                                >
-                                    Next Question
-                                    <ArrowRight className="h-4 w-4" />
-                                </Button>
-                            ) : (
-                                <Button
-                                    disabled={!canProceed}
-                                    variant="default"
-                                    className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                                    onClick={() => {
-                                        if (onFinish) {
-                                            onFinish()
-                                        } else {
-                                            router.push(`/student/class/${classId}`)
-                                        }
-                                    }}
-                                >
-                                    {onFinish ? "Next Exercise" : "Finish Assignment"}
-                                    <CheckCircle2 className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+            )}
         </div>
     )
 }

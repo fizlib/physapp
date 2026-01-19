@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2 } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion } from "../../actions"
 import { toast } from "sonner"
@@ -31,6 +32,7 @@ interface ExerciseData {
     title: string
     // category: 'homework' | 'classwork' // Removed
     questions: QuestionData[]
+    show_all_questions: boolean
 }
 
 const DEFAULT_QUESTION: QuestionData = {
@@ -51,7 +53,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     const [data, setData] = useState<ExerciseData>({
         title: '',
         // category: 'homework',
-        questions: [{ ...DEFAULT_QUESTION }]
+        questions: [{ ...DEFAULT_QUESTION }],
+        show_all_questions: false
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
 
@@ -157,7 +160,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                 setData({
                     title: '',
                     // category: 'homework',
-                    questions: [{ ...DEFAULT_QUESTION }]
+                    questions: [{ ...DEFAULT_QUESTION }],
+                    show_all_questions: false
                 })
             } else {
                 toast.error(result.error || "Failed to save exercise")
@@ -240,6 +244,15 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                     value={data.title}
                                     onChange={(e) => setData({ ...data, title: e.target.value })}
                                 />
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="show-all"
+                                    checked={data.show_all_questions}
+                                    onCheckedChange={(checked) => setData({ ...data, show_all_questions: checked as boolean })}
+                                />
+                                <Label htmlFor="show-all">Show all questions on one page</Label>
                             </div>
 
                             {/* Category selection removed - Exercises are generic */}

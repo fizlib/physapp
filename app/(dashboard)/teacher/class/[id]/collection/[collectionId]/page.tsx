@@ -70,8 +70,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                 <div className="space-y-4">
                     {assignments.length > 0 ? (
                         assignments.map((assignment: any, index: number) => (
-                            <Card key={assignment.id} className="cursor-default hover:border-primary/50 transition-colors">
-                                <CardContent className="p-4 flex items-center justify-between">
+                            <Card key={assignment.id} className="relative group hover:border-primary/50 transition-colors">
+                                <Link
+                                    href={`/teacher/class/${id}/assignment/${assignment.id}`}
+                                    className="absolute inset-0 z-0"
+                                />
+                                <CardContent className="p-4 flex items-center justify-between relative z-10 pointer-events-none">
                                     <div className="flex items-center gap-4">
                                         <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground text-sm font-medium">
                                             {index + 1}
@@ -86,12 +90,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="ghost" size="sm" asChild>
-                                            <Link href={`/teacher/class/${id}/assignment/${assignment.id}`}>
-                                                Edit Detail
-                                            </Link>
-                                        </Button>
+                                    <div className="flex items-center gap-2 pointer-events-auto">
                                         <RemoveExerciseButton
                                             classroomId={id}
                                             collectionId={collectionId}
