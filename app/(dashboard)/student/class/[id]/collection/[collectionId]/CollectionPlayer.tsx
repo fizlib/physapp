@@ -4,12 +4,18 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, Layers } from "lucide-react"
+import { ArrowLeft, Layers, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { StudentAssignmentInterface } from "../../assignment/[assignmentId]/StudentAssignmentInterface"
 import { Card, CardContent } from "@/components/ui/card"
 import Confetti from "react-confetti"
 import { useWindowSize } from "react-use"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface CollectionPlayerProps {
     collection: any
@@ -18,6 +24,7 @@ interface CollectionPlayerProps {
 
 export function CollectionPlayer({ collection, classroomId }: CollectionPlayerProps) {
     const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(0)
+    const [maxReachedIndex, setMaxReachedIndex] = useState(0)
     const [isCompleted, setIsCompleted] = useState(false)
     const router = useRouter()
     const { width, height } = useWindowSize()
@@ -28,9 +35,23 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
 
     const handleAssignmentFinish = () => {
         if (currentAssignmentIndex < totalAssignments - 1) {
-            setCurrentAssignmentIndex(prev => prev + 1)
+            const nextIndex = currentAssignmentIndex + 1
+            setCurrentAssignmentIndex(nextIndex)
+            setMaxReachedIndex(prev => Math.max(prev, nextIndex))
         } else {
             setIsCompleted(true)
+        }
+    }
+
+    const handlePrevious = () => {
+        if (currentAssignmentIndex > 0) {
+            setCurrentAssignmentIndex(prev => prev - 1)
+        }
+    }
+
+    const handleJumpToExercise = (index: number) => {
+        if (index <= maxReachedIndex) {
+            setCurrentAssignmentIndex(index)
         }
     }
 
@@ -74,7 +95,7 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
         )
     }
 
-    const progress = ((currentAssignmentIndex) / totalAssignments) * 100
+    const progress = ((maxReachedIndex) / totalAssignments) * 100
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -88,9 +109,28 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
                                 Exit Collection
                             </Link>
                         </Button>
-                        <div className="text-sm font-medium text-muted-foreground">
-                            Exercise {currentAssignmentIndex + 1} of {totalAssignments}
-                        </div>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                                    Exercise {currentAssignmentIndex + 1} of {totalAssignments}
+                                    <ChevronDown className="ml-2 h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {assignments.map((_: any, index: number) => (
+                                    <DropdownMenuItem
+                                        key={index}
+                                        disabled={index > maxReachedIndex}
+                                        onClick={() => handleJumpToExercise(index)}
+                                        className={index === currentAssignmentIndex ? "bg-accent" : ""}
+                                    >
+                                        Exercise {index + 1}
+                                        {index > maxReachedIndex && " (Locked)"}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <div className="space-y-2">
@@ -109,6 +149,8 @@ export function CollectionPlayer({ collection, classroomId }: CollectionPlayerPr
                     assignment={currentAssignment}
                     classId={classroomId}
                     onFinish={handleAssignmentFinish}
+                    onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
+                    canSkip={currentAssignmentIndex < maxReachedIndex}
                     compact={true}
                 />
             </div>

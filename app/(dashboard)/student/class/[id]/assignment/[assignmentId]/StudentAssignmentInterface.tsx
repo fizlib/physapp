@@ -11,7 +11,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-export function StudentAssignmentInterface({ assignment, classId, onFinish, compact = false }: { assignment: any, classId: string, onFinish?: () => void, compact?: boolean }) {
+export function StudentAssignmentInterface({ assignment, classId, onFinish, onPrevious, canSkip = false, compact = false }: { assignment: any, classId: string, onFinish?: () => void, onPrevious?: () => void, canSkip?: boolean, compact?: boolean }) {
     const [currentIndex, setCurrentIndex] = useState(0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set())
@@ -31,7 +31,7 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
         setCompletedIndices(prev => new Set(prev).add(currentIndex))
     }
 
-    const canProceed = completedIndices.has(currentIndex)
+    const canProceed = canSkip || completedIndices.has(currentIndex)
     const isLastQuestion = currentIndex === totalQuestions - 1
 
     const handleNext = () => {
@@ -122,9 +122,20 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                         )
                     })}
 
-                    <div className="flex justify-end pt-4 sticky bottom-4">
+                    <div className={`flex ${onPrevious ? 'justify-between' : 'justify-end'} pt-4 sticky bottom-4`}>
+                        {onPrevious && (
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                className="gap-2"
+                                onClick={onPrevious}
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Previous Exercise
+                            </Button>
+                        )}
                         <Button
-                            disabled={completedIndices.size !== totalQuestions}
+                            disabled={!canSkip && completedIndices.size !== totalQuestions}
                             variant="default"
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
@@ -169,7 +180,17 @@ export function StudentAssignmentInterface({ assignment, classId, onFinish, comp
                                 onCorrect={handleCorrect}
                             />
 
-                            <div className="mt-6 flex justify-end">
+                            <div className={`mt-6 flex ${onPrevious ? 'justify-between' : 'justify-end'}`}>
+                                {onPrevious && (
+                                    <Button
+                                        variant="outline"
+                                        className="gap-2"
+                                        onClick={onPrevious}
+                                    >
+                                        <ArrowLeft className="h-4 w-4" />
+                                        Previous Exercise
+                                    </Button>
+                                )}
                                 {!isLastQuestion ? (
                                     <Button
                                         onClick={handleNext}
