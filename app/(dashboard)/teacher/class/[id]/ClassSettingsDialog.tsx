@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -12,36 +12,103 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Settings, Trash2, AlertTriangle, Check } from "lucide-react"
+import { Settings, Trash2, AlertTriangle, Check, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { updateClassroomType, deleteClassroom } from "../../actions"
+import { updateClassroomType, deleteClassroom, updateLessonSchedule } from "../../actions"
 import { useRouter } from "next/navigation"
+
+const DAYS_OF_WEEK = [
+    { value: 1, label: 'Monday', short: 'Mon' },
+    { value: 2, label: 'Tuesday', short: 'Tue' },
+    { value: 3, label: 'Wednesday', short: 'Wed' },
+    { value: 4, label: 'Thursday', short: 'Thu' },
+    { value: 5, label: 'Friday', short: 'Fri' },
+    { value: 6, label: 'Saturday', short: 'Sat' },
+    { value: 0, label: 'Sunday', short: 'Sun' },
+]
+
+const TIME_OPTIONS = [
+    '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+    '16:00', '16:30', '17:00', '17:30', '18:00'
+] // Kept for reference, but using time input now
+
+interface LessonSlot {
+    day: number
+    time: string
+}
 
 interface ClassSettingsDialogProps {
     classroomId: string
     currentType: 'private_student' | 'school_class'
+    currentLessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
 }
 
-export function ClassSettingsDialog({ classroomId, currentType, trigger }: ClassSettingsDialogProps) {
+export function ClassSettingsDialog({ classroomId, currentType, currentLessonSchedule, trigger }: ClassSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
     const [type, setType] = useState(currentType)
+    const [lessonSchedule, setLessonSchedule] = useState<LessonSlot[]>(currentLessonSchedule || [])
     const router = useRouter()
 
-    const handleUpdateType = async () => {
-        if (type === currentType) return
+    // Reset state when dialog opens
+    useEffect(() => {
+        if (open) {
+            setType(currentType)
+            setLessonSchedule(currentLessonSchedule || [])
+        }
+    }, [open, currentType, currentLessonSchedule])
 
+    const toggleDay = (day: number) => {
+        const existing = lessonSchedule.find(s => s.day === day)
+        if (existing) {
+            setLessonSchedule(lessonSchedule.filter(s => s.day !== day))
+        } else {
+            setLessonSchedule([...lessonSchedule, { day, time: '09:00' }])
+        }
+    }
+
+    const updateTime = (day: number, time: string) => {
+        setLessonSchedule(lessonSchedule.map(s =>
+            s.day === day ? { ...s, time } : s
+        ))
+    }
+
+    const isDaySelected = (day: number) => lessonSchedule.some(s => s.day === day)
+    const getTimeForDay = (day: number) => lessonSchedule.find(s => s.day === day)?.time || '09:00'
+
+    const hasTypeChanged = type !== currentType
+    const hasScheduleChanged = JSON.stringify(lessonSchedule.sort((a, b) => a.day - b.day)) !==
+        JSON.stringify((currentLessonSchedule || []).sort((a, b) => a.day - b.day))
+    const hasChanges = hasTypeChanged || hasScheduleChanged
+
+    const handleSave = async () => {
         setLoading(true)
         try {
-            const result = await updateClassroomType(classroomId, type)
-            if (result.success) {
-                toast.success("Classroom type updated")
-                setOpen(false)
-            } else {
-                toast.error(result.error || "Failed to update type")
+            // Update type if changed
+            if (hasTypeChanged) {
+                const result = await updateClassroomType(classroomId, type)
+                if (!result.success) {
+                    toast.error(result.error || "Failed to update type")
+                    setLoading(false)
+                    return
+                }
             }
+
+            // Update lesson schedule if changed (only for school_class)
+            if (hasScheduleChanged && type === 'school_class') {
+                const result = await updateLessonSchedule(classroomId, lessonSchedule)
+                if (!result.success) {
+                    toast.error(result.error || "Failed to update schedule")
+                    setLoading(false)
+                    return
+                }
+            }
+
+            toast.success("Settings updated")
+            setOpen(false)
         } catch (err) {
             toast.error("An error occurred")
         } finally {
@@ -76,7 +143,7 @@ export function ClassSettingsDialog({ classroomId, currentType, trigger }: Class
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Classroom Settings</DialogTitle>
                     <DialogDescription>
@@ -125,6 +192,50 @@ export function ClassSettingsDialog({ classroomId, currentType, trigger }: Class
                         </div>
                     </div>
 
+                    {/* Lesson Schedule - Only for School Class */}
+                    {type === 'school_class' && (
+                        <>
+                            <div className="h-px bg-border" />
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                    <Label>Lesson Schedule</Label>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Select days and times when lessons occur. This helps with scheduling classwork.
+                                </p>
+                                <div className="space-y-2">
+                                    {DAYS_OF_WEEK.slice(0, 5).map((day) => (
+                                        <div key={day.value} className="flex items-center gap-3">
+                                            <label className="flex items-center gap-2 min-w-[120px] cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isDaySelected(day.value)}
+                                                    onChange={() => toggleDay(day.value)}
+                                                    className="accent-primary h-4 w-4"
+                                                />
+                                                <span className="text-sm">{day.label}</span>
+                                            </label>
+                                            {isDaySelected(day.value) && (
+                                                <input
+                                                    type="time"
+                                                    value={getTimeForDay(day.value)}
+                                                    onChange={(e) => updateTime(day.value, e.target.value)}
+                                                    className="text-sm border rounded px-2 py-1 bg-background w-32"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                {lessonSchedule.length > 0 && (
+                                    <p className="text-xs text-primary">
+                                        {lessonSchedule.length} lesson{lessonSchedule.length > 1 ? 's' : ''} per week
+                                    </p>
+                                )}
+                            </div>
+                        </>
+                    )}
+
                     <div className="h-px bg-border" />
 
                     {/* Danger Zone */}
@@ -153,7 +264,7 @@ export function ClassSettingsDialog({ classroomId, currentType, trigger }: Class
 
                 <DialogFooter className="gap-2 sm:gap-0">
                     <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdateType} disabled={loading || type === currentType}>
+                    <Button onClick={handleSave} disabled={loading || !hasChanges}>
                         {loading ? "Saving..." : "Save Changes"}
                     </Button>
                 </DialogFooter>

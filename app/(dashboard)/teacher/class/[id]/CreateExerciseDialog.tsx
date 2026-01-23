@@ -248,7 +248,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                             </div>
                             <h3 className="font-semibold text-lg">Generate with AI</h3>
                             <p className="text-sm text-muted-foreground max-w-sm">
-                                Upload an image of a physics problem (numerical or multiple choice).
+                                Upload an image of a problem (numerical or multiple choice).
                                 Gemini will automatically detect the type and extract the content.
                             </p>
                         </div>

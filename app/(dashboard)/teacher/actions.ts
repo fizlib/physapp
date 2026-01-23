@@ -10,9 +10,15 @@ import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 // ... (keep existing code) ...
 
 
+const LessonSlotSchema = z.object({
+    day: z.number().min(0).max(6),
+    time: z.string().regex(/^\d{2}:\d{2}$/)
+})
+
 const CreateClassSchema = z.object({
     name: z.string().min(3),
     type: z.enum(['private_student', 'school_class']).default('school_class'),
+    lessonSchedule: z.array(LessonSlotSchema).optional(),
 })
 
 const CreateCollectionSchema = z.object({
@@ -35,21 +41,31 @@ export async function createClassroom(formData: FormData) {
 
     const name = formData.get('name') as string
     const type = formData.get('type') as 'private_student' | 'school_class' || 'school_class'
+    const lessonScheduleRaw = formData.get('lessonSchedule') as string | null
 
-    const validated = CreateClassSchema.safeParse({ name, type })
+    let lessonSchedule = undefined
+    if (lessonScheduleRaw && type === 'school_class') {
+        try {
+            lessonSchedule = JSON.parse(lessonScheduleRaw)
+        } catch (e) {
+            console.error('Failed to parse lesson schedule', e)
+        }
+    }
+
+    const validated = CreateClassSchema.safeParse({ name, type, lessonSchedule })
     if (!validated.success) return { error: "Invalid name or type" }
 
     const { error } = await supabase.from('classrooms').insert({
         teacher_id: user.id,
         name: name,
-        type: validated.data.type
+        type: validated.data.type,
+        lesson_schedule: validated.data.lessonSchedule || null
     })
 
     if (error) {
         console.error(error)
         return { error: 'Failed to create classroom' }
     }
-
 
     revalidatePath('/teacher')
     return { success: true }
@@ -674,6 +690,43 @@ export async function updateClassroomType(classroomId: string, type: 'private_st
     return { success: true }
 }
 
+export async function updateLessonSchedule(classroomId: string, schedule: { day: number, time: string }[]): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Validate schedule
+    const validatedSchedule = z.array(LessonSlotSchema).safeParse(schedule)
+    if (!validatedSchedule.success) {
+        return { success: false, error: "Invalid schedule format" }
+    }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('classrooms')
+        .update({ lesson_schedule: schedule.length > 0 ? schedule : null })
+        .eq('id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update lesson schedule' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
 export async function deleteClassroom(classroomId: string): Promise<ActionState> {
     const supabase = await createClient()
 
@@ -734,7 +787,7 @@ export async function deleteClassroom(classroomId: string): Promise<ActionState>
 }
 
 
-export async function createCollection(classroomId: string, title: string, category: 'homework' | 'classwork' = 'homework'): Promise<ActionState> {
+export async function createCollection(classroomId: string, title: string, category: 'homework' | 'classwork' = 'homework', scheduledDate?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -757,7 +810,8 @@ export async function createCollection(classroomId: string, title: string, categ
     const { error } = await supabase.from('collections').insert({
         classroom_id: classroomId,
         title: title,
-        category: category
+        category: category,
+        scheduled_date: scheduledDate || null
     })
 
     if (error) {

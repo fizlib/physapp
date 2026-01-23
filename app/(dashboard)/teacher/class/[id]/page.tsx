@@ -88,7 +88,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                     Manage Students
                                 </Link>
                             </Button>
-                            <ClassSettingsDialog classroomId={id} currentType={classroom.type} />
+                            <ClassSettingsDialog classroomId={id} currentType={classroom.type} currentLessonSchedule={classroom.lesson_schedule} />
                         </div>
                     </div>
                 </div>
@@ -157,7 +157,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                         <div className="space-y-6 animate-fade-in-up">
                             <div className="flex items-center justify-between">
                                 <h2 className="font-serif text-xl font-semibold tracking-tight">Exercise Collections</h2>
-                                <CreateCollectionDialog classroomId={id} classroomType={classroom.type} />
+                                <CreateCollectionDialog classroomId={id} classroomType={classroom.type} lessonSchedule={classroom.lesson_schedule} />
                             </div>
 
                             {classroom.type === 'school_class' ? (
@@ -188,9 +188,15 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                                     ? `${collection.assignments.length} Exercise(s)`
                                                                     : "Empty collection"}
                                                             </div>
-                                                            <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
-                                                                Created {new Date(collection.created_at).toLocaleDateString()}
-                                                            </div>
+                                                            {collection.scheduled_date ? (
+                                                                <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded pointer-events-none">
+                                                                    📅 {new Date(collection.scheduled_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} at {new Date(collection.scheduled_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                                    Created {new Date(collection.created_at).toLocaleDateString()}
+                                                                </div>
+                                                            )}
                                                         </CardContent>
                                                     </Card>
                                                 ))}
