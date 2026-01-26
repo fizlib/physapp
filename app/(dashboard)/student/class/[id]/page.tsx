@@ -31,6 +31,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
             .from('collections')
             .select('*, assignments(*)')
             .eq('classroom_id', id)
+            .or(`scheduled_date.is.null,scheduled_date.lte.${new Date().toISOString()}`)
             .order('created_at', { ascending: false })
     ])
 

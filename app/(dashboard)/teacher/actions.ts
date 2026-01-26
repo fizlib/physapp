@@ -823,6 +823,47 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = CreateCollectionSchema.safeParse({ title, classroomId, category })
+    if (!validated.success) return { success: false, error: "Invalid data" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('collections')
+        .update({
+            title: title,
+            category: category,
+            scheduled_date: scheduledDate || null
+        })
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update collection' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
+
 export async function addExerciseToCollection(classroomId: string, collectionId: string, assignmentId: string): Promise<ActionState> {
     const supabase = await createClient()
 

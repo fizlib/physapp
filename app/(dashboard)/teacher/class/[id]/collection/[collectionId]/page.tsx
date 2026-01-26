@@ -11,7 +11,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
     const supabase = await createClient()
     const { id, collectionId } = await params
 
-    const [collectionResult, availableExercisesResult] = await Promise.all([
+    const [collectionResult, availableExercisesResult, classroomResult] = await Promise.all([
         supabase
             .from('collections')
             .select('*, assignments(*), classrooms(type)')
@@ -22,11 +22,17 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
             .select('*')
             .eq('classroom_id', id)
             .is('collection_id', null)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+        supabase
+            .from('classrooms')
+            .select('lesson_schedule')
+            .eq('id', id)
+            .single()
     ])
 
     const { data: collection } = collectionResult
     const { data: availableExercises } = availableExercisesResult
+    const { data: classroom } = classroomResult
 
     if (!collection) notFound()
 
@@ -61,6 +67,10 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 classroomId={id}
                                 collectionId={collectionId}
                                 availableExercises={availableExercises || []}
+                                currentTitle={collection.title}
+                                currentCategory={collection.category}
+                                currentScheduledDate={collection.scheduled_date}
+                                lessonSchedule={classroom?.lesson_schedule}
                             />
                         </div>
                     </div>
