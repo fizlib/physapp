@@ -33,6 +33,7 @@ interface ExerciseData {
     // category: 'homework' | 'classwork' // Removed
     questions: QuestionData[]
     show_all_questions: boolean
+    required_variations_count?: number | null
 }
 
 function sanitizeSvg(svg: string): string {
@@ -79,6 +80,9 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     })
     const [imagePreview, setImagePreview] = useState<string | null>(null)
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
+    const [variationMode, setVariationMode] = useState(false)
+    const [variationCount, setVariationCount] = useState(6)
+    const [passRequirement, setPassRequirement] = useState(2)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleFileSelection = (file: File) => {
@@ -134,6 +138,9 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
         try {
             const formData = new FormData()
             formData.append('image', selectedFile)
+            if (variationMode) {
+                formData.append('variationCount', variationCount.toString())
+            }
             const result = await generateExerciseFromImage(formData)
 
             if (result.success && result.data) {
@@ -145,7 +152,9 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                 setData(prev => ({
                     ...prev,
                     title: result.data.title || prev.title,
-                    questions: questions
+                    questions: questions,
+                    required_variations_count: variationMode ? passRequirement : null,
+                    show_all_questions: !variationMode // Force paginated for variations
                 }))
                 setStep('edit')
                 toast.success("Exercise generated successfully!")
@@ -264,6 +273,47 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                     onChange={handleFileChange}
                                     className="cursor-pointer"
                                 />
+                            </div>
+
+                            <div className="space-y-4 pt-2 border-t">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="variation-mode"
+                                        checked={variationMode}
+                                        onCheckedChange={(c) => setVariationMode(c as boolean)}
+                                    />
+                                    <Label htmlFor="variation-mode" className="font-medium">Create Variations</Label>
+                                </div>
+
+                                {variationMode && (
+                                    <div className="grid grid-cols-2 gap-4 pl-6 animate-in fade-in slide-in-from-top-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="var-count" className="text-xs">Total Variations</Label>
+                                            <Input
+                                                id="var-count"
+                                                type="number"
+                                                min={2}
+                                                max={10}
+                                                value={variationCount}
+                                                onChange={e => setVariationCount(parseInt(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="pass-req" className="text-xs">Pass Requirement</Label>
+                                            <Input
+                                                id="pass-req"
+                                                type="number"
+                                                min={1}
+                                                max={variationCount}
+                                                value={passRequirement}
+                                                onChange={e => setPassRequirement(parseInt(e.target.value))}
+                                            />
+                                        </div>
+                                        <p className="col-span-2 text-xs text-muted-foreground">
+                                            Student will need to solve {passRequirement} correct variations out of {variationCount} available.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {imagePreview && (

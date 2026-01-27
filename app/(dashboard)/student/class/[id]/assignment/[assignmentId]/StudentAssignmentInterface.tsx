@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
@@ -20,7 +20,8 @@ export function StudentAssignmentInterface({
     canSkip = false,
     compact = false,
     initialCompletedIndices = [],
-    initialIsCompleted = false
+    initialIsCompleted = false,
+    initialActiveQuestionIndex
 }: {
     assignment: any,
     classId: string,
@@ -29,16 +30,63 @@ export function StudentAssignmentInterface({
     canSkip?: boolean,
     compact?: boolean,
     initialCompletedIndices?: number[],
-    initialIsCompleted?: boolean
+    initialIsCompleted?: boolean,
+    initialActiveQuestionIndex?: number
 }) {
-    const [currentIndex, setCurrentIndex] = useState(0)
+    // Priority: initialActiveQuestionIndex > previous logic
+    const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const router = useRouter()
 
     const questions = assignment.questions || []
     const totalQuestions = questions.length
-    const showAll = assignment.show_all_questions
+    // Variation Mode Logic
+    const requiredVariations = assignment.required_variations_count;
+    const isVariationMode = requiredVariations && requiredVariations > 0;
+
+    // If variation mode, "showAll" is overridden to false
+    const showAll = !isVariationMode && assignment.show_all_questions
+
+    // Initialize currentIndex for variation mode
+    useState(() => {
+        if (isVariationMode && initialActiveQuestionIndex === undefined) {
+            // Pick the first unsolved index
+            // If all solved (or enough solved), pick any (won't matter as we show finish screen)
+            const solvedCount = initialCompletedIndices.length;
+            if (solvedCount < requiredVariations) {
+                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i));
+                if (unsolved.length > 0) {
+                    // Pick random to ensure "different variation" feel
+                    const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
+                    setCurrentIndex(randIndex);
+                }
+            }
+        }
+    })
+
+    // Effect to save active question index when it changes
+    // We debounce slightly to avoid rapid updates if user clicks fast, or just save immediately?
+    // Saving immediately is safer for "reload" resilience.
+    // Effect to save active question index when it changes
+    useEffect(() => {
+        // Skip first render if we just initialized? 
+        // Actually, if we initialized with a value, we don't need to save it again immediately unless it changed.
+        // But `initialActiveQuestionIndex` is the DB value. 
+        // If `currentIndex` differs from `initialActiveQuestionIndex`, we save.
+        // Or simpler: whenever `currentIndex` changes, save it.
+
+        // We need to avoid saving on mount if it hasn't changed from DB.
+        if (currentIndex === initialActiveQuestionIndex) return
+
+        // Also debounce could be nice, but for now direct save.
+        upsertAssignmentProgress(
+            assignment.id,
+            Array.from(completedIndices),
+            completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
+            currentIndex
+        )
+    }, [currentIndex, assignment.id, completedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex])
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
@@ -54,21 +102,35 @@ export function StudentAssignmentInterface({
         await upsertAssignmentProgress(
             assignment.id,
             Array.from(newSet),
-            false
+            // Finish if we met the requirement
+            isVariationMode ? newSet.size >= requiredVariations : false,
+            currentIndex
         )
+
+        // For variation mode, auto-advance logic is handled in render or effect
+        if (isVariationMode && newSet.size < requiredVariations) {
+            // Pick next variation after a short delay to show success state?
+            // Or just let user click "Next Variation" button?
+            // User request: "After they solve it correctly, then they are given another"
+            // Best UX: Show "Correct!", enable "Next Variation" button.
+        }
     }
 
     const canProceed = canSkip || completedIndices.has(currentIndex)
-    const isLastQuestion = currentIndex === totalQuestions - 1
+    const isLastQuestion = isVariationMode
+        ? completedIndices.size >= requiredVariations - 1 // Logic: if we are at size == target-1, solving this makes it last
+        : currentIndex === totalQuestions - 1
 
     const handleNext = () => {
         if (currentIndex < totalQuestions - 1) {
-            setCurrentIndex(prev => prev + 1)
+            setCurrentIndex((prev: number) => prev + 1)
         }
     }
 
     // Progress calculation
-    const progress = (completedIndices.size / totalQuestions) * 100
+    const progress = isVariationMode
+        ? (completedIndices.size / requiredVariations) * 100
+        : (completedIndices.size / totalQuestions) * 100
 
     return (
         <div className="space-y-8 max-w-3xl mx-auto">
@@ -171,7 +233,8 @@ export function StudentAssignmentInterface({
                                 await upsertAssignmentProgress(
                                     assignment.id,
                                     Array.from(completedIndices),
-                                    true
+                                    true,
+                                    currentIndex
                                 )
 
                                 if (onFinish) {
@@ -191,9 +254,14 @@ export function StudentAssignmentInterface({
                 <Card className={`transition-all ${canProceed ? 'border-green-500/40 bg-green-50/10' : ''}`}>
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
-                            <CardTitle className="text-xl">Question {currentIndex + 1}</CardTitle>
+                            <CardTitle className="text-xl">
+                                {isVariationMode ? `Variation ${completedIndices.size + 1} of ${requiredVariations}` : `Question ${currentIndex + 1}`}
+                            </CardTitle>
                             <CardDescription>
-                                {totalQuestions > 1 ? `Step ${currentIndex + 1} of ${totalQuestions}` : 'Solve the problem below'}
+                                {isVariationMode
+                                    ? `Complete ${requiredVariations} variations to pass. (${completedIndices.size} solved)`
+                                    : (totalQuestions > 1 ? `Step ${currentIndex + 1} of ${totalQuestions}` : 'Solve the problem below')
+                                }
                             </CardDescription>
                         </div>
                     </CardHeader>
@@ -225,13 +293,24 @@ export function StudentAssignmentInterface({
                                         Previous Exercise
                                     </Button>
                                 )}
-                                {!isLastQuestion ? (
+                                {!isLastQuestion || (isVariationMode && completedIndices.size < requiredVariations) ? (
                                     <Button
-                                        onClick={handleNext}
+                                        onClick={() => {
+                                            if (isVariationMode) {
+                                                // Pick next random unsolved
+                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !completedIndices.has(i));
+                                                if (unsolved.length > 0) {
+                                                    const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
+                                                    setCurrentIndex(randIndex);
+                                                }
+                                            } else {
+                                                handleNext();
+                                            }
+                                        }}
                                         disabled={!canProceed}
                                         className="gap-2"
                                     >
-                                        Next Question
+                                        {isVariationMode ? "Next Variation" : "Next Question"}
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 ) : (
@@ -244,7 +323,8 @@ export function StudentAssignmentInterface({
                                             await upsertAssignmentProgress(
                                                 assignment.id,
                                                 Array.from(completedIndices),
-                                                true
+                                                true,
+                                                currentIndex
                                             )
 
                                             if (onFinish) {

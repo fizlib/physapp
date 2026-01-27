@@ -99,6 +99,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
     const currentProgress = progressMap.get(currentAssignment?.id)
     const currentCompletedIndices = currentProgress?.completed_question_indices || []
     const currentIsCompleted = currentProgress?.is_completed || false
+    const currentActiveIndex = currentProgress?.active_question_index
 
     const handleAssignmentFinish = () => {
         if (currentAssignmentIndex < totalAssignments - 1) {
@@ -228,6 +229,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
                     compact={true}
                     initialCompletedIndices={currentCompletedIndices}
                     initialIsCompleted={currentIsCompleted}
+                    initialActiveQuestionIndex={currentActiveIndex}
                 />
             </div>
         </div>

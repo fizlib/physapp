@@ -418,7 +418,8 @@ const ExerciseSchema = z.object({
     // We'll default to 'homework' for the DB constraint but it won't be used for logic.
     category: z.enum(['homework', 'classwork']).default('homework').optional(),
     questions: z.array(QuestionSchema),
-    show_all_questions: z.boolean().default(false).optional()
+    show_all_questions: z.boolean().default(false).optional(),
+    required_variations_count: z.number().nullable().optional()
 })
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -428,6 +429,9 @@ export async function generateExerciseFromImage(formData: FormData) {
         console.error("Missing GEMINI_API_KEY")
         return { error: "Gemini API Key not found" }
     }
+
+    const variationCount = parseInt(formData.get('variationCount') as string || '1')
+    const isVariationMode = variationCount > 1
 
     const file = formData.get('image') as File
     if (!file) {
@@ -450,7 +454,18 @@ export async function generateExerciseFromImage(formData: FormData) {
   
   CRITICAL: If a single problem text asks for multiple distinct values (e.g., "Find the velocity and acceleration", "Calculate the time for each worker", "Find x and y"), you MUST SPLIT this into separate questions for each value requested.
   
-  Generate a list of questions, one for each part found. If there is only one problem, generate a list with one item.
+  Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
+
+  ${isVariationMode ? `
+  GENERATION MODE: VARIATIONS
+  You are requested to generate ${variationCount} DISTINCT variations of the problem shown in the image.
+  - The first variation (Question 1) should match the numbers and context of the image EXACTLY.
+  - The subsequent ${variationCount - 1} variations must be NEW problems that:
+    - Change the numerical values / inputs.
+    - Keep the same physics/math logic and difficulty.
+    - Keep the same context/story if possible, just different numbers.
+    - Calculate the new correct values based on your new numbers.
+  ` : ''}
  
   For each question:
   - Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
@@ -592,7 +607,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             // category: data.category, // We let it default or set to 'homework' as placeholder since it's now generic
             published: true,
             collection_id: collectionId || null,
-            show_all_questions: data.show_all_questions || false
+            show_all_questions: data.show_all_questions || false,
+            required_variations_count: data.required_variations_count || null
         })
         .select()
         .single()

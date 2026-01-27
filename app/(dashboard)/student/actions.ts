@@ -7,7 +7,8 @@ import { z } from 'zod'
 const UpsertProgressSchema = z.object({
     assignmentId: z.string().uuid(),
     completedIndices: z.array(z.number()),
-    isCompleted: z.boolean()
+    isCompleted: z.boolean(),
+    activeQuestionIndex: z.number().optional()
 })
 
 export type ActionState = {
@@ -19,14 +20,15 @@ export type ActionState = {
 export async function upsertAssignmentProgress(
     assignmentId: string,
     completedIndices: number[],
-    isCompleted: boolean
+    isCompleted: boolean,
+    activeQuestionIndex?: number
 ): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted })
+    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex })
     if (!validated.success) return { success: false, error: "Invalid data" }
 
     const { error } = await supabase
@@ -36,6 +38,7 @@ export async function upsertAssignmentProgress(
             assignment_id: assignmentId,
             completed_question_indices: completedIndices,
             is_completed: isCompleted,
+            active_question_index: activeQuestionIndex,
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'
