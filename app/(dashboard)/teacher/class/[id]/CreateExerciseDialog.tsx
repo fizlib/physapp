@@ -82,6 +82,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [variationMode, setVariationMode] = useState(false)
     const [variationCount, setVariationCount] = useState(6)
+    const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [passRequirement, setPassRequirement] = useState(2)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -140,6 +141,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
             formData.append('image', selectedFile)
             if (variationMode) {
                 formData.append('variationCount', variationCount.toString())
+                formData.append('variationType', variationType)
             }
             const result = await generateExerciseFromImage(formData)
 
@@ -309,7 +311,42 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                                 onChange={e => setPassRequirement(parseInt(e.target.value))}
                                             />
                                         </div>
-                                        <p className="col-span-2 text-xs text-muted-foreground">
+
+                                        <div className="col-span-2 space-y-2 pt-2">
+                                            <Label className="text-xs font-semibold block mb-2">Variation Type</Label>
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="var-type-numbers"
+                                                        name="variationType"
+                                                        value="numbers"
+                                                        checked={variationType === 'numbers'}
+                                                        onChange={() => setVariationType('numbers')}
+                                                        className="accent-primary h-4 w-4"
+                                                    />
+                                                    <Label htmlFor="var-type-numbers" className="text-sm font-normal cursor-pointer">
+                                                        Only different numbers <span className="text-xs text-muted-foreground ml-1">(Same context)</span>
+                                                    </Label>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="var-type-descriptions"
+                                                        name="variationType"
+                                                        value="descriptions"
+                                                        checked={variationType === 'descriptions'}
+                                                        onChange={() => setVariationType('descriptions')}
+                                                        className="accent-primary h-4 w-4"
+                                                    />
+                                                    <Label htmlFor="var-type-descriptions" className="text-sm font-normal cursor-pointer">
+                                                        Different descriptions <span className="text-xs text-muted-foreground ml-1">(New contexts/stories)</span>
+                                                    </Label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p className="col-span-2 text-xs text-muted-foreground pt-1">
                                             Student will need to solve {passRequirement} correct variations out of {variationCount} available.
                                         </p>
                                     </div>

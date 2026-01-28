@@ -19,7 +19,8 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
             let val: number;
             try {
                 // Use mathjs to evaluate the expression (e.g., "1/2" -> 0.5, "2^3" -> 8)
-                const evaluated = math.evaluate(asciiInput || latexInput);
+                // Accept both comma and dot as decimal separators
+                const evaluated = math.evaluate((asciiInput || latexInput).replace(/,/g, '.'));
                 val = typeof evaluated === 'number' ? evaluated : parseFloat(evaluated?.toString());
 
                 if (isNaN(val)) {
