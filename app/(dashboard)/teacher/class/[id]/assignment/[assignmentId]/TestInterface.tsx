@@ -2,21 +2,32 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Check, X, AlertCircle } from "lucide-react"
+import { Check, X } from "lucide-react"
 import MathDisplay from "@/components/MathDisplay"
+import MathInput from "@/components/MathInput"
+import * as math from "mathjs"
 
 export function TestInterface({ question, onCorrect }: { question: any, onCorrect?: () => void }) {
-    const [numInput, setNumInput] = useState("")
+    const [latexInput, setLatexInput] = useState("")
+    const [asciiInput, setAsciiInput] = useState("")
     const [mcqInput, setMcqInput] = useState<string | null>(null)
     const [result, setResult] = useState<'correct' | 'incorrect' | null>(null)
     const [feedback, setFeedback] = useState("")
 
     const checkAnswer = () => {
         if (question.question_type === 'numerical') {
-            const val = parseFloat(numInput)
-            if (isNaN(val)) {
-                setFeedback("Please enter a valid number")
+            let val: number;
+            try {
+                // Use mathjs to evaluate the expression (e.g., "1/2" -> 0.5, "2^3" -> 8)
+                const evaluated = math.evaluate(asciiInput || latexInput);
+                val = typeof evaluated === 'number' ? evaluated : parseFloat(evaluated?.toString());
+
+                if (isNaN(val)) {
+                    setFeedback("Please enter a valid mathematical expression")
+                    return
+                }
+            } catch (e) {
+                setFeedback("Please enter a valid mathematical expression")
                 return
             }
 
@@ -27,11 +38,11 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
             // Check range
             if (Math.abs(val - correct) <= margin) {
                 setResult('correct')
-                setFeedback(`Correct! ${val} is within ${tolerance}% of the target.`)
+                setFeedback(`Correct! ${val} matches the target (within ${tolerance}%).`)
                 onCorrect?.()
             } else {
                 setResult('incorrect')
-                setFeedback(`Incorrect. Please check your calculations and try again.`)
+                setFeedback(`Incorrect. Your result was ${val}, but it outside the allowed range.`)
             }
         } else {
             // MCQ
@@ -54,27 +65,36 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
     return (
         <div className="space-y-4">
             {question.question_type === 'numerical' ? (
-                <form
-                    className="flex w-full max-w-sm items-center gap-2"
-                    onSubmit={(e) => {
-                        e.preventDefault()
-                        checkAnswer()
-                    }}
-                >
-                    <Input
-                        type="number"
-                        id="answer"
-                        placeholder="Enter your answer..."
-                        value={numInput}
-                        onWheel={(e) => e.currentTarget.blur()}
-                        onChange={(e) => {
-                            setNumInput(e.target.value)
-                            setResult(null)
-                            setFeedback("")
-                        }}
-                    />
-                    <Button type="submit">Check</Button>
-                </form>
+                <div className="space-y-4">
+                    <div className="flex w-full items-center gap-2">
+                        <div className="flex-1">
+                            <MathInput
+                                value={latexInput}
+                                onChange={(latex, ascii) => {
+                                    setLatexInput(latex)
+                                    setAsciiInput(ascii || "")
+                                }}
+                                onKeyDown={(e: any) => {
+                                    if (e.key === 'Enter') {
+                                        // Reset results only when checking
+                                        setResult(null)
+                                        setFeedback("")
+
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        checkAnswer()
+                                    } else {
+                                        // Clear feedback when typing something else
+                                        setResult(null)
+                                        setFeedback("")
+                                    }
+                                }}
+                                placeholder="Write your answer (e.g. 1/2, 2^3)..."
+                            />
+                        </div>
+                        <Button type="button" onClick={checkAnswer}>Check</Button>
+                    </div>
+                </div>
             ) : (
                 <div className="space-y-3">
                     <div className="grid gap-2">
