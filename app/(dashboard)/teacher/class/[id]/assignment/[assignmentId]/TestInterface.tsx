@@ -90,7 +90,6 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
                                         setFeedback("")
                                     }
                                 }}
-                                placeholder="Write your answer (e.g. 1/2, 2^3)..."
                             />
                         </div>
                         <Button type="button" onClick={checkAnswer}>Check</Button>

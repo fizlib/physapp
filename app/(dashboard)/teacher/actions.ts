@@ -460,8 +460,8 @@ export async function generateExerciseFromImage(formData: FormData) {
   ${isVariationMode ? `
   GENERATION MODE: VARIATIONS (${variationType === 'descriptions' ? 'DIFFERENT DESCRIPTIONS' : 'ONLY NUMBERS'})
   You are requested to generate ${variationCount} DISTINCT variations of the problem shown in the image.
-  - The first variation (Question 1) should match the numbers and context of the image EXACTLY.
-  - The subsequent ${variationCount - 1} variations must be NEW problems.
+  - ALL ${variationCount} variations must be NEW problems based on the one in the image.
+  - DO NOT include an exact copy of the problem from the image, even as the first variation.
   
   ${variationType === 'descriptions' ? `
   VARIATION RULES (DIFFERENT DESCRIPTIONS):

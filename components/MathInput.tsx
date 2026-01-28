@@ -52,7 +52,7 @@ export default function MathInput({ value, onChange, onKeyDown, placeholder, cla
     }, [mounted, placeholder]);
 
     if (!mounted) {
-        return <div className={`h-10 w-full rounded-md border border-input bg-background px-3 py-2 ${className}`}>Loading editor...</div>;
+        return <div className={`h-[58px] w-full rounded-md border border-input bg-background px-3 py-2 ${className}`}></div>;
     }
 
     return (
