@@ -48,6 +48,9 @@ export default function MathInput({ value, onChange, onKeyDown, placeholder, cla
             if (placeholder) {
                 mfe.current.placeholder = placeholder;
             }
+
+            // Hide menu button
+            mfe.current.menuHandle = "none";
         }
     }, [mounted, placeholder]);
 
@@ -56,24 +59,33 @@ export default function MathInput({ value, onChange, onKeyDown, placeholder, cla
     }
 
     return (
-        // @ts-ignore
-        <math-field
-            ref={mfe}
-            onInput={(e: any) => {
-                const latex = e.target.value;
-                const ascii = e.target.getValue("ascii-math");
-                onChange(latex, ascii);
-            }}
-            onKeyDown={(e: any) => {
-                if (e.key === 'Enter') {
-                    e.stopPropagation();
+        <>
+            <style>{`
+                math-field::part(menu-toggle),
+                math-field::part(menu-handle) {
+                    display: none !important;
                 }
-                if (onKeyDown) onKeyDown(e);
-            }}
-            className={className}
-        >
-            {value}
+            `}</style>
             {/* @ts-ignore */}
-        </math-field>
+            <math-field
+                ref={mfe}
+                menu-handle="none"
+                onInput={(e: any) => {
+                    const latex = e.target.value;
+                    const ascii = e.target.getValue("ascii-math");
+                    onChange(latex, ascii);
+                }}
+                onKeyDown={(e: any) => {
+                    if (e.key === 'Enter') {
+                        e.stopPropagation();
+                    }
+                    if (onKeyDown) onKeyDown(e);
+                }}
+                className={className}
+            >
+                {value}
+                {/* @ts-ignore */}
+            </math-field>
+        </>
     );
 }

@@ -306,3 +306,40 @@ export async function adminGenerateMagicLink(userId: string) {
         return { success: false, error: 'Internal server error' }
     }
 }
+
+export async function adminResetUserProgress(userId: string) {
+    try {
+        await checkAdmin()
+
+        const supabaseAdmin = createAdminClient()
+
+        // Delete from assignment_progress
+        const { error: progressError } = await supabaseAdmin
+            .from('assignment_progress')
+            .delete()
+            .eq('student_id', userId)
+
+        if (progressError) {
+            console.error('Error resetting assignment progress:', progressError)
+            return { success: false, error: 'Failed to reset assignment progress' }
+        }
+
+        // Delete from submissions
+        const { error: submissionsError } = await supabaseAdmin
+            .from('submissions')
+            .delete()
+            .eq('student_id', userId)
+
+        if (submissionsError) {
+            console.error('Error resetting submissions:', submissionsError)
+            return { success: false, error: 'Failed to reset submissions' }
+        }
+
+        revalidatePath('/admin')
+        return { success: true, error: null }
+
+    } catch (error) {
+        console.error('Unexpected error in adminResetUserProgress:', error)
+        return { success: false, error: 'Internal server error' }
+    }
+}
