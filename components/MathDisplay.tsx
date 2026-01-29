@@ -24,7 +24,7 @@ export default function MathDisplay({ content }: { content: string }) {
     const parts = content.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$)/g)
 
     return (
-        <span>
+        <span className="whitespace-pre-wrap">
             {parts.map((part, index) => {
                 if (part.startsWith('$$') && part.endsWith('$$')) {
                     return <BlockMath key={index} math={part.slice(2, -2)} />

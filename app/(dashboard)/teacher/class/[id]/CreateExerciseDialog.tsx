@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2 } from "lucide-react"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +26,7 @@ interface QuestionData {
     correct_answer?: string | null
     diagram_type?: 'graph' | 'scheme' | null
     diagram_svg?: string | null
+    solution_text?: string | null
 }
 
 interface ExerciseData {
@@ -65,7 +66,8 @@ const DEFAULT_QUESTION: QuestionData = {
     options: ['', '', '', ''],
     correct_answer: 'A',
     diagram_type: null,
-    diagram_svg: null
+    diagram_svg: null,
+    solution_text: null
 }
 
 export function CreateExerciseDialog({ classroomId, classroomType, collectionId }: { classroomId: string, classroomType: string, collectionId?: string }) {
@@ -84,6 +86,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     const [variationCount, setVariationCount] = useState(6)
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [passRequirement, setPassRequirement] = useState(2)
+    const [generateSolution, setGenerateSolution] = useState(true)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     const handleFileSelection = (file: File) => {
@@ -143,6 +146,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                 formData.append('variationCount', variationCount.toString())
                 formData.append('variationType', variationType)
             }
+            formData.append('generateSolution', generateSolution.toString())
             const result = await generateExerciseFromImage(formData)
 
             if (result.success && result.data) {
@@ -353,6 +357,15 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                 )}
                             </div>
 
+                            <div className="flex items-center space-x-2 pt-2 border-t">
+                                <Checkbox
+                                    id="generate-solution"
+                                    checked={generateSolution}
+                                    onCheckedChange={(c) => setGenerateSolution(c as boolean)}
+                                />
+                                <Label htmlFor="generate-solution" className="font-medium">Generate step-by-step solution manual</Label>
+                            </div>
+
                             {imagePreview && (
                                 <div className="relative aspect-video w-full overflow-hidden rounded-lg border bg-muted">
                                     <img src={imagePreview} alt="Preview" className="object-cover w-full h-full" />
@@ -490,6 +503,20 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                                 ))}
                                             </div>
                                         )}
+
+                                        {/* Solution Section */}
+                                        <div className="space-y-2 pt-2 border-t">
+                                            <Label className="flex items-center gap-2">
+                                                <BookOpen className="h-4 w-4" />
+                                                Solution Manual
+                                            </Label>
+                                            <textarea
+                                                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                placeholder="Step-by-step solution..."
+                                                value={q.solution_text || ''}
+                                                onChange={(e) => updateQuestion(index, 'solution_text', e.target.value)}
+                                            />
+                                        </div>
 
                                         {/* Diagram Section */}
                                         {q.diagram_type && q.diagram_svg && (

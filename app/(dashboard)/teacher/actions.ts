@@ -146,7 +146,8 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
-        diagram_svg: index === 0 ? (q.diagram_svg || null) : null
+        diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
+        solution_text: q.solution_text || null
     }))
 
     const { error: insertError } = await supabase
@@ -409,7 +410,8 @@ const QuestionSchema = z.object({
     options: z.array(z.string()).nullable().optional(),
     correct_answer: z.string().nullable().optional(),
     diagram_type: z.enum(['graph', 'scheme']).nullable().optional(),
-    diagram_svg: z.string().nullable().optional()
+    diagram_svg: z.string().nullable().optional(),
+    solution_text: z.string().nullable().optional()
 })
 
 const ExerciseSchema = z.object({
@@ -433,6 +435,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const variationCount = parseInt(formData.get('variationCount') as string || '1')
     const isVariationMode = variationCount > 1
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
+    const generateSolution = formData.get('generateSolution') === 'true'
 
     const file = formData.get('image') as File
     if (!file) {
@@ -453,9 +456,17 @@ export async function generateExerciseFromImage(formData: FormData) {
   Analyze this physics/math problem image.
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
   
-  CRITICAL: If a single problem text asks for multiple distinct values (e.g., "Find the velocity and acceleration", "Calculate the time for each worker", "Find x and y"), you MUST SPLIT this into separate questions for each value requested.
-  
   Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
+
+  ${generateSolution ? `
+  SOLUTION MANUAL MODE:
+  For each question variation, you MUST also generate a concise, step-by-step solution.
+  - The solution should explain the physics principles used.
+  - Show the substituted values into the formula.
+  - Provide the final calculation steps.
+  - Use newlines or bullet points to separate distinct steps.
+  - Keep it professional and educational.
+  ` : ''}
 
   ${isVariationMode ? `
   GENERATION MODE: VARIATIONS (${variationType === 'descriptions' ? 'DIFFERENT DESCRIPTIONS' : 'ONLY NUMBERS'})
@@ -509,7 +520,8 @@ export async function generateExerciseFromImage(formData: FormData) {
             "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null... include strictly 4 options if possible, or as many as in the image. Wrap LaTeX in $),
             "correct_answer": "A" | "B" | "C" | "D" (if multiple_choice, else null... MUST be a single upper-case letter corresponding to the correct option index 0=A, 1=B, etc.),
             "diagram_type": "graph" | "scheme" | null (null if no diagram found),
-            "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found)
+            "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found),
+            "solution": "Concise step-by-step solution in LaTeX format" | null (Only if SOLUTION MANUAL MODE is active)
         }
     ]
   }
@@ -584,6 +596,12 @@ export async function generateExerciseFromImage(formData: FormData) {
 
                     q.correct_answer = ans
                 }
+
+                // Map Gemini 'solution' field to our 'solution_text'
+                if (q.solution) {
+                    q.solution_text = q.solution
+                }
+
                 return q
             })
         }
@@ -643,7 +661,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
-        diagram_svg: index === 0 ? (q.diagram_svg || null) : null
+        diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
+        solution_text: q.solution_text || null
     }))
 
     const { error: questionError } = await supabase

@@ -32,6 +32,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
         .single()
 
     const initialCompletedIndices = progress?.completed_question_indices || []
+    const initialRevealedIndices = progress?.revealed_question_indices || []
     const initialIsCompleted = progress?.is_completed || false
 
     return (
@@ -52,6 +53,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     assignment={assignment}
                     classId={id}
                     initialCompletedIndices={initialCompletedIndices}
+                    initialRevealedIndices={initialRevealedIndices}
                     initialIsCompleted={initialIsCompleted}
                 />
             </div>

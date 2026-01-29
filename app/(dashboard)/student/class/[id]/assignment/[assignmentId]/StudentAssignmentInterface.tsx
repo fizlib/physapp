@@ -7,10 +7,11 @@ import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { upsertAssignmentProgress } from "../../../../actions"
+import { toast } from "sonner"
 
 export function StudentAssignmentInterface({
     assignment,
@@ -20,6 +21,7 @@ export function StudentAssignmentInterface({
     canSkip = false,
     compact = false,
     initialCompletedIndices = [],
+    initialRevealedIndices = [],
     initialIsCompleted = false,
     initialActiveQuestionIndex
 }: {
@@ -30,6 +32,7 @@ export function StudentAssignmentInterface({
     canSkip?: boolean,
     compact?: boolean,
     initialCompletedIndices?: number[],
+    initialRevealedIndices?: number[],
     initialIsCompleted?: boolean,
     initialActiveQuestionIndex?: number
 }) {
@@ -37,6 +40,7 @@ export function StudentAssignmentInterface({
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
+    const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
     const router = useRouter()
 
     const questions = assignment.questions || []
@@ -55,7 +59,7 @@ export function StudentAssignmentInterface({
             // If all solved (or enough solved), pick any (won't matter as we show finish screen)
             const solvedCount = initialCompletedIndices.length;
             if (solvedCount < requiredVariations) {
-                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i));
+                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i) && !initialRevealedIndices.includes(i));
                 if (unsolved.length > 0) {
                     // Pick random to ensure "different variation" feel
                     const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
@@ -84,9 +88,10 @@ export function StudentAssignmentInterface({
             assignment.id,
             Array.from(completedIndices),
             completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
-            currentIndex
+            currentIndex,
+            Array.from(revealedIndices)
         )
-    }, [currentIndex, assignment.id, completedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex])
+    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex])
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
@@ -104,19 +109,36 @@ export function StudentAssignmentInterface({
             Array.from(newSet),
             // Finish if we met the requirement
             isVariationMode ? newSet.size >= requiredVariations : false,
-            currentIndex
+            currentIndex,
+            Array.from(revealedIndices)
         )
 
         // For variation mode, auto-advance logic is handled in render or effect
         if (isVariationMode && newSet.size < requiredVariations) {
-            // Pick next variation after a short delay to show success state?
-            // Or just let user click "Next Variation" button?
-            // User request: "After they solve it correctly, then they are given another"
-            // Best UX: Show "Correct!", enable "Next Variation" button.
+            // ...
         }
     }
 
-    const canProceed = canSkip || completedIndices.has(currentIndex)
+    const handleRevealSolution = async () => {
+        if (!confirm("Are you sure? If you reveal the solution, you will not be able to submit this variation and will need to solve a different one.")) {
+            return
+        }
+
+        const newRevealed = new Set(revealedIndices).add(currentIndex)
+        setRevealedIndices(newRevealed)
+
+        // Save progress immediately
+        await upsertAssignmentProgress(
+            assignment.id,
+            Array.from(completedIndices),
+            false, // Revelation never completes the assignment
+            currentIndex,
+            Array.from(newRevealed)
+        )
+        toast.info("Solution revealed. Please solve a different variation.")
+    }
+
+    const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex)
     const isLastQuestion = isVariationMode
         ? completedIndices.size >= requiredVariations - 1 // Logic: if we are at size == target-1, solving this makes it last
         : currentIndex === totalQuestions - 1
@@ -197,7 +219,38 @@ export function StudentAssignmentInterface({
                                                 diagramSvg={q.diagram_svg}
                                             />
 
-                                            <div className="pt-2">
+                                            {revealedIndices.has(index) && (
+                                                <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                    <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
+                                                        <BookOpen className="h-4 w-4" />
+                                                        Step-by-Step Solution
+                                                    </div>
+                                                    <div className="text-zinc-800 text-sm leading-relaxed border-t border-blue-100 pt-3">
+                                                        <MathDisplay content={q.solution_text || "No solution manual available."} />
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {!isCorrect && !revealedIndices.has(index) && (
+                                                <div className="flex justify-end">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-muted-foreground hover:text-blue-600 hover:bg-blue-50 gap-2 h-7 px-2 text-[10px]"
+                                                        onClick={async () => {
+                                                            if (!confirm("Reveal solution? Submission for this question will be disabled.")) return
+                                                            const newRevealed = new Set(revealedIndices).add(index)
+                                                            setRevealedIndices(newRevealed)
+                                                            await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed))
+                                                        }}
+                                                    >
+                                                        <HelpCircle className="h-3 w-3" />
+                                                        Reveal Solution
+                                                    </Button>
+                                                </div>
+                                            )}
+
+                                            <div className={`pt-2 ${revealedIndices.has(index) ? "opacity-50 pointer-events-none grayscale-[0.5]" : ""}`}>
                                                 <TestInterface
                                                     key={q.id || index}
                                                     question={q}
@@ -275,12 +328,44 @@ export function StudentAssignmentInterface({
                             diagramSvg={questions[currentIndex].diagram_svg}
                         />
 
-                        <div className="pt-6 border-t">
-                            <TestInterface
-                                key={questions[currentIndex].id || currentIndex}
-                                question={questions[currentIndex]}
-                                onCorrect={handleCorrect}
-                            />
+                        <div className="pt-6 border-t space-y-6">
+                            {revealedIndices.has(currentIndex) && (
+                                <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex items-center gap-2 text-blue-700 font-semibold">
+                                        <BookOpen className="h-5 w-5" />
+                                        Step-by-Step Solution
+                                    </div>
+                                    <div className="text-zinc-800 leading-relaxed border-t border-blue-100 pt-3">
+                                        <MathDisplay content={questions[currentIndex].solution_text || "No solution manual available for this variation."} />
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-100/50 p-2 rounded">
+                                        <AlertCircle className="h-3.5 w-3.5" />
+                                        Manual revealed. Submission disabled for this variation.
+                                    </div>
+                                </div>
+                            )}
+
+                            {!completedIndices.has(currentIndex) && !revealedIndices.has(currentIndex) && (
+                                <div className="flex justify-end">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-muted-foreground hover:text-blue-600 hover:bg-blue-50 gap-2"
+                                        onClick={handleRevealSolution}
+                                    >
+                                        <HelpCircle className="h-4 w-4" />
+                                        Reveal Solution
+                                    </Button>
+                                </div>
+                            )}
+
+                            <div className={revealedIndices.has(currentIndex) ? "opacity-50 pointer-events-none grayscale-[0.5]" : ""}>
+                                <TestInterface
+                                    key={questions[currentIndex].id || currentIndex}
+                                    question={questions[currentIndex]}
+                                    onCorrect={handleCorrect}
+                                />
+                            </div>
 
                             <div className={`mt-6 flex ${onPrevious ? 'justify-between' : 'justify-end'}`}>
                                 {onPrevious && (
@@ -297,8 +382,8 @@ export function StudentAssignmentInterface({
                                     <Button
                                         onClick={() => {
                                             if (isVariationMode) {
-                                                // Pick next random unsolved
-                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !completedIndices.has(i));
+                                                // Pick next random unsolved (not solved and not revealed)
+                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !completedIndices.has(i) && !revealedIndices.has(i));
                                                 if (unsolved.length > 0) {
                                                     const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
                                                     setCurrentIndex(randIndex);

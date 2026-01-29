@@ -8,7 +8,8 @@ const UpsertProgressSchema = z.object({
     assignmentId: z.string().uuid(),
     completedIndices: z.array(z.number()),
     isCompleted: z.boolean(),
-    activeQuestionIndex: z.number().optional()
+    activeQuestionIndex: z.number().optional(),
+    revealedIndices: z.array(z.number()).optional()
 })
 
 export type ActionState = {
@@ -21,7 +22,8 @@ export async function upsertAssignmentProgress(
     assignmentId: string,
     completedIndices: number[],
     isCompleted: boolean,
-    activeQuestionIndex?: number
+    activeQuestionIndex?: number,
+    revealedIndices?: number[]
 ): Promise<ActionState> {
     const supabase = await createClient()
 
@@ -39,6 +41,7 @@ export async function upsertAssignmentProgress(
             completed_question_indices: completedIndices,
             is_completed: isCompleted,
             active_question_index: activeQuestionIndex,
+            revealed_question_indices: revealedIndices || [],
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'

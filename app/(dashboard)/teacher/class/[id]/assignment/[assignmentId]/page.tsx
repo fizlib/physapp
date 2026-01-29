@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Check, CheckCircle2, XCircle } from "lucide-react"
+import { ArrowLeft, Check, CheckCircle2, XCircle, BookOpen } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
@@ -143,6 +143,23 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                                     )}
                                 </CardContent>
                             </Card>
+
+                            {/* Solution Preview */}
+                            {question.solution_text && (
+                                <Card className="border-blue-200 bg-blue-50/20">
+                                    <CardHeader className="pb-3">
+                                        <CardTitle className="flex items-center gap-2 text-blue-700 text-lg">
+                                            <BookOpen className="h-5 w-5" />
+                                            Solution Preview
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-zinc-800 leading-relaxed">
+                                            <MathDisplay content={question.solution_text} />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
                         </div>
                     ))}
                 </div>
