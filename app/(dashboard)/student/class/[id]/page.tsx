@@ -3,13 +3,16 @@ import { notFound } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, Activity, Layers, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, BookOpen, Clock, Activity, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
+import { getClientIp } from "@/lib/ip"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
     const { id } = await params
     const { data: { user } } = await supabase.auth.getUser()
+
+    const studentIp = await getClientIp()
 
     if (!user) return <div>Please log in</div>
 
@@ -64,6 +67,8 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     if (!classroom) notFound()
 
+    const isClassworkRestricted = classroom.ip_check_enabled && classroom.allowed_ip && studentIp !== classroom.allowed_ip
+
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
             <div className="mx-auto max-w-6xl space-y-8">
@@ -103,23 +108,31 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
                                                 const progress = getCollectionProgress(collection)
-                                                return (
-                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
-                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
-                                                            <CardContent className="p-6 space-y-4">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div className="space-y-1.5 flex-1 pr-4">
+                                                const cardContent = (
+                                                    <Card className={`transition-colors bg-secondary/10 ${isClassworkRestricted ? 'opacity-75' : 'cursor-pointer hover:border-primary/50'}`}>
+                                                        <CardContent className="p-6 space-y-4">
+                                                            <div className="flex justify-between items-start">
+                                                                <div className="space-y-1.5 flex-1 pr-4">
+                                                                    <div className="flex items-center gap-2">
                                                                         <h3 className="font-semibold leading-none">{collection.title}</h3>
-                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                            <span>{collection.assignments?.length || 0} Exercises</span>
-                                                                            <span>•</span>
-                                                                            <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                                                                        </div>
+                                                                        {isClassworkRestricted && <Lock className="h-3 w-3 text-red-500" />}
                                                                     </div>
-                                                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Classwork</span>
+                                                                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                                                        <span>{collection.assignments?.length || 0} Exercises</span>
+                                                                        <span>•</span>
+                                                                        <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                                    </div>
                                                                 </div>
+                                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Classwork</span>
+                                                            </div>
 
-                                                                {/* Progress Section */}
+                                                            {/* Progress Section */}
+                                                            {isClassworkRestricted ? (
+                                                                <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
+                                                                    <ShieldAlert className="h-3.5 w-3.5" />
+                                                                    <span className="text-[10px] font-medium leading-tight">Access restricted to classroom network only</span>
+                                                                </div>
+                                                            ) : (
                                                                 <div className="space-y-2">
                                                                     {progress > 0 && progress < 100 && (
                                                                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -136,8 +149,18 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                         <Progress value={progress} className="h-1.5" />
                                                                     )}
                                                                 </div>
-                                                            </CardContent>
-                                                        </Card>
+                                                            )}
+                                                        </CardContent>
+                                                    </Card>
+                                                )
+
+                                                if (isClassworkRestricted) {
+                                                    return <div key={collection.id}>{cardContent}</div>
+                                                }
+
+                                                return (
+                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
+                                                        {cardContent}
                                                     </Link>
                                                 )
                                             })}

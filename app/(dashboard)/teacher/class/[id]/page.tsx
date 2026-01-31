@@ -101,7 +101,13 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                     Manage Students
                                 </Link>
                             </Button>
-                            <ClassSettingsDialog classroomId={id} currentType={classroom.type} currentLessonSchedule={classroom.lesson_schedule} />
+                            <ClassSettingsDialog
+                                classroomId={id}
+                                currentType={classroom.type}
+                                currentLessonSchedule={classroom.lesson_schedule}
+                                allowedIp={classroom.allowed_ip}
+                                ipCheckEnabled={classroom.ip_check_enabled}
+                            />
                         </div>
                     </div>
                 </div>

@@ -14,8 +14,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { Settings, Trash2, AlertTriangle, Check, Clock } from "lucide-react"
 import { toast } from "sonner"
-import { updateClassroomType, deleteClassroom, updateLessonSchedule } from "../../actions"
+import { updateClassroomType, deleteClassroom, updateLessonSchedule, updateClassroomIpSettings, getCurrentIp } from "../../actions"
 import { useRouter } from "next/navigation"
+import { Globe, Shield, RefreshCw } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 
 const DAYS_OF_WEEK = [
     { value: 1, label: 'Monday', short: 'Mon' },
@@ -42,15 +45,27 @@ interface ClassSettingsDialogProps {
     classroomId: string
     currentType: 'private_student' | 'school_class'
     currentLessonSchedule?: LessonSlot[] | null
+    allowedIp?: string | null
+    ipCheckEnabled?: boolean
     trigger?: React.ReactNode
 }
 
-export function ClassSettingsDialog({ classroomId, currentType, currentLessonSchedule, trigger }: ClassSettingsDialogProps) {
+export function ClassSettingsDialog({
+    classroomId,
+    currentType,
+    currentLessonSchedule,
+    allowedIp,
+    ipCheckEnabled = true,
+    trigger
+}: ClassSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
     const [type, setType] = useState(currentType)
     const [lessonSchedule, setLessonSchedule] = useState<LessonSlot[]>(currentLessonSchedule || [])
+    const [ipEnabled, setIpEnabled] = useState(ipCheckEnabled)
+    const [allowedIpValue, setAllowedIpValue] = useState(allowedIp || '')
+    const [fetchingIp, setFetchingIp] = useState(false)
     const router = useRouter()
 
     // Reset state when dialog opens
@@ -58,8 +73,10 @@ export function ClassSettingsDialog({ classroomId, currentType, currentLessonSch
         if (open) {
             setType(currentType)
             setLessonSchedule(currentLessonSchedule || [])
+            setIpEnabled(ipCheckEnabled)
+            setAllowedIpValue(allowedIp || '')
         }
-    }, [open, currentType, currentLessonSchedule])
+    }, [open, currentType, currentLessonSchedule, ipCheckEnabled, allowedIp])
 
     const toggleDay = (day: number) => {
         const existing = lessonSchedule.find(s => s.day === day)
@@ -82,7 +99,21 @@ export function ClassSettingsDialog({ classroomId, currentType, currentLessonSch
     const hasTypeChanged = type !== currentType
     const hasScheduleChanged = JSON.stringify(lessonSchedule.sort((a, b) => a.day - b.day)) !==
         JSON.stringify((currentLessonSchedule || []).sort((a, b) => a.day - b.day))
-    const hasChanges = hasTypeChanged || hasScheduleChanged
+    const hasIpSettingsChanged = ipEnabled !== ipCheckEnabled || allowedIpValue !== (allowedIp || '')
+    const hasChanges = hasTypeChanged || hasScheduleChanged || hasIpSettingsChanged
+
+    const handleFetchCurrentIp = async () => {
+        setFetchingIp(true)
+        try {
+            const result = await getCurrentIp()
+            setAllowedIpValue(result.ip)
+            toast.success("Successfully fetched current IP")
+        } catch (err) {
+            toast.error("Failed to fetch current IP")
+        } finally {
+            setFetchingIp(false)
+        }
+    }
 
     const handleSave = async () => {
         setLoading(true)
@@ -102,6 +133,16 @@ export function ClassSettingsDialog({ classroomId, currentType, currentLessonSch
                 const result = await updateLessonSchedule(classroomId, lessonSchedule)
                 if (!result.success) {
                     toast.error(result.error || "Failed to update schedule")
+                    setLoading(false)
+                    return
+                }
+            }
+
+            // Update IP settings if changed
+            if (hasIpSettingsChanged) {
+                const result = await updateClassroomIpSettings(classroomId, allowedIpValue, ipEnabled)
+                if (!result.success) {
+                    toast.error(result.error || "Failed to update IP settings")
                     setLoading(false)
                     return
                 }
@@ -235,6 +276,58 @@ export function ClassSettingsDialog({ classroomId, currentType, currentLessonSch
                             </div>
                         </>
                     )}
+
+                    <div className="h-px bg-border" />
+
+                    {/* IP Access Control */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm font-medium flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-primary" />
+                                    IP Access Control
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Restrict access to Classwork to a specific public IP address.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={ipEnabled}
+                                onCheckedChange={setIpEnabled}
+                            />
+                        </div>
+
+                        {ipEnabled && (
+                            <div className="space-y-3 pl-6 border-l-2 border-primary/20 animate-in fade-in slide-in-from-left-2 duration-200">
+                                <div className="space-y-2">
+                                    <Label htmlFor="allowed-ip" className="text-xs text-muted-foreground">Allowed Public IP Address</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="allowed-ip"
+                                            value={allowedIpValue}
+                                            onChange={(e) => setAllowedIpValue(e.target.value)}
+                                            placeholder="e.g. 1.2.3.4"
+                                            className="text-sm font-mono h-9"
+                                        />
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleFetchCurrentIp}
+                                            disabled={fetchingIp}
+                                            className="shrink-0"
+                                        >
+                                            <RefreshCw className={`h-3 w-3 mr-2 ${fetchingIp ? 'animate-spin' : ''}`} />
+                                            Use Current
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="flex items-start gap-2 text-[10px] text-muted-foreground bg-muted/50 p-2 rounded">
+                                    <Globe className="h-3 w-3 mt-0.5" />
+                                    <p>Students will only be able to access "Classwork" collections when connected to this network. "Homework" remains accessible from anywhere.</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="h-px bg-border" />
 

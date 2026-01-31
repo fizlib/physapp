@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
+import { headers } from 'next/headers'
 import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 
 // ... (keep existing code) ...
@@ -32,6 +33,8 @@ const AddStudentSchema = z.object({
     classroomId: z.string().uuid(),
 })
 
+import { getClientIp } from '@/lib/ip'
+
 export async function createClassroom(formData: FormData) {
     const supabase = await createClient()
 
@@ -55,11 +58,15 @@ export async function createClassroom(formData: FormData) {
     const validated = CreateClassSchema.safeParse({ name, type, lessonSchedule })
     if (!validated.success) return { error: "Invalid name or type" }
 
+    const ip = await getClientIp()
+
     const { error } = await supabase.from('classrooms').insert({
         teacher_id: user.id,
         name: name,
         type: validated.data.type,
-        lesson_schedule: validated.data.lessonSchedule || null
+        lesson_schedule: validated.data.lessonSchedule || null,
+        allowed_ip: ip,
+        ip_check_enabled: true
     })
 
     if (error) {
@@ -1081,3 +1088,47 @@ export async function deleteCollection(collectionId: string, classroomId: string
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
 }
+
+export async function updateClassroomIpSettings(
+    classroomId: string,
+    allowedIp: string,
+    enabled: boolean
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('classrooms')
+        .update({
+            allowed_ip: allowedIp,
+            ip_check_enabled: enabled
+        })
+        .eq('id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to update IP settings' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function getCurrentIp(): Promise<{ ip: string }> {
+    const ip = await getClientIp()
+    return { ip }
+}
+
