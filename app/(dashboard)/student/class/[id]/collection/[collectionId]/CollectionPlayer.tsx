@@ -278,6 +278,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
                     initialCompletedIndices={currentCompletedIndices}
                     initialIsCompleted={currentIsCompleted}
                     initialActiveQuestionIndex={currentActiveIndex}
+                    hideRevealSolution={collection.category === 'classwork'}
                 />
             </div>
         </div>

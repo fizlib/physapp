@@ -12,13 +12,16 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
 
     const { data: assignment } = await supabase
         .from('assignments')
-        .select('*, questions(*)')
+        .select('*, questions(*), collection:collections(category)')
         .eq('id', assignmentId)
         .eq('published', true)
         .order('created_at', { foreignTable: 'questions', ascending: true })
         .single()
 
     if (!assignment) notFound()
+
+    // Determine if this is a classwork assignment
+    const isClasswork = assignment.collection?.category === 'classwork'
 
     // Ensure questions are sorted by sequence/order if applicable, or just rely on default order.
     // Assuming questions array is the order.
@@ -55,6 +58,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     initialCompletedIndices={initialCompletedIndices}
                     initialRevealedIndices={initialRevealedIndices}
                     initialIsCompleted={initialIsCompleted}
+                    hideRevealSolution={isClasswork}
                 />
             </div>
         </div>

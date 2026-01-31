@@ -23,7 +23,8 @@ export function StudentAssignmentInterface({
     initialCompletedIndices = [],
     initialRevealedIndices = [],
     initialIsCompleted = false,
-    initialActiveQuestionIndex
+    initialActiveQuestionIndex,
+    hideRevealSolution = false
 }: {
     assignment: any,
     classId: string,
@@ -34,7 +35,8 @@ export function StudentAssignmentInterface({
     initialCompletedIndices?: number[],
     initialRevealedIndices?: number[],
     initialIsCompleted?: boolean,
-    initialActiveQuestionIndex?: number
+    initialActiveQuestionIndex?: number,
+    hideRevealSolution?: boolean
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
@@ -231,7 +233,7 @@ export function StudentAssignmentInterface({
                                                 </div>
                                             )}
 
-                                            {!isCorrect && !revealedIndices.has(index) && (
+                                            {!hideRevealSolution && !isCorrect && !revealedIndices.has(index) && (
                                                 <div className="flex justify-end">
                                                     <Button
                                                         variant="ghost"
@@ -345,7 +347,7 @@ export function StudentAssignmentInterface({
                                 </div>
                             )}
 
-                            {!completedIndices.has(currentIndex) && !revealedIndices.has(currentIndex) && (
+                            {!hideRevealSolution && !completedIndices.has(currentIndex) && !revealedIndices.has(currentIndex) && (
                                 <div className="flex justify-end">
                                     <Button
                                         variant="ghost"
