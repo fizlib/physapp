@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import { getClientIp } from '@/lib/ip'
 
 const UpsertProgressSchema = z.object({
     assignmentId: z.string().uuid(),
@@ -33,6 +34,38 @@ export async function upsertAssignmentProgress(
     const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex })
     if (!validated.success) return { success: false, error: "Invalid data" }
 
+    // IP Enforcement Check
+    const studentIp = await getClientIp()
+
+    // Fetch classroom info via assignment -> collection link
+    const { data: assignmentData } = await supabase
+        .from('assignments')
+        .select(`
+            classroom_id,
+            collections (
+                category
+            ),
+            classrooms (
+                allowed_ip,
+                ip_check_enabled
+            )
+        `)
+        .eq('id', assignmentId)
+        .single()
+
+    if (assignmentData) {
+        // Handle potential array return from join (depends on Supabase client version/types)
+        const classroom: any = Array.isArray(assignmentData.classrooms) ? assignmentData.classrooms[0] : assignmentData.classrooms
+        const collection: any = Array.isArray(assignmentData.collections) ? assignmentData.collections[0] : assignmentData.collections
+
+        // Only restrict 'classwork'
+        if (collection?.category === 'classwork' && classroom?.ip_check_enabled && classroom?.allowed_ip) {
+            if (studentIp !== classroom.allowed_ip) {
+                return { success: false, error: "Access restricted: You have moved to a different network. Please reconnect to the classroom network to save progress." }
+            }
+        }
+    }
+
     const { error } = await supabase
         .from('assignment_progress')
         .upsert({
@@ -62,4 +95,24 @@ export async function upsertAssignmentProgress(
     }
 
     return { success: true }
+}
+
+export async function checkIpAccess(classroomId: string, category: string): Promise<{ isRestricted: boolean, studentIp?: string }> {
+    const supabase = await createClient()
+    const studentIp = await getClientIp()
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('allowed_ip, ip_check_enabled')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom) return { isRestricted: false }
+
+    const isRestricted = category === 'classwork' &&
+        classroom.ip_check_enabled &&
+        classroom.allowed_ip &&
+        studentIp !== classroom.allowed_ip
+
+    return { isRestricted, studentIp }
 }

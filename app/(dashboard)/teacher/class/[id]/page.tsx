@@ -10,6 +10,7 @@ import { CreateExerciseDialog } from "./CreateExerciseDialog"
 import { CreateCollectionDialog } from "./CreateCollectionDialog"
 import { ClassSettingsDialog } from "./ClassSettingsDialog"
 import { DeleteCollectionButton } from "./DeleteCollectionButton"
+import { TeacherIpSync } from "../../TeacherIpSync"
 
 export default async function ClassroomPage({ params, searchParams }: { params: Promise<{ id: string }>, searchParams: Promise<{ view?: string }> }) {
     const supabase = await createClient()
@@ -63,6 +64,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
+            <TeacherIpSync classroomId={id} />
             <div className="mx-auto max-w-6xl space-y-8">
                 {/* Header */}
                 <div className="space-y-4">

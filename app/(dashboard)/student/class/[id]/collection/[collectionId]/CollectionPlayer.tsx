@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -16,6 +16,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { checkIpAccess } from "../../../../actions"
+import { ShieldAlert } from "lucide-react"
 
 interface CollectionPlayerProps {
     collection: any
@@ -90,6 +92,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
     const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(initialIndex)
     const [maxReachedIndex, setMaxReachedIndex] = useState(Math.max(0, allDone ? assignments.length - 1 : initialIndex))
     const [isCompleted, setIsCompleted] = useState(allDone)
+    const [restrictionData, setRestrictionData] = useState<{ isRestricted: boolean, studentIp?: string }>({ isRestricted: false })
     const router = useRouter()
     const { width, height } = useWindowSize()
     const totalAssignments = assignments.length
@@ -101,7 +104,14 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
     const currentIsCompleted = currentProgress?.is_completed || false
     const currentActiveIndex = currentProgress?.active_question_index
 
-    const handleAssignmentFinish = () => {
+    const handleAssignmentFinish = async () => {
+        // Double check IP before moving to next assignment
+        const result = await checkIpAccess(classroomId, collection.category)
+        if (result.isRestricted) {
+            setRestrictionData(result)
+            return
+        }
+
         if (currentAssignmentIndex < totalAssignments - 1) {
             const nextIndex = currentAssignmentIndex + 1
             setCurrentAssignmentIndex(nextIndex)
@@ -109,6 +119,48 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
         } else {
             setIsCompleted(true)
         }
+    }
+
+    const [isReviewing, setIsReviewing] = useState(allDone)
+
+    // Periodic IP check effect
+    useEffect(() => {
+        if (isCompleted || collection.category !== 'classwork') return
+
+        const check = async () => {
+            const result = await checkIpAccess(classroomId, collection.category)
+            if (result.isRestricted) {
+                setRestrictionData(result)
+            }
+        }
+
+        const interval = setInterval(check, 30000)
+        return () => clearInterval(interval)
+    }, [classroomId, collection.category, isCompleted])
+
+    if (restrictionData.isRestricted) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                        <ShieldAlert className="h-10 w-10 text-red-600" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
+                        <p className="text-muted-foreground">
+                            Your network connection has changed. This classwork is restricted to the classroom network only.
+                            You are currently connected from <span className="font-mono text-red-500">{restrictionData.studentIp}</span>.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={`/student/class/${classroomId}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Return to Classroom
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
     }
 
     const handlePrevious = () => {
@@ -133,10 +185,6 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
             </div>
         )
     }
-
-    // State to toggle between completion screen and review mode
-    // If allDone is true initially, it means we are revisiting a completed collection, so start in review mode.
-    const [isReviewing, setIsReviewing] = useState(allDone)
 
     if (isCompleted && !isReviewing) {
         return (

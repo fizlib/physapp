@@ -1132,3 +1132,39 @@ export async function getCurrentIp(): Promise<{ ip: string }> {
     return { ip }
 }
 
+export async function syncClassroomIp(classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Get current IP
+    const currentIp = await getClientIp()
+
+    // 1. Check if teacher owns the classroom and if IP restriction is enabled
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id, allowed_ip, ip_check_enabled')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // 2. Only update if enabled and IF it actually changed
+    if (classroom.ip_check_enabled && classroom.allowed_ip !== currentIp) {
+        const { error } = await supabase
+            .from('classrooms')
+            .update({ allowed_ip: currentIp })
+            .eq('id', classroomId)
+
+        if (error) {
+            console.error('IP Sync Error:', error)
+            return { success: false, error: "Failed to sync IP" }
+        }
+    }
+
+    return { success: true }
+}
+
