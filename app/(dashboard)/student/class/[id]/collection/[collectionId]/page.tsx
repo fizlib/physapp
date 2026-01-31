@@ -32,6 +32,11 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     if (!collection) notFound()
 
+    // Filter out unpublished assignments
+    if (collection.assignments) {
+        collection.assignments = collection.assignments.filter((a: any) => a.published)
+    }
+
     // 2. IP Restriction Check
     const { data: classroom } = await supabase
         .from('classrooms')

@@ -40,7 +40,15 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     const { data: classroom } = classroomResult
     const { data: assignments } = assignmentsResult
-    const { data: collections } = collectionsResult
+    let { data: collections } = collectionsResult
+
+    // Filter out unpublished assignments within collections
+    if (collections) {
+        collections = collections.map((c: any) => ({
+            ...c,
+            assignments: c.assignments?.filter((a: any) => a.published) || []
+        }))
+    }
 
     // Fetch progress for all assignments in collections
     const allCollectionAssignmentIds = collections?.flatMap((c: any) => c.assignments.map((a: any) => a.id)) || []

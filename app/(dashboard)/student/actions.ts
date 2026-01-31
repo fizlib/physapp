@@ -42,6 +42,7 @@ export async function upsertAssignmentProgress(
         .from('assignments')
         .select(`
             classroom_id,
+            published,
             collections (
                 category
             ),
@@ -52,6 +53,10 @@ export async function upsertAssignmentProgress(
         `)
         .eq('id', assignmentId)
         .single()
+
+    if (assignmentData && !assignmentData.published) {
+        return { success: false, error: "This assignment is currently in draft and cannot be saved." }
+    }
 
     if (assignmentData) {
         // Handle potential array return from join (depends on Supabase client version/types)

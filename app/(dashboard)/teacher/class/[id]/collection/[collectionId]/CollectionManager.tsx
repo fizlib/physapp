@@ -9,12 +9,56 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Trash2, GripVertical, BookOpen } from "lucide-react"
-import { addExerciseToCollection, removeExerciseFromCollection } from "../../../../actions"
+import { Plus, Trash2, GripVertical, BookOpen, Eye, EyeOff } from "lucide-react"
+import { addExerciseToCollection, removeExerciseFromCollection, toggleAssignmentPublish } from "../../../../actions"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
+
+export function TogglePublishButton({
+    assignmentId,
+    classroomId,
+    initialPublished
+}: {
+    assignmentId: string
+    classroomId: string
+    initialPublished: boolean
+}) {
+    const [published, setPublished] = useState(initialPublished)
+    const [loading, setLoading] = useState(false)
+
+    const handleToggle = async () => {
+        setLoading(true)
+        const newStatus = !published
+        try {
+            const result = await toggleAssignmentPublish(assignmentId, classroomId, newStatus)
+            if (result.success) {
+                setPublished(newStatus)
+                toast.success(newStatus ? "Exercise published" : "Exercise unpublished")
+            } else {
+                toast.error(result.error || "Failed to update status")
+            }
+        } catch (err) {
+            toast.error("Something went wrong")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    return (
+        <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleToggle}
+            disabled={loading}
+            className={published ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-muted-foreground hover:text-foreground"}
+            title={published ? "Unpublish exercise" : "Publish exercise"}
+        >
+            {published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+        </Button>
+    )
+}
 
 interface CollectionManagerProps {
     classroomId: string

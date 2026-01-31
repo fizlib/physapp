@@ -1,7 +1,11 @@
 1. Run:
 npm run build
 
-2. Upload only these in Filezilla:
+2. 
+Delete previous folders in SSH terminal:
+rm -rf .next public
+
+Upload only these in Filezilla:
 
 .next/ (The build output)
 

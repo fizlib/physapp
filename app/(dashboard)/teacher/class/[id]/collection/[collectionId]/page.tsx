@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ArrowLeft, BookOpen, Clock, GripVertical } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { CollectionManager, RemoveExerciseButton } from "./CollectionManager"
+import { CollectionManager, RemoveExerciseButton, TogglePublishButton } from "./CollectionManager"
 import { CreateExerciseDialog } from "../../CreateExerciseDialog"
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
@@ -91,7 +91,14 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                             {index + 1}
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold">{assignment.title}</h3>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-semibold">{assignment.title}</h3>
+                                                {assignment.published ? (
+                                                    <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
+                                                ) : (
+                                                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
                                                 {assignment.questions && (
                                                     <span>{assignment.questions.length || 'Unknown'} questions</span>
@@ -101,6 +108,11 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 pointer-events-auto">
+                                        <TogglePublishButton
+                                            classroomId={id}
+                                            assignmentId={assignment.id}
+                                            initialPublished={assignment.published}
+                                        />
                                         <RemoveExerciseButton
                                             classroomId={id}
                                             collectionId={collectionId}
