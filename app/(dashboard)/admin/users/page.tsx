@@ -4,8 +4,9 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
     const { users, error } = await adminGetAllUsers()
+    const { id: selectedUserId } = await searchParams
 
     if (error) {
         return (
@@ -31,7 +32,7 @@ export default async function AdminUsersPage() {
                 </div>
             </div>
 
-            <UserList initialUsers={users} />
+            <UserList initialUsers={users} selectedUserId={selectedUserId} />
         </div>
     )
 }

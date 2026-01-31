@@ -2,7 +2,7 @@
 
 import { AdminUser, adminConfirmUserEmail, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
 import { CopyButton } from "@/components/ui/copy-button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
     Table,
@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
+export function UserList({ initialUsers, selectedUserId }: { initialUsers: AdminUser[], selectedUserId?: string }) {
     const [users, setUsers] = useState<AdminUser[]>(initialUsers)
     const [isLoading, setIsLoading] = useState<string | null>(null)
     const [isCreating, setIsCreating] = useState(false)
@@ -39,11 +39,22 @@ export function UserList({ initialUsers }: { initialUsers: AdminUser[] }) {
     const [generatedPassword, setGeneratedPassword] = useState<string>("")
 
     // New state for details view
-    const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
+    const [selectedUser, setSelectedUser] = useState<AdminUser | null>(
+        selectedUserId ? initialUsers.find(u => u.id === selectedUserId) || null : null
+    )
     const [isLoadingLink, setIsLoadingLink] = useState(false)
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [userToReset, setUserToReset] = useState<AdminUser | null>(null)
     const [isResetting, setIsResetting] = useState(false)
+
+    useEffect(() => {
+        if (selectedUserId) {
+            const user = users.find(u => u.id === selectedUserId)
+            if (user) {
+                setSelectedUser(user)
+            }
+        }
+    }, [selectedUserId, users])
 
     const router = useRouter()
 

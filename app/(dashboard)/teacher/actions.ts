@@ -16,13 +16,13 @@ const LessonSlotSchema = z.object({
 })
 
 const CreateClassSchema = z.object({
-    name: z.string().min(3),
+    name: z.string().min(1),
     type: z.enum(['private_student', 'school_class']).default('school_class'),
     lessonSchedule: z.array(LessonSlotSchema).optional(),
 })
 
 const CreateCollectionSchema = z.object({
-    title: z.string().min(3),
+    title: z.string().min(1),
     classroomId: z.string().uuid(),
     category: z.enum(['homework', 'classwork']).default('homework'),
 })
@@ -365,7 +365,7 @@ export async function getUnassignedStudents() {
 
 const UpdateClassroomNameSchema = z.object({
     classroomId: z.string().uuid(),
-    name: z.string().min(3),
+    name: z.string().min(1),
 })
 
 export async function updateClassroomName(classroomId: string, name: string): Promise<ActionState> {

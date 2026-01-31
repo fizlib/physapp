@@ -17,8 +17,8 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     const { view } = await searchParams
     const currentView = view || 'collections'
 
-    // 1. Fetch Classroom, Students, Assignments, and Collections in parallel
-    const [classroomResult, enrollmentsResult, assignmentsResult, collectionsResult] = await Promise.all([
+    // 1. Fetch Classroom, Students, Assignments, Collections and current user's admin status in parallel
+    const [classroomResult, enrollmentsResult, assignmentsResult, collectionsResult, userResult] = await Promise.all([
         supabase
             .from('classrooms')
             .select('*')
@@ -38,13 +38,26 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             .from('collections')
             .select('*, assignments(*)')
             .eq('classroom_id', id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+        supabase.auth.getUser()
     ])
 
     const { data: classroom } = classroomResult
     const { data: enrollments } = enrollmentsResult
     const { data: assignments } = assignmentsResult
     const { data: collections } = collectionsResult
+    const { data: { user } } = userResult
+
+    // Fetch user profile to check admin status
+    let isTeacherAdmin = false
+    if (user) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single()
+        isTeacherAdmin = !!profile?.is_admin
+    }
 
     if (!classroom) notFound()
 
@@ -149,6 +162,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                         <StudentManager
                             classroomId={id}
                             initialEnrollments={enrollments || []}
+                            isTeacherAdmin={isTeacherAdmin}
                         />
                     )}
 

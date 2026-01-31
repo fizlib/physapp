@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { ArrowLeft, UserPlus, Search, Loader2, Users, X } from "lucide-react"
+import { ArrowLeft, UserPlus, Search, Loader2, Users, X, Shield } from "lucide-react"
+import Link from "next/link"
 import { getUnassignedStudents, enrollStudent } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentProgressDialog } from "./StudentProgressDialog"
@@ -21,9 +22,10 @@ interface Student {
 interface StudentManagerProps {
     classroomId: string
     initialEnrollments: any[]
+    isTeacherAdmin: boolean
 }
 
-export function StudentManager({ classroomId, initialEnrollments }: StudentManagerProps) {
+export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin }: StudentManagerProps) {
     const router = useRouter()
     const [view, setView] = useState<'list' | 'add'>('list')
     const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
@@ -204,7 +206,15 @@ export function StudentManager({ classroomId, initialEnrollments }: StudentManag
                                                 </span>
                                             </div>
                                         </div>
-                                        <div onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                            {isTeacherAdmin && (
+                                                <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-primary">
+                                                    <Link href={`/admin/users?id=${enrollment.student_id}`}>
+                                                        <Shield className="h-4 w-4" />
+                                                        <span className="sr-only">Admin View</span>
+                                                    </Link>
+                                                </Button>
+                                            )}
                                             <RemoveStudentButton
                                                 studentId={enrollment.student_id}
                                                 classroomId={classroomId}
