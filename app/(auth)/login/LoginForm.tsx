@@ -131,7 +131,7 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                                     onClick={() => setIsLogin(!isLogin)}
                                     className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
                                 >
-                                    {isLogin ? "New to Gama? Create an account" : "Have an account? Sign in"}
+                                    {isLogin ? "New to Protus? Create an account" : "Have an account? Sign in"}
                                 </button>
                             ) : (
                                 !isLogin && (

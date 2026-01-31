@@ -42,7 +42,7 @@ export function Logo({ className, size = "md", iconOnly = false }: LogoProps) {
                         textSizeClasses[size]
                     )}
                 >
-                    Gama
+                    Protus
                 </span>
             )}
         </div>

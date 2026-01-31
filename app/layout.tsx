@@ -18,8 +18,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Gama",
-  description: "Gama App",
+  title: "Protus",
+  description: "Protus App",
 };
 
 export default function RootLayout({
