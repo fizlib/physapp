@@ -1,0 +1,20 @@
+1. Run:
+npm run build
+
+2. Upload only these in Filezilla:
+
+.next/ (The build output)
+
+public/ (Images and static assets)
+
+package.json
+
+package-lock.json (or yarn.lock)
+
+next.config.js
+
+3. in VM ssh:
+
+cd physapp
+npm install --production
+pm2 restart physapp
