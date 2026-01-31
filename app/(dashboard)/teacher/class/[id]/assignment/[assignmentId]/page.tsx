@@ -32,9 +32,9 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                 {/* Header */}
                 <div className="space-y-4">
                     <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
-                        <Link href={`/teacher/class/${id}`}>
+                        <Link href={assignment.collection_id ? `/teacher/class/${id}/collection/${assignment.collection_id}` : `/teacher/class/${id}`}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Class
+                            Back to Collection
                         </Link>
                     </Button>
                     <div className="flex items-start justify-between border-b pb-6">
