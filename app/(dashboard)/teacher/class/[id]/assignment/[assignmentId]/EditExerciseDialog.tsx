@@ -257,16 +257,16 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
                                                 <Input
                                                     type="number"
                                                     step="any"
-                                                    value={q.correct_value || 0}
-                                                    onChange={(e) => updateQuestion(index, 'correct_value', parseFloat(e.target.value))}
+                                                    value={q.correct_value === null || q.correct_value === undefined || isNaN(q.correct_value) ? '' : q.correct_value}
+                                                    onChange={(e) => updateQuestion(index, 'correct_value', e.target.value === '' ? null : parseFloat(e.target.value))}
                                                 />
                                             </div>
                                             <div className="space-y-2">
                                                 <Label>Tolerance (%)</Label>
                                                 <Input
                                                     type="number"
-                                                    value={q.tolerance || 0}
-                                                    onChange={(e) => updateQuestion(index, 'tolerance', parseFloat(e.target.value))}
+                                                    value={q.tolerance === null || q.tolerance === undefined || isNaN(q.tolerance) ? '' : q.tolerance}
+                                                    onChange={(e) => updateQuestion(index, 'tolerance', e.target.value === '' ? null : parseFloat(e.target.value))}
                                                 />
                                             </div>
                                         </div>

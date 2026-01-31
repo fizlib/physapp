@@ -300,8 +300,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                                 type="number"
                                                 min={2}
                                                 max={10}
-                                                value={variationCount}
-                                                onChange={e => setVariationCount(parseInt(e.target.value))}
+                                                value={isNaN(variationCount) ? '' : variationCount}
+                                                onChange={e => setVariationCount(e.target.value === '' ? NaN : parseInt(e.target.value))}
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -310,9 +310,9 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                                 id="pass-req"
                                                 type="number"
                                                 min={1}
-                                                max={variationCount}
-                                                value={passRequirement}
-                                                onChange={e => setPassRequirement(parseInt(e.target.value))}
+                                                max={isNaN(variationCount) ? 10 : variationCount}
+                                                value={isNaN(passRequirement) ? '' : passRequirement}
+                                                onChange={e => setPassRequirement(e.target.value === '' ? NaN : parseInt(e.target.value))}
                                             />
                                         </div>
 
@@ -462,16 +462,16 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                                                     <Input
                                                         type="number"
                                                         step="any"
-                                                        value={q.correct_value || 0}
-                                                        onChange={(e) => updateQuestion(index, 'correct_value', parseFloat(e.target.value))}
+                                                        value={q.correct_value === null || q.correct_value === undefined || isNaN(q.correct_value) ? '' : q.correct_value}
+                                                        onChange={(e) => updateQuestion(index, 'correct_value', e.target.value === '' ? null : parseFloat(e.target.value))}
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label>Tolerance (%)</Label>
                                                     <Input
                                                         type="number"
-                                                        value={q.tolerance || 0}
-                                                        onChange={(e) => updateQuestion(index, 'tolerance', parseFloat(e.target.value))}
+                                                        value={q.tolerance === null || q.tolerance === undefined || isNaN(q.tolerance) ? '' : q.tolerance}
+                                                        onChange={(e) => updateQuestion(index, 'tolerance', e.target.value === '' ? null : parseFloat(e.target.value))}
                                                     />
                                                 </div>
                                             </div>
