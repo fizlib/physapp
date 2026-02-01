@@ -24,6 +24,16 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
 
     if (!assignment) notFound()
 
+    // Fetch collection category if this assignment belongs to a collection
+    let collectionCategory: 'homework' | 'classwork' | undefined = undefined
+    if (assignment.collection_id) {
+        const { data: collection } = await supabase
+            .from('collections')
+            .select('category')
+            .eq('id', assignment.collection_id)
+            .single()
+        collectionCategory = collection?.category
+    }
 
 
     return (
@@ -59,6 +69,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                                 classroomId={id}
                                 assignmentId={assignmentId}
                                 initialData={assignment}
+                                collectionCategory={collectionCategory}
                             />
                             <DeleteAssignmentDialog assignmentId={assignmentId} classroomId={id} />
                         </div>

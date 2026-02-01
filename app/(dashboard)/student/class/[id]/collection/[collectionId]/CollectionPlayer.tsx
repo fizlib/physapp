@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Layers, ChevronDown, Loader2, Lock } from "lucide-react"
+import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award } from "lucide-react"
 import Link from "next/link"
 import { StudentAssignmentInterface } from "../../assignment/[assignmentId]/StudentAssignmentInterface"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,8 +15,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess, checkAssignmentPublished } from "../../../../actions"
-import { ShieldAlert } from "lucide-react"
+import { checkIpAccess, checkAssignmentPublished, getCollectionResults } from "../../../../actions"
+import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 
 interface CollectionPlayerProps {
     collection: any
@@ -72,6 +72,31 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const { width, height } = useWindowSize()
     const totalAssignments = assignments.length
     const currentAssignment = assignments[currentAssignmentIndex]
+
+    // Points results state
+    const [pointsResults, setPointsResults] = useState<{
+        totalPoints: number
+        earnedPoints: number
+        exercises: Array<{
+            id: string
+            title: string
+            pointsEnabled: boolean
+            points: number
+            earnedPoints: number | null
+            isCorrect: boolean | null
+        }>
+    } | null>(null)
+
+    // Fetch points results when completed
+    useEffect(() => {
+        if (isCompleted && isClasswork) {
+            getCollectionResults(collection.id).then(res => {
+                if (res.success && res.results) {
+                    setPointsResults(res.results)
+                }
+            })
+        }
+    }, [isCompleted, isClasswork, collection.id])
 
     // Get progress for current assignment
     const currentProgress = progressMap.get(currentAssignment?.id)
@@ -258,6 +283,33 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                 You have successfully finished all exercises in <span className="font-semibold text-foreground">{collection.title}</span>.
                             </p>
                         </div>
+
+                        {/* Points Summary */}
+                        {pointsResults && pointsResults.totalPoints > 0 && (
+                            <div className="w-full space-y-4 pt-4 border-t">
+                                <div className="flex items-center justify-center gap-3">
+                                    <Award className="h-6 w-6 text-amber-500" />
+                                    <span className="text-xl font-bold">
+                                        {pointsResults.earnedPoints} / {pointsResults.totalPoints} points
+                                    </span>
+                                </div>
+
+                                <div className="space-y-2 text-left">
+                                    {pointsResults.exercises.filter(e => e.pointsEnabled).map((ex, idx) => (
+                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                            <span className="flex items-center gap-2">
+                                                {ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                Exercise {idx + 1}
+                                            </span>
+                                            <span className="font-medium">
+                                                {ex.earnedPoints ?? 0} / {ex.points} pts
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <Button onClick={() => router.push(`/student/class/${classroomId}`)} size="lg" className="w-full">
                             Return to Class
                         </Button>
@@ -401,6 +453,10 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     initialActiveQuestionIndex={currentActiveIndex}
                     hideRevealSolution={collection.category === 'classwork'}
                     exerciseNumber={allAssignmentsState.length > 0 ? (allAssignmentsState.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1) : (currentAssignmentIndex + 1)}
+                    // Points mode props
+                    pointsEnabled={currentAssignment.points_enabled || false}
+                    exercisePoints={currentAssignment.points || 1}
+                    initialSubmittedAnswer={currentProgress?.submitted_answer}
                 />
             </div>
         </div>

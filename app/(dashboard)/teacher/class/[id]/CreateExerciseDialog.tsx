@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen } from "lucide-react"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +35,8 @@ interface ExerciseData {
     questions: QuestionData[]
     show_all_questions: boolean
     required_variations_count?: number | null
+    points_enabled?: boolean
+    points?: number
 }
 
 function sanitizeSvg(svg: string): string {
@@ -70,7 +72,7 @@ const DEFAULT_QUESTION: QuestionData = {
     solution_text: null
 }
 
-export function CreateExerciseDialog({ classroomId, classroomType, collectionId }: { classroomId: string, classroomType: string, collectionId?: string }) {
+export function CreateExerciseDialog({ classroomId, classroomType, collectionId, collectionCategory }: { classroomId: string, classroomType: string, collectionId?: string, collectionCategory?: 'homework' | 'classwork' }) {
     const [open, setOpen] = useState(false)
     const [step, setStep] = useState<'upload' | 'edit'>('upload')
     const [loading, setLoading] = useState(false)
@@ -87,7 +89,11 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
+    const [pointsEnabled, setPointsEnabled] = useState(false)
+    const [points, setPoints] = useState(1)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    const isClasswork = collectionCategory === 'classwork'
 
     const handleFileSelection = (file: File) => {
         setSelectedFile(file)
@@ -217,7 +223,12 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
     const handleSave = async () => {
         setLoading(true)
         try {
-            const result = await createAssignmentWithQuestion(classroomId, data, collectionId)
+            const exerciseData: ExerciseData = {
+                ...data,
+                points_enabled: isClasswork ? pointsEnabled : false,
+                points: pointsEnabled ? points : undefined
+            }
+            const result = await createAssignmentWithQuestion(classroomId, exerciseData, collectionId)
             if (result.success) {
                 toast.success("Exercise created successfully!")
                 setOpen(false)
@@ -231,6 +242,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                     questions: [{ ...DEFAULT_QUESTION }],
                     show_all_questions: true
                 })
+                setPointsEnabled(false)
+                setPoints(1)
             } else {
                 toast.error(result.error || "Failed to save exercise")
             }
@@ -410,6 +423,41 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId 
                             </div>
 
                             {/* Category selection removed - Exercises are generic */}
+
+                            {/* Points settings - only for classwork */}
+                            {isClasswork && (
+                                <div className="space-y-3 pt-3 border-t">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="points-enabled"
+                                            checked={pointsEnabled}
+                                            onCheckedChange={(checked) => setPointsEnabled(checked as boolean)}
+                                        />
+                                        <Label htmlFor="points-enabled" className="flex items-center gap-2">
+                                            <Award className="h-4 w-4 text-amber-500" />
+                                            Enable Points (one try only)
+                                        </Label>
+                                    </div>
+
+                                    {pointsEnabled && (
+                                        <div className="pl-6 space-y-2 animate-in fade-in slide-in-from-top-2">
+                                            <Label htmlFor="points-value" className="text-sm">Points for this exercise</Label>
+                                            <Input
+                                                id="points-value"
+                                                type="number"
+                                                min={1}
+                                                max={100}
+                                                value={points}
+                                                onChange={(e) => setPoints(Math.max(1, parseInt(e.target.value) || 1))}
+                                                className="w-24"
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                Students get one try. Results shown after collection is complete.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                         </div>
 

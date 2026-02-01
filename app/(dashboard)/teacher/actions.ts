@@ -115,7 +115,9 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         .update({
             title: data.title,
             category: data.category,
-            show_all_questions: data.show_all_questions || false
+            show_all_questions: data.show_all_questions || false,
+            points_enabled: data.points_enabled || false,
+            points: data.points_enabled ? (data.points || 1) : null
         })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
@@ -428,7 +430,9 @@ const ExerciseSchema = z.object({
     category: z.enum(['homework', 'classwork']).default('homework').optional(),
     questions: z.array(QuestionSchema),
     show_all_questions: z.boolean().default(false).optional(),
-    required_variations_count: z.number().nullable().optional()
+    required_variations_count: z.number().nullable().optional(),
+    points_enabled: z.boolean().default(false).optional(),
+    points: z.number().min(1).default(1).optional()
 })
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -662,8 +666,9 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             collection_id: collectionId || null,
             order_index: nextOrderIndex,
             show_all_questions: data.show_all_questions || false,
-            required_variations_count: data.required_variations_count || null
-
+            required_variations_count: data.required_variations_count || null,
+            points_enabled: data.points_enabled || false,
+            points: data.points_enabled ? (data.points || 1) : null
         })
         .select()
         .single()

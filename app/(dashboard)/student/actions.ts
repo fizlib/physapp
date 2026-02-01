@@ -143,3 +143,136 @@ export async function checkAssignmentPublished(assignmentId: string): Promise<{ 
 
     return { isPublished: false }
 }
+
+// New action for point-based exercises - one try only
+export async function submitPointsAnswer(
+    assignmentId: string,
+    submittedAnswer: string,
+    isCorrect: boolean,
+    exercisePoints: number
+): Promise<ActionState & { alreadySubmitted?: boolean }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Check if already submitted
+    const { data: existing } = await supabase
+        .from('assignment_progress')
+        .select('submitted_answer')
+        .eq('student_id', user.id)
+        .eq('assignment_id', assignmentId)
+        .single()
+
+    if (existing?.submitted_answer) {
+        // Already submitted - cannot change answer
+        return { success: false, error: "Answer already submitted", alreadySubmitted: true }
+    }
+
+    const earnedPoints = isCorrect ? exercisePoints : 0
+
+    const { error } = await supabase
+        .from('assignment_progress')
+        .upsert({
+            student_id: user.id,
+            assignment_id: assignmentId,
+            completed_question_indices: isCorrect ? [0] : [],
+            is_completed: true,
+            submitted_answer: submittedAnswer,
+            earned_points: earnedPoints,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'student_id, assignment_id'
+        })
+
+    if (error) {
+        console.error("Points Submit Error", error)
+        return { success: false, error: "Failed to submit answer" }
+    }
+
+    return { success: true }
+}
+
+// Get collection results for student (points summary)
+export async function getCollectionResults(collectionId: string): Promise<{
+    success: boolean
+    results?: {
+        totalPoints: number
+        earnedPoints: number
+        exercises: Array<{
+            id: string
+            title: string
+            pointsEnabled: boolean
+            points: number
+            earnedPoints: number | null
+            submittedAnswer: string | null
+            isCorrect: boolean | null
+        }>
+    }
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Fetch assignments in collection with their progress
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            title,
+            points_enabled,
+            points,
+            questions (correct_value, correct_answer)
+        `)
+        .eq('collection_id', collectionId)
+        .order('order_index', { ascending: true })
+
+    if (!assignments) return { success: false, error: "Collection not found" }
+
+    // Fetch progress for these assignments
+    const assignmentIds = assignments.map(a => a.id)
+    const { data: progressData } = await supabase
+        .from('assignment_progress')
+        .select('assignment_id, earned_points, submitted_answer, is_completed')
+        .eq('student_id', user.id)
+        .in('assignment_id', assignmentIds)
+
+    const progressMap = new Map(progressData?.map(p => [p.assignment_id, p]) || [])
+
+    let totalPoints = 0
+    let earnedPoints = 0
+
+    const exercises = assignments.map((a: any) => {
+        const progress = progressMap.get(a.id)
+        const isPointsExercise = a.points_enabled
+        const exercisePoints = a.points || 1
+
+        if (isPointsExercise) {
+            totalPoints += exercisePoints
+            if (progress?.earned_points != null) {
+                earnedPoints += progress.earned_points
+            }
+        }
+
+        return {
+            id: a.id,
+            title: a.title,
+            pointsEnabled: isPointsExercise,
+            points: exercisePoints,
+            earnedPoints: progress?.earned_points ?? null,
+            submittedAnswer: progress?.submitted_answer ?? null,
+            isCorrect: progress?.earned_points != null ? progress.earned_points > 0 : null
+        }
+    })
+
+    return {
+        success: true,
+        results: {
+            totalPoints,
+            earnedPoints,
+            exercises
+        }
+    }
+}

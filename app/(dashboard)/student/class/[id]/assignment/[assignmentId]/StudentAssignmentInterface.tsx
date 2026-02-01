@@ -10,8 +10,9 @@ import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { upsertAssignmentProgress } from "../../../../actions"
+import { upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
 import { toast } from "sonner"
+import { Award } from "lucide-react"
 
 export function StudentAssignmentInterface({
     assignment,
@@ -25,7 +26,11 @@ export function StudentAssignmentInterface({
     initialIsCompleted = false,
     initialActiveQuestionIndex,
     hideRevealSolution = false,
-    exerciseNumber
+    exerciseNumber,
+    // Points mode props
+    pointsEnabled = false,
+    exercisePoints = 1,
+    initialSubmittedAnswer = null
 }: {
     assignment: any,
     classId: string,
@@ -38,13 +43,19 @@ export function StudentAssignmentInterface({
     initialIsCompleted?: boolean,
     initialActiveQuestionIndex?: number,
     hideRevealSolution?: boolean,
-    exerciseNumber?: number
+    exerciseNumber?: number,
+    // Points mode props
+    pointsEnabled?: boolean,
+    exercisePoints?: number,
+    initialSubmittedAnswer?: string | null
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
+    // Points mode state - locked after first submission
+    const [isPointsLocked, setIsPointsLocked] = useState(!!initialSubmittedAnswer)
     const router = useRouter()
 
     const questions = assignment.questions || []
@@ -140,6 +151,30 @@ export function StudentAssignmentInterface({
             Array.from(newRevealed)
         )
         toast.info("Solution revealed. Please solve a different variation.")
+    }
+
+    // Points mode submission handler - one try only
+    const handlePointsSubmit = async (answer: string, isCorrect: boolean) => {
+        setIsPointsLocked(true)
+
+        const result = await submitPointsAnswer(
+            assignment.id,
+            answer,
+            isCorrect,
+            exercisePoints
+        )
+
+        if (result.success) {
+            toast.success("Answer submitted!")
+            // Move on to next exercise or finish
+            if (onFinish) {
+                onFinish()
+            }
+        } else if (result.alreadySubmitted) {
+            toast.error("Answer was already submitted")
+        } else {
+            toast.error(result.error || "Failed to submit answer")
+        }
     }
 
     const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex)
@@ -259,6 +294,9 @@ export function StudentAssignmentInterface({
                                                     key={q.id || index}
                                                     question={q}
                                                     onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
+                                                    pointsMode={pointsEnabled}
+                                                    disabled={isPointsLocked}
+                                                    onPointsSubmit={handlePointsSubmit}
                                                 />
                                             </div>
                                         </div>
@@ -368,8 +406,19 @@ export function StudentAssignmentInterface({
                                     key={questions[currentIndex].id || currentIndex}
                                     question={questions[currentIndex]}
                                     onCorrect={handleCorrect}
+                                    pointsMode={pointsEnabled}
+                                    disabled={isPointsLocked}
+                                    onPointsSubmit={handlePointsSubmit}
                                 />
                             </div>
+
+                            {/* Points mode indicator */}
+                            {pointsEnabled && !isPointsLocked && (
+                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200">
+                                    <Award className="h-4 w-4" />
+                                    <span className="text-sm font-medium">Points exercise: You have one attempt ({exercisePoints} pts)</span>
+                                </div>
+                            )}
 
                             <div className={`mt-6 flex ${onPrevious ? 'justify-between' : 'justify-end'}`}>
                                 {onPrevious && (

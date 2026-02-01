@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen } from "lucide-react"
+import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award } from "lucide-react"
 import { updateAssignmentWithQuestion } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -35,6 +35,8 @@ interface ExerciseData {
     // category: 'homework' | 'classwork' // Removed
     questions: QuestionData[]
     show_all_questions: boolean
+    points_enabled?: boolean
+    points?: number
 }
 
 function sanitizeSvg(svg: string): string {
@@ -74,9 +76,10 @@ interface EditExerciseDialogProps {
     classroomId: string
     assignmentId: string
     initialData: any
+    collectionCategory?: 'homework' | 'classwork'
 }
 
-export function EditExerciseDialog({ classroomId, assignmentId, initialData }: EditExerciseDialogProps) {
+export function EditExerciseDialog({ classroomId, assignmentId, initialData, collectionCategory }: EditExerciseDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const router = useRouter()
@@ -85,8 +88,14 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
         title: '',
         // category: 'homework',
         questions: [{ ...DEFAULT_QUESTION }],
-        show_all_questions: false
+        show_all_questions: false,
+        points_enabled: false,
+        points: 1
     })
+
+    const [pointsEnabled, setPointsEnabled] = useState(false)
+    const [points, setPoints] = useState(1)
+    const isClasswork = collectionCategory === 'classwork'
 
     // Populate data when dialog opens
     useEffect(() => {
@@ -109,6 +118,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
                 questions: mappedQuestions,
                 show_all_questions: initialData.show_all_questions || false
             })
+            setPointsEnabled(initialData.points_enabled || false)
+            setPoints(initialData.points || 1)
         }
     }, [initialData, open])
 
@@ -154,7 +165,12 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
     const handleSave = async () => {
         setLoading(true)
         try {
-            const result = await updateAssignmentWithQuestion(assignmentId, classroomId, data)
+            const saveData = {
+                ...data,
+                points_enabled: isClasswork ? pointsEnabled : false,
+                points: pointsEnabled ? points : undefined
+            }
+            const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
             if (result.success) {
                 toast.success("Exercise updated successfully!")
                 setOpen(false)
@@ -205,6 +221,41 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData }: E
                         </div>
 
                         {/* Category functionality removed */}
+
+                        {/* Points settings - only for classwork */}
+                        {isClasswork && (
+                            <div className="space-y-3 pt-3 border-t">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="edit-points-enabled"
+                                        checked={pointsEnabled}
+                                        onCheckedChange={(checked) => setPointsEnabled(checked as boolean)}
+                                    />
+                                    <Label htmlFor="edit-points-enabled" className="flex items-center gap-2">
+                                        <Award className="h-4 w-4 text-amber-500" />
+                                        Enable Points (one try only)
+                                    </Label>
+                                </div>
+
+                                {pointsEnabled && (
+                                    <div className="pl-6 space-y-2 animate-in fade-in slide-in-from-top-2">
+                                        <Label htmlFor="edit-points-value" className="text-sm">Points for this exercise</Label>
+                                        <Input
+                                            id="edit-points-value"
+                                            type="number"
+                                            min={1}
+                                            max={100}
+                                            value={points}
+                                            onChange={(e) => setPoints(Math.max(1, parseInt(e.target.value) || 1))}
+                                            className="w-24"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Students get one try. Results shown after collection is complete.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                     </div>
 

@@ -64,6 +64,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 classroomId={id}
                                 classroomType={collection.classrooms?.type || 'school_class'}
                                 collectionId={collectionId}
+                                collectionCategory={collection.category}
                             />
                             <CollectionManager
                                 classroomId={id}

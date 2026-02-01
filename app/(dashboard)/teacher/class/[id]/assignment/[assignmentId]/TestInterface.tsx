@@ -7,7 +7,21 @@ import MathDisplay from "@/components/MathDisplay"
 import MathInput from "@/components/MathInput"
 import * as math from "mathjs"
 
-export function TestInterface({ question, onCorrect }: { question: any, onCorrect?: () => void }) {
+export function TestInterface({
+    question,
+    onCorrect,
+    // Points mode props
+    pointsMode = false,
+    disabled = false,
+    onPointsSubmit
+}: {
+    question: any,
+    onCorrect?: () => void,
+    // Points mode props
+    pointsMode?: boolean,
+    disabled?: boolean,
+    onPointsSubmit?: (answer: string, isCorrect: boolean) => void
+}) {
     const [latexInput, setLatexInput] = useState("")
     const [asciiInput, setAsciiInput] = useState("")
     const [mcqInput, setMcqInput] = useState<string | null>(null)
@@ -36,8 +50,16 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
             const tolerance = question.tolerance_percent || 0
             const margin = Math.abs(correct * (tolerance / 100))
 
-            // Check range
-            if (Math.abs(val - correct) <= margin) {
+            const isCorrect = Math.abs(val - correct) <= margin
+
+            // Points mode: don't show feedback, just submit
+            if (pointsMode) {
+                onPointsSubmit?.(String(val), isCorrect)
+                return
+            }
+
+            // Normal mode: show feedback
+            if (isCorrect) {
                 setResult('correct')
                 setFeedback(`Correct! ${val} matches the target (within ${tolerance}%).`)
                 onCorrect?.()
@@ -52,7 +74,16 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
                 return
             }
 
-            if (mcqInput === question.correct_answer?.trim().toUpperCase()) {
+            const isCorrect = mcqInput === question.correct_answer?.trim().toUpperCase()
+
+            // Points mode: don't show feedback, just submit
+            if (pointsMode) {
+                onPointsSubmit?.(mcqInput, isCorrect)
+                return
+            }
+
+            // Normal mode: show feedback
+            if (isCorrect) {
                 setResult('correct')
                 setFeedback("Correct option selected!")
                 onCorrect?.()
@@ -61,6 +92,21 @@ export function TestInterface({ question, onCorrect }: { question: any, onCorrec
                 setFeedback(`Incorrect. Try another option.`)
             }
         }
+    }
+
+    // If already disabled (points mode after submission), show locked state
+    if (disabled) {
+        return (
+            <div className="p-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                    <Check className="h-4 w-4" />
+                    <span className="font-medium">Answer submitted</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Results will be shown when the collection is complete.
+                </p>
+            </div>
+        )
     }
 
     return (
