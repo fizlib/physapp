@@ -1,6 +1,6 @@
 'use client'
 
-import { AdminUser, adminConfirmUserEmail, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
+import { AdminUser, adminApproveUser, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
 import { CopyButton } from "@/components/ui/copy-button"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -76,20 +76,20 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
         e.stopPropagation() // Prevent row click
         setIsLoading(userId)
         try {
-            const result = await adminConfirmUserEmail(userId)
+            const result = await adminApproveUser(userId)
             if (result.success) {
                 setUsers(users.map(u =>
                     u.id === userId
-                        ? { ...u, email_confirmed_at: new Date().toISOString() }
+                        ? { ...u, approved: true }
                         : u
                 ))
                 if (selectedUser?.id === userId) {
-                    setSelectedUser(prev => prev ? { ...prev, email_confirmed_at: new Date().toISOString() } : null)
+                    setSelectedUser(prev => prev ? { ...prev, approved: true } : null)
                 }
-                toast.success('User confirmed successfully')
+                toast.success('User approved successfully')
                 router.refresh()
             } else {
-                toast.error('Failed to confirm user: ' + result.error)
+                toast.error('Failed to approve user: ' + result.error)
             }
         } catch (error) {
             toast.error('An error occurred')
@@ -210,9 +210,9 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                         User ID: {selectedUser.id}
                                     </CardDescription>
                                 </div>
-                                <Badge variant={selectedUser.email_confirmed_at ? "outline" : "secondary"}
-                                    className={selectedUser.email_confirmed_at ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
-                                    {selectedUser.email_confirmed_at ? "Confirmed" : "Pending Confirmation"}
+                                <Badge variant={selectedUser.approved ? "outline" : "secondary"}
+                                    className={selectedUser.approved ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                                    {selectedUser.approved ? "Approved" : "Pending Approval"}
                                 </Badge>
                             </div>
                         </CardHeader>
@@ -249,7 +249,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
 
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-4">
-                                        {!selectedUser.email_confirmed_at && (
+                                        {!selectedUser.approved && (
                                             <Button
                                                 variant="outline"
                                                 onClick={(e) => handleConfirm(selectedUser.id, e)}
@@ -260,7 +260,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                                 ) : (
                                                     <Check className="h-4 w-4 mr-1" />
                                                 )}
-                                                Confirm Email
+                                                Approve User
                                             </Button>
                                         )}
                                         <Button
@@ -481,9 +481,9 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                         </TableCell>
                                         <TableCell className="capitalize">{user.role || 'N/A'}</TableCell>
                                         <TableCell>
-                                            {user.email_confirmed_at ? (
+                                            {user.approved ? (
                                                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                    Confirmed
+                                                    Approved
                                                 </Badge>
                                             ) : (
                                                 <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
@@ -495,7 +495,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                             {new Date(user.created_at).toLocaleDateString()}
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            {!user.email_confirmed_at && (
+                                            {!user.approved && (
                                                 <Button
                                                     size="sm"
                                                     onClick={(e) => handleConfirm(user.id, e)}
@@ -507,7 +507,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                                     ) : (
                                                         <Check className="h-4 w-4 mr-1" />
                                                     )}
-                                                    Confirm
+                                                    Approve
                                                 </Button>
                                             )}
                                             <Button

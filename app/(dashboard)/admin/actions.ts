@@ -14,6 +14,7 @@ export type AdminUser = {
     role: string | null
     is_admin: boolean | null
     email_confirmed_at: string | null
+    approved: boolean | null
     created_at: string
 }
 
@@ -73,6 +74,7 @@ export async function adminGetAllUsers(): Promise<{ users: AdminUser[], error: s
                 role: profile?.role || null,
                 is_admin: profile?.is_admin || false,
                 email_confirmed_at: authUser.email_confirmed_at || null,
+                approved: profile?.approved || false,
                 created_at: authUser.created_at
             }
         })
@@ -85,27 +87,27 @@ export async function adminGetAllUsers(): Promise<{ users: AdminUser[], error: s
     }
 }
 
-export async function adminConfirmUserEmail(userId: string) {
+export async function adminApproveUser(userId: string) {
     try {
         await checkAdmin()
 
         const supabaseAdmin = createAdminClient()
 
-        const { error } = await supabaseAdmin.auth.admin.updateUserById(
-            userId,
-            { email_confirm: true }
-        )
+        const { error } = await supabaseAdmin
+            .from('profiles')
+            .update({ approved: true })
+            .eq('id', userId)
 
         if (error) {
-            console.error('Error confirming user:', error)
-            return { success: false, error: 'Failed to confirm user' }
+            console.error('Error approving user:', error)
+            return { success: false, error: 'Failed to approve user' }
         }
 
         revalidatePath('/admin')
         return { success: true, error: null }
 
     } catch (error) {
-        console.error('Unexpected error in adminConfirmUserEmail:', error)
+        console.error('Unexpected error in adminApproveUser:', error)
         return { success: false, error: 'Internal server error' }
     }
 }
@@ -165,6 +167,7 @@ export async function adminCreateUser(formData: FormData) {
             role: role,
             is_admin: false, // Default to false for new users
             email_confirmed_at: new Date().toISOString(), // We set email_confirm: true
+            approved: true, // Admin-created users are auto-approved
             created_at: user.user!.created_at
         }
 

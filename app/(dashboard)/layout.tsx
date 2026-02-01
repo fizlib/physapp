@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Atom, BookOpen, Home, Shield, User } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
@@ -6,6 +7,13 @@ import { getCachedUser, getCachedProfile, getCachedStudentClassroom } from "@/li
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const user = await getCachedUser();
+
+    if (user) {
+        const profile = await getCachedProfile(user.id);
+        if (!profile?.approved) {
+            redirect('/waiting-approval');
+        }
+    }
 
     let isAdmin = false;
     let studentClassroomId = null;

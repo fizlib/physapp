@@ -38,9 +38,13 @@ export async function login(formData: FormData) {
     if (user) {
         const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, approved')
             .eq('id', user.id)
             .single()
+
+        if (!profile?.approved) {
+            redirect('/waiting-approval')
+        }
 
         if (profile?.role === 'student') {
             revalidatePath('/', 'layout')
@@ -99,12 +103,7 @@ export async function signup(formData: FormData) {
     }
 
     revalidatePath('/', 'layout')
-
-    if (data.role === 'student') {
-        redirect('/student')
-    } else {
-        redirect('/teacher')
-    }
+    redirect('/waiting-approval')
 }
 
 export async function logout() {
