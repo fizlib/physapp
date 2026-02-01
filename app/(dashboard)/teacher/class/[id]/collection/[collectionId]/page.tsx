@@ -6,6 +6,8 @@ import { ArrowLeft, BookOpen, Clock, GripVertical } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { CollectionManager, RemoveExerciseButton, TogglePublishButton } from "./CollectionManager"
 import { CreateExerciseDialog } from "../../CreateExerciseDialog"
+import { SortableExerciseList } from "./SortableExerciseList"
+
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
     const supabase = await createClient()
@@ -77,61 +79,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                 </div>
 
                 {/* Exercises List */}
-                <div className="space-y-4">
-                    {assignments.length > 0 ? (
-                        assignments.map((assignment: any, index: number) => (
-                            <Card key={assignment.id} className="relative group hover:border-primary/50 transition-colors">
-                                <Link
-                                    href={`/teacher/class/${id}/assignment/${assignment.id}`}
-                                    className="absolute inset-0 z-0"
-                                />
-                                <CardContent className="p-4 flex items-center justify-between relative z-10 pointer-events-none">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground text-sm font-medium">
-                                            {index + 1}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-semibold">{assignment.title}</h3>
-                                                {assignment.published ? (
-                                                    <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
-                                                ) : (
-                                                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
-                                                )}
-                                            </div>
-                                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
-                                                {assignment.questions && (
-                                                    <span>{assignment.questions.length || 'Unknown'} questions</span>
-                                                )}
-                                                <span>{assignment.category}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 pointer-events-auto">
-                                        <TogglePublishButton
-                                            classroomId={id}
-                                            assignmentId={assignment.id}
-                                            initialPublished={assignment.published}
-                                        />
-                                        <RemoveExerciseButton
-                                            classroomId={id}
-                                            collectionId={collectionId}
-                                            assignmentId={assignment.id}
-                                        />
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))
-                    ) : (
-                        <div className="text-center py-12 border-2 border-dashed rounded-lg bg-muted/5">
-                            <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
-                            <h3 className="text-lg font-medium text-muted-foreground">Empty Collection</h3>
-                            <p className="text-sm text-muted-foreground/70 max-w-sm mx-auto mt-2">
-                                Add exercises using the button above to build your collection.
-                            </p>
-                        </div>
-                    )}
-                </div>
+                <SortableExerciseList
+                    initialAssignments={assignments}
+                    classroomId={id}
+                    collectionId={collectionId}
+                />
+
             </div>
         </div>
     )

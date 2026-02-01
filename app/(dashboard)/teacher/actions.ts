@@ -635,7 +635,23 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
     }
     const data = validated.data
 
+    // Calculate order_index
+    let nextOrderIndex = 0
+    if (collectionId) {
+        const { data: maxOrderData } = await supabase
+            .from('assignments')
+            .select('order_index')
+            .eq('collection_id', collectionId)
+            .order('order_index', { ascending: false })
+            .limit(1)
+
+        if (maxOrderData && maxOrderData.length > 0) {
+            nextOrderIndex = (maxOrderData[0].order_index || 0) + 1
+        }
+    }
+
     // 3. Create Assignment
+
     const { data: assignment, error: assignmentError } = await supabase
         .from('assignments')
         .insert({
@@ -644,8 +660,10 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             // category: data.category, // We let it default or set to 'homework' as placeholder since it's now generic
             published: true,
             collection_id: collectionId || null,
+            order_index: nextOrderIndex,
             show_all_questions: data.show_all_questions || false,
             required_variations_count: data.required_variations_count || null
+
         })
         .select()
         .single()
@@ -935,11 +953,28 @@ export async function addExerciseToCollection(classroomId: string, collectionId:
         return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
+    // Calculate order_index
+    let nextOrderIndex = 0
+    const { data: maxOrderData } = await supabase
+        .from('assignments')
+        .select('order_index')
+        .eq('collection_id', collectionId)
+        .order('order_index', { ascending: false })
+        .limit(1)
+
+    if (maxOrderData && maxOrderData.length > 0) {
+        nextOrderIndex = (maxOrderData[0].order_index || 0) + 1
+    }
+
     const { error } = await supabase
         .from('assignments')
-        .update({ collection_id: collectionId })
+        .update({
+            collection_id: collectionId,
+            order_index: nextOrderIndex
+        })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
+
 
     if (error) {
         console.error(error)
@@ -1168,3 +1203,45 @@ export async function syncClassroomIp(classroomId: string): Promise<ActionState>
     return { success: true }
 }
 
+
+export async function updateAssignmentOrder(
+    classroomId: string,
+    collectionId: string,
+    items: { id: string, order_index: number }[]
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Perform updates in a loop (Supabase doesn't easily support bulk updates with different values for different rows in JS without RPC)
+    // However, for small lists (exercises in a collection), individual updates are acceptable.
+    // A better way would be an RPC but let's stick to this for simplicity if it's not too many.
+
+    for (const item of items) {
+        const { error } = await supabase
+            .from('assignments')
+            .update({ order_index: item.order_index })
+            .eq('id', item.id)
+            .eq('collection_id', collectionId)
+            .eq('classroom_id', classroomId)
+
+        if (error) {
+            console.error(`Error updating order for ${item.id}:`, error)
+        }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
