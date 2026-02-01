@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Card, CardContent } from "@/components/ui/card"
-import { GripVertical, BookOpen } from "lucide-react"
+import { GripVertical, BookOpen, Award } from "lucide-react"
 import Link from "next/link"
 import { TogglePublishButton, RemoveExerciseButton } from "./CollectionManager"
 import { updateAssignmentOrder } from "../../../../actions"
@@ -51,7 +51,7 @@ function SortableItem({ assignment, index, classroomId, collectionId }: Sortable
 
     return (
         <div ref={setNodeRef} style={style}>
-            <Card className={`relative group hover:border-primary/50 transition-colors ${isDragging ? 'border-primary shadow-lg' : ''}`}>
+            <Card className={`relative group hover:border-primary/50 transition-colors ${isDragging ? 'border-primary shadow-lg' : ''} ${assignment.points_enabled ? 'border-amber-500/30 bg-amber-50/5' : ''}`}>
                 <Link
                     href={`/teacher/class/${classroomId}/assignment/${assignment.id}`}
                     className="absolute inset-0 z-0"
@@ -66,17 +66,27 @@ function SortableItem({ assignment, index, classroomId, collectionId }: Sortable
                             >
                                 <GripVertical className="h-4 w-4 text-muted-foreground" />
                             </div>
-                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground text-sm font-medium">
+                            <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${assignment.points_enabled ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-muted text-muted-foreground'}`}>
                                 {index + 1}
                             </div>
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <h3 className="font-semibold">{assignment.title}</h3>
+                                <h3 className="font-semibold flex items-center gap-2">
+                                    {assignment.title}
+                                    {assignment.points_enabled && (
+                                        <Award className="h-4 w-4 text-amber-500" />
+                                    )}
+                                </h3>
                                 {assignment.published ? (
                                     <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
                                 ) : (
                                     <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                )}
+                                {assignment.points_enabled && (
+                                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                                        {assignment.points || 0} pts
+                                    </span>
                                 )}
                             </div>
                             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">

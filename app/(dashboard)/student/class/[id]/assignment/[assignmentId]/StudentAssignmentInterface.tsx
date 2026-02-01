@@ -240,13 +240,18 @@ export function StudentAssignmentInterface({
                     {questions.map((q: any, index: number) => {
                         const isCorrect = completedIndices.has(index)
                         return (
-                            <Card key={index} className={`transition-all ${isCorrect ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                            <Card key={index} className={`transition-all ${pointsEnabled ? 'border-amber-500/30' : ''} ${isCorrect ? 'border-green-500/40 bg-green-50/10' : ''}`}>
                                 <CardContent className="p-6">
                                     <div className="flex gap-4">
                                         <div className="flex-none pt-1">
-                                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                                            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${pointsEnabled ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-muted text-muted-foreground'}`}>
                                                 {exerciseNumber ? (questions.length > 1 ? `${exerciseNumber}.${index + 1}` : exerciseNumber) : index + 1}
                                             </span>
+                                            {pointsEnabled && (
+                                                <div className="flex justify-center mt-1">
+                                                    <Award className="h-3 w-3 text-amber-500" />
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex-1 space-y-6">
                                             <div className="text-lg leading-relaxed">
@@ -346,12 +351,20 @@ export function StudentAssignmentInterface({
                 </div>
             ) : (
                 /* Paginated View */
-                <Card className={`transition-all ${canProceed ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                <Card className={`transition-all ${pointsEnabled ? 'border-amber-500/30' : ''} ${canProceed ? 'border-green-500/40 bg-green-50/10' : ''}`}>
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
-                            <CardTitle className="text-xl">
-                                {isVariationMode ? `Variation ${completedIndices.size + 1} of ${requiredVariations}` : `Question ${currentIndex + 1}`}
-                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                                <CardTitle className="text-xl">
+                                    {isVariationMode ? `Variation ${completedIndices.size + 1} of ${requiredVariations}` : `Question ${currentIndex + 1}`}
+                                </CardTitle>
+                                {pointsEnabled && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
+                                        <Award className="h-3 w-3" />
+                                        Points
+                                    </span>
+                                )}
+                            </div>
                             <CardDescription>
                                 {isVariationMode
                                     ? `Complete ${requiredVariations} variations to pass. (${completedIndices.size} solved)`
@@ -414,9 +427,14 @@ export function StudentAssignmentInterface({
 
                             {/* Points mode indicator */}
                             {pointsEnabled && !isPointsLocked && (
-                                <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-3 rounded-md border border-amber-200">
-                                    <Award className="h-4 w-4" />
-                                    <span className="text-sm font-medium">Points exercise: You have one attempt ({exercisePoints} pts)</span>
+                                <div className="flex items-center gap-3 text-amber-700 bg-amber-50/50 p-4 rounded-xl border border-amber-200/50 animate-in fade-in slide-in-from-bottom-2">
+                                    <div className="bg-amber-100 p-2 rounded-full">
+                                        <Award className="h-5 w-5 text-amber-600" />
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <span className="text-sm font-bold block">Points exercise</span>
+                                        <span className="text-xs text-amber-600/80">You have one attempt for {exercisePoints} {exercisePoints === 1 ? 'point' : 'points'}. Solve carefully!</span>
+                                    </div>
                                 </div>
                             )}
 

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Plus, Users, Settings, LayoutList, Layers } from "lucide-react"
+import { ArrowLeft, BookOpen, Plus, Users, Settings, LayoutList, Layers, Award } from "lucide-react"
 import { StudentManager } from "./StudentManager"
 import { EditableClassroomTitle } from "./EditableClassroomTitle"
 import { CreateExerciseDialog } from "./CreateExerciseDialog"
@@ -128,15 +128,27 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                     {assignments.map((assignment) => (
                                         <Link key={assignment.id} href={`/teacher/class/${id}/assignment/${assignment.id}`}>
-                                            <Card className="cursor-pointer hover:border-primary/50 transition-colors h-full">
+                                            <Card className={`cursor-pointer transition-colors h-full ${assignment.points_enabled ? 'border-amber-500/30 bg-amber-50/5 hover:border-amber-500/50' : 'hover:border-primary/50'}`}>
                                                 <CardContent className="p-6 space-y-2">
                                                     <div className="flex justify-between items-start">
-                                                        <h3 className="font-semibold">{assignment.title}</h3>
-                                                        {assignment.published ? (
-                                                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
-                                                        ) : (
-                                                            <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
-                                                        )}
+                                                        <h3 className="font-semibold flex items-center gap-2">
+                                                            {assignment.title}
+                                                            {assignment.points_enabled && (
+                                                                <Award className="h-3.5 w-3.5 text-amber-500" />
+                                                            )}
+                                                        </h3>
+                                                        <div className="flex flex-col items-end gap-1">
+                                                            {assignment.published ? (
+                                                                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Published</span>
+                                                            ) : (
+                                                                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Draft</span>
+                                                            )}
+                                                            {assignment.points_enabled && (
+                                                                <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                                                                    {assignment.points || 0} pts
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div className="text-sm text-muted-foreground line-clamp-2">
                                                         {assignment.questions && assignment.questions.length > 0

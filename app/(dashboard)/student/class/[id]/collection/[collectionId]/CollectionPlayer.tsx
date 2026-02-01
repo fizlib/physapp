@@ -397,8 +397,11 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                                 >
                                                     <span className="flex items-center gap-2">
                                                         Exercise {index + 1}
+                                                        {assignment.points_enabled && (
+                                                            <Award className="h-3.5 w-3.5 text-amber-500" />
+                                                        )}
                                                         {isLocked && (
-                                                            <span className="flex items-center gap-1 text-muted-foreground">
+                                                            <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
                                                                 <Lock className="h-3 w-3" />
                                                                 (Locked)
                                                             </span>
@@ -420,8 +423,11 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                             >
                                                 <span className="flex items-center gap-2">
                                                     Exercise {index + 1}
+                                                    {assignments[index]?.points_enabled && (
+                                                        <Award className="h-3.5 w-3.5 text-amber-500" />
+                                                    )}
                                                     {isLocked && (
-                                                        <span className="flex items-center gap-1 text-muted-foreground">
+                                                        <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
                                                             <Lock className="h-3 w-3" />
                                                             (Locked)
                                                         </span>
