@@ -66,6 +66,13 @@ export function CircularGradeDisplay({
         return 'stroke-rose-500'
     }
 
+    const getBackgroundStrokeColor = (g: number) => {
+        if (g >= 9) return 'stroke-emerald-500/10'
+        if (g >= 7) return 'stroke-blue-500/10'
+        if (g >= 5) return 'stroke-amber-500/10'
+        return 'stroke-rose-500/10'
+    }
+
     return (
         <div className="flex flex-col items-center justify-center p-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-2xl border border-border/40 shadow-sm transition-all hover:shadow-md animate-fade-in-up">
             <div className="relative" style={{ width: size, height: size }}>
@@ -78,7 +85,7 @@ export function CircularGradeDisplay({
                         fill="transparent"
                         stroke="currentColor"
                         strokeWidth={strokeWidth}
-                        className="text-muted/20"
+                        className={getBackgroundStrokeColor(targetGrade)}
                     />
                     {/* Progress Circle */}
                     <circle
