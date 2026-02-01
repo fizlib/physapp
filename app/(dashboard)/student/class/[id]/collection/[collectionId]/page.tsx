@@ -32,7 +32,10 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     if (!collection) notFound()
 
-    // Filter out unpublished assignments
+    // Store all assignments (including unpublished) for dropdown and waiting state
+    const allAssignments = collection.assignments ? [...collection.assignments].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) : []
+
+    // Filter out unpublished assignments for the main player
     if (collection.assignments) {
         collection.assignments = collection.assignments.filter((a: any) => a.published)
     }
@@ -106,6 +109,6 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     }
 
     return (
-        <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} />
+        <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} />
     )
 }

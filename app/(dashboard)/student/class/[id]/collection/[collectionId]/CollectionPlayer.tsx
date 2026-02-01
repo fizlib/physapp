@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, Layers, ChevronDown } from "lucide-react"
+import { ArrowLeft, Layers, ChevronDown, Loader2, Lock } from "lucide-react"
 import Link from "next/link"
 import { StudentAssignmentInterface } from "../../assignment/[assignmentId]/StudentAssignmentInterface"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,17 +15,24 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess } from "../../../../actions"
+import { checkIpAccess, checkAssignmentPublished } from "../../../../actions"
 import { ShieldAlert } from "lucide-react"
 
 interface CollectionPlayerProps {
     collection: any
     classroomId: string
     progressData?: any[]
+    allAssignments?: any[] // All assignments including unpublished, for tracking waiting state
 }
 
-export function CollectionPlayer({ collection, classroomId, progressData = [] }: CollectionPlayerProps) {
-    const assignments = collection.assignments || []
+export function CollectionPlayer({ collection, classroomId, progressData = [], allAssignments: initialAllAssignments = [] }: CollectionPlayerProps) {
+    // Determine if this is classwork (all published accessible) or homework (sequential unlock)
+    const isClasswork = collection.category === 'classwork'
+
+    // Use state for assignments so we can dynamically add newly published ones
+    const [assignments, setAssignments] = useState(collection.assignments || [])
+    // Also track allAssignments as state to update dropdown locked status
+    const [allAssignmentsState, setAllAssignmentsState] = useState(initialAllAssignments)
 
     // Determine initial state based on progress
     // Create a map for easy lookup
@@ -35,50 +41,16 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
         progressMap.set(p.assignment_id, p)
     })
 
-    // Find the first incomplete assignment
-    let firstIncompleteIndex = 0
-    let lastCompletedIndex = -1
-
-    for (let i = 0; i < assignments.length; i++) {
-        const assign = assignments[i]
-        const progress = progressMap.get(assign.id)
-
-        if (progress && progress.is_completed) {
-            lastCompletedIndex = i
-        } else {
-            firstIncompleteIndex = i
-            break
-        }
-    }
-
-    // If all completed, maybe show completion screen or last one?
-    // Let's go to max index if all completed, but `isCompleted` state will handle the finish screen.
-    // If truly all completed, firstIncompleteIndex loop will finish at assignments.length ?? No, the loop breaks or finishes.
-    // If loop finishes without break, firstIncompleteIndex is actually not set to length.
-    // Let's fix loop logic.
-
-    if (lastCompletedIndex === assignments.length - 1) {
-        // All done
-        firstIncompleteIndex = assignments.length - 1 // Show last one? Or show completion?
-        // Actually, if I want to show completion screen immediately:
-        // setIsCompleted(true)
-        // But let's just show the last one effectively, or handle `isCompleted` state initialization.
-    }
-
-    // But wait, if lastCompletedIndex is 0, it means 0 is done. We should be at 1.
-    // If loop didn't break, it means all were completed. 
-    // If I ran loop: 0 completed, 1 completed. 
-    // i=0: completed. last=0.
-    // i=1: completed. last=1.
-    // i=2 (len): loop ends.
-    // firstIncompleteIndex remains 0 (initial). This is WRONG.
-
-    // Better logic:
+    // Better logic for initial index:
     let initialIndex = 0
     let allDone = false
+    let initialMaxReached = 0 // For homework: track highest reached exercise
 
     for (let i = 0; i < assignments.length; i++) {
         const p = progressMap.get(assignments[i].id)
+        if (p?.is_completed) {
+            initialMaxReached = Math.max(initialMaxReached, i + 1) // Can access next one
+        }
         if (!p || !p.is_completed) {
             initialIndex = i
             break
@@ -86,13 +58,16 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
         if (i === assignments.length - 1) {
             allDone = true
             initialIndex = i // Stay at last one
+            initialMaxReached = i
         }
     }
 
     const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(initialIndex)
-    const [maxReachedIndex, setMaxReachedIndex] = useState(Math.max(0, allDone ? assignments.length - 1 : initialIndex))
+    const [maxReachedIndex, setMaxReachedIndex] = useState(initialMaxReached) // For homework sequential unlock
     const [isCompleted, setIsCompleted] = useState(allDone)
     const [restrictionData, setRestrictionData] = useState<{ isRestricted: boolean, studentIp?: string }>({ isRestricted: false })
+    const [isWaitingForUnlock, setIsWaitingForUnlock] = useState(false)
+    const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const router = useRouter()
     const { width, height } = useWindowSize()
     const totalAssignments = assignments.length
@@ -104,6 +79,20 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
     const currentIsCompleted = currentProgress?.is_completed || false
     const currentActiveIndex = currentProgress?.active_question_index
 
+    // Find the next assignment (could be unpublished)
+    const getNextAssignmentFromAllAssignments = () => {
+        if (!allAssignmentsState.length) return null
+        // Find current assignment's order_index
+        const currentOrderIndex = currentAssignment?.order_index ?? 0
+        // Find the next assignment by order_index
+        const sorted = [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+        const currentPos = sorted.findIndex((a: any) => a.id === currentAssignment?.id)
+        if (currentPos >= 0 && currentPos < sorted.length - 1) {
+            return sorted[currentPos + 1]
+        }
+        return null
+    }
+
     const handleAssignmentFinish = async () => {
         // Double check IP before moving to next assignment
         const result = await checkIpAccess(classroomId, collection.category)
@@ -112,12 +101,32 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
             return
         }
 
+        // For homework: update maxReachedIndex when completing an exercise
+        if (!isClasswork) {
+            setMaxReachedIndex(prev => Math.max(prev, currentAssignmentIndex + 1))
+        }
+
         if (currentAssignmentIndex < totalAssignments - 1) {
+            // Next published assignment exists
             const nextIndex = currentAssignmentIndex + 1
             setCurrentAssignmentIndex(nextIndex)
-            setMaxReachedIndex(prev => Math.max(prev, nextIndex))
         } else {
-            setIsCompleted(true)
+            // No more published assignments
+            if (isClasswork) {
+                // Classwork: check if there's an unpublished one to wait for
+                const nextUnpublished = getNextAssignmentFromAllAssignments()
+                if (nextUnpublished && !nextUnpublished.published) {
+                    // Wait for teacher to unlock
+                    setIsWaitingForUnlock(true)
+                    setWaitingForAssignmentId(nextUnpublished.id)
+                } else {
+                    // Truly completed
+                    setIsCompleted(true)
+                }
+            } else {
+                // Homework: collection completed
+                setIsCompleted(true)
+            }
         }
     }
 
@@ -137,6 +146,39 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
         const interval = setInterval(check, 30000)
         return () => clearInterval(interval)
     }, [classroomId, collection.category, isCompleted])
+
+    // Polling effect for waiting for next exercise to be published
+    useEffect(() => {
+        if (!isWaitingForUnlock || !waitingForAssignmentId) return
+
+        const checkPublished = async () => {
+            const result = await checkAssignmentPublished(waitingForAssignmentId)
+            if (result.isPublished && result.assignment) {
+                // Exercise is now published - add it to assignments and navigate to it
+                setAssignments((prev: any[]) => {
+                    // Add the new assignment and sort by order_index
+                    const updated = [...prev, result.assignment]
+                    updated.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+                    return updated
+                })
+                // Update allAssignmentsState to mark this exercise as published
+                setAllAssignmentsState((prev: any[]) =>
+                    prev.map((a: any) => a.id === waitingForAssignmentId ? { ...a, published: true } : a)
+                )
+                // Navigate to the new assignment (it will be at the end after adding)
+                setCurrentAssignmentIndex(prev => prev + 1)
+                setIsWaitingForUnlock(false)
+                setWaitingForAssignmentId(null)
+            }
+        }
+
+        // Check immediately
+        checkPublished()
+
+        // Then poll every 3 seconds
+        const interval = setInterval(checkPublished, 3000)
+        return () => clearInterval(interval)
+    }, [isWaitingForUnlock, waitingForAssignmentId])
 
     if (restrictionData.isRestricted) {
         return (
@@ -164,14 +206,24 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
     }
 
     const handlePrevious = () => {
+        if (isWaitingForUnlock) {
+            // Go back from waiting screen
+            setIsWaitingForUnlock(false)
+            setWaitingForAssignmentId(null)
+            return
+        }
         if (currentAssignmentIndex > 0) {
             setCurrentAssignmentIndex(prev => prev - 1)
         }
     }
 
     const handleJumpToExercise = (index: number) => {
-        if (index <= maxReachedIndex) {
+        // For classwork: all published exercises are accessible
+        // For homework: only exercises up to maxReachedIndex are accessible
+        if (isClasswork || index <= maxReachedIndex) {
             setCurrentAssignmentIndex(index)
+            setIsWaitingForUnlock(false)
+            setWaitingForAssignmentId(null)
         }
     }
 
@@ -218,7 +270,37 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
         )
     }
 
-    const progress = isCompleted ? 100 : ((maxReachedIndex) / totalAssignments) * 100
+    // Waiting for teacher to unlock next exercise
+    if (isWaitingForUnlock) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background p-8">
+                <Card className="max-w-md w-full border-2 border-primary/20 bg-card/50 backdrop-blur-sm">
+                    <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-6">
+                        <div className="rounded-full bg-amber-100 p-6">
+                            <Loader2 className="h-12 w-12 text-amber-600 animate-spin" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold tracking-tight">Waiting for Teacher</h2>
+                            <p className="text-muted-foreground">
+                                Please wait for your teacher to unlock the next exercise...
+                            </p>
+                        </div>
+                        <div className="flex flex-col gap-2 w-full">
+                            {currentAssignmentIndex > 0 && (
+                                <Button onClick={handlePrevious} variant="outline" size="lg" className="w-full">
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Go Back to Previous Exercise
+                                </Button>
+                            )}
+                            <Button onClick={() => router.push(`/student/class/${classroomId}`)} variant="ghost" size="lg" className="w-full">
+                                Exit Collection
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -236,33 +318,72 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                                    Exercise {currentAssignmentIndex + 1} of {totalAssignments}
+                                    Exercise {allAssignmentsState.length > 0 ? [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1 : currentAssignmentIndex + 1} of {allAssignmentsState.length > 0 ? allAssignmentsState.length : totalAssignments}
                                     <ChevronDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                {assignments.map((_: any, index: number) => (
-                                    <DropdownMenuItem
-                                        key={index}
-                                        disabled={index > maxReachedIndex}
-                                        onClick={() => handleJumpToExercise(index)}
-                                        className={index === currentAssignmentIndex ? "bg-accent" : ""}
-                                    >
-                                        Exercise {index + 1}
-                                        {index > maxReachedIndex && " (Locked)"}
-                                    </DropdownMenuItem>
-                                ))}
+                                {allAssignmentsState.length > 0 ? (
+                                    // Show all assignments including unpublished ones
+                                    [...allAssignmentsState]
+                                        .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+                                        .map((assignment: any, index: number) => {
+                                            const isPublished = assignment.published
+                                            const publishedIndex = assignments.findIndex((a: any) => a.id === assignment.id)
+                                            const isCurrent = assignment.id === currentAssignment?.id
+                                            // For classwork: locked if not published
+                                            // For homework: locked if not published OR beyond maxReachedIndex
+                                            const isLocked = isClasswork
+                                                ? !isPublished
+                                                : (!isPublished || publishedIndex > maxReachedIndex)
+                                            return (
+                                                <DropdownMenuItem
+                                                    key={assignment.id}
+                                                    disabled={isLocked}
+                                                    onClick={() => !isLocked && publishedIndex >= 0 && handleJumpToExercise(publishedIndex)}
+                                                    className={isCurrent ? "bg-accent" : ""}
+                                                >
+                                                    <span className="flex items-center gap-2">
+                                                        Exercise {index + 1}
+                                                        {isLocked && (
+                                                            <span className="flex items-center gap-1 text-muted-foreground">
+                                                                <Lock className="h-3 w-3" />
+                                                                (Locked)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </DropdownMenuItem>
+                                            )
+                                        })
+                                ) : (
+                                    // Fallback to published assignments only (for homework, respect maxReachedIndex)
+                                    assignments.map((_: any, index: number) => {
+                                        const isLocked = !isClasswork && index > maxReachedIndex
+                                        return (
+                                            <DropdownMenuItem
+                                                key={index}
+                                                disabled={isLocked}
+                                                onClick={() => !isLocked && handleJumpToExercise(index)}
+                                                className={index === currentAssignmentIndex ? "bg-accent" : ""}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    Exercise {index + 1}
+                                                    {isLocked && (
+                                                        <span className="flex items-center gap-1 text-muted-foreground">
+                                                            <Lock className="h-3 w-3" />
+                                                            (Locked)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </DropdownMenuItem>
+                                        )
+                                    })
+                                )}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
 
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                            <h1 className="text-xl font-bold text-primary">{collection.title}</h1>
-                            <span className="text-xs text-muted-foreground">{Math.round(progress)}% Complete</span>
-                        </div>
-                        <Progress value={progress} className="h-2" />
-                    </div>
+                    <h1 className="text-xl font-bold text-primary border-b pb-4">{collection.title}</h1>
                 </div>
 
                 {/* Current Assignment Interface */}
@@ -273,12 +394,13 @@ export function CollectionPlayer({ collection, classroomId, progressData = [] }:
                     classId={classroomId}
                     onFinish={handleAssignmentFinish}
                     onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
-                    canSkip={currentAssignmentIndex < maxReachedIndex}
+                    canSkip={isClasswork}
                     compact={true}
                     initialCompletedIndices={currentCompletedIndices}
                     initialIsCompleted={currentIsCompleted}
                     initialActiveQuestionIndex={currentActiveIndex}
                     hideRevealSolution={collection.category === 'classwork'}
+                    exerciseNumber={allAssignmentsState.length > 0 ? (allAssignmentsState.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1) : (currentAssignmentIndex + 1)}
                 />
             </div>
         </div>

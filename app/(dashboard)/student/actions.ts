@@ -121,3 +121,25 @@ export async function checkIpAccess(classroomId: string, category: string): Prom
 
     return { isRestricted, studentIp }
 }
+
+export async function checkAssignmentPublished(assignmentId: string): Promise<{ isPublished: boolean, assignment?: any }> {
+    const supabase = await createClient()
+
+    const { data } = await supabase
+        .from('assignments')
+        .select('*, questions(*)')
+        .eq('id', assignmentId)
+        .single()
+
+    if (!data) return { isPublished: false }
+
+    if (data.published) {
+        // Sort questions by created_at
+        if (data.questions) {
+            data.questions.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        }
+        return { isPublished: true, assignment: data }
+    }
+
+    return { isPublished: false }
+}

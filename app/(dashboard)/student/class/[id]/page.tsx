@@ -42,6 +42,14 @@ export default async function StudentClassroomPage({ params }: { params: Promise
     const { data: assignments } = assignmentsResult
     let { data: collections } = collectionsResult
 
+    // Store total assignment counts (including unpublished) before filtering - for classwork cards
+    const totalAssignmentCounts = new Map<string, number>()
+    if (collections) {
+        collections.forEach((c: any) => {
+            totalAssignmentCounts.set(c.id, c.assignments?.length || 0)
+        })
+    }
+
     // Filter out unpublished assignments within collections
     if (collections) {
         collections = collections.map((c: any) => ({
@@ -126,7 +134,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                         {isClassworkRestricted && <Lock className="h-3 w-3 text-red-500" />}
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                        <span>{collection.assignments?.length || 0} Exercises</span>
+                                                                        <span>{totalAssignmentCounts.get(collection.id) || 0} Exercises</span>
                                                                         <span>•</span>
                                                                         <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                                                                     </div>
@@ -134,28 +142,11 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Classwork</span>
                                                             </div>
 
-                                                            {/* Progress Section */}
-                                                            {isClassworkRestricted ? (
+                                                            {/* IP Restriction message for classwork */}
+                                                            {isClassworkRestricted && (
                                                                 <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
                                                                     <ShieldAlert className="h-3.5 w-3.5" />
                                                                     <span className="text-[10px] font-medium leading-tight">Access restricted to classroom network only</span>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="space-y-2">
-                                                                    {progress > 0 && progress < 100 && (
-                                                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                                                            <span>{Math.round(progress)}% Complete</span>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {progress === 100 ? (
-                                                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
-                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                            <span className="text-xs font-medium">Completed</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <Progress value={progress} className="h-1.5" />
-                                                                    )}
                                                                 </div>
                                                             )}
                                                         </CardContent>

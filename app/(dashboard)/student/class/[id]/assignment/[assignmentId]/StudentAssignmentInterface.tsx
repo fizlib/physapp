@@ -24,7 +24,8 @@ export function StudentAssignmentInterface({
     initialRevealedIndices = [],
     initialIsCompleted = false,
     initialActiveQuestionIndex,
-    hideRevealSolution = false
+    hideRevealSolution = false,
+    exerciseNumber
 }: {
     assignment: any,
     classId: string,
@@ -36,7 +37,8 @@ export function StudentAssignmentInterface({
     initialRevealedIndices?: number[],
     initialIsCompleted?: boolean,
     initialActiveQuestionIndex?: number,
-    hideRevealSolution?: boolean
+    hideRevealSolution?: boolean,
+    exerciseNumber?: number
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
@@ -208,7 +210,7 @@ export function StudentAssignmentInterface({
                                     <div className="flex gap-4">
                                         <div className="flex-none pt-1">
                                             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                                                {index + 1}
+                                                {exerciseNumber ? (questions.length > 1 ? `${exerciseNumber}.${index + 1}` : exerciseNumber) : index + 1}
                                             </span>
                                         </div>
                                         <div className="flex-1 space-y-6">
