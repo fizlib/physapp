@@ -138,7 +138,7 @@ export function TestInterface({
                                 }}
                             />
                         </div>
-                        <Button type="button" onClick={checkAnswer}>Check</Button>
+                        <Button type="button" onClick={checkAnswer}>{pointsMode ? 'Submit' : 'Check'}</Button>
                     </div>
                 </div>
             ) : (
@@ -167,7 +167,7 @@ export function TestInterface({
                         })}
                     </div>
                     <Button className="mt-1" onClick={checkAnswer} disabled={!mcqInput}>
-                        Check Answer
+                        {pointsMode ? 'Submit' : 'Check Answer'}
                     </Button>
                 </div>
             )}
