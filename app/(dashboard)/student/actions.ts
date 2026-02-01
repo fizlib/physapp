@@ -276,3 +276,72 @@ export async function getCollectionResults(collectionId: string): Promise<{
         }
     }
 }
+
+// Get stats for all enrolled classrooms of type 'school_class'
+export async function getStudentDashboardStats(): Promise<{
+    success: boolean
+    stats?: Record<string, { totalPoints: number, earnedPoints: number }>
+    error?: string
+}> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // 1. Get enrolled classrooms
+    const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select(`
+            classroom_id,
+            classrooms (
+                id,
+                type
+            )
+        `)
+        .eq('student_id', user.id)
+
+    if (!enrollments) return { success: false, error: "No enrollments found" }
+
+    const schoolClassIds = enrollments
+        .filter((e: any) => e.classrooms?.type === 'school_class')
+        .map((e: any) => e.classroom_id)
+
+    if (schoolClassIds.length === 0) return { success: true, stats: {} }
+
+    // 2. Fetch all published assignments with points for these classrooms
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select('id, classroom_id, points, points_enabled')
+        .in('classroom_id', schoolClassIds)
+        .eq('published', true)
+        .eq('points_enabled', true)
+
+    if (!assignments) return { success: true, stats: {} }
+
+    // 3. Fetch progress for these assignments
+    const assignmentIds = assignments.map(a => a.id)
+    const { data: progress } = await supabase
+        .from('assignment_progress')
+        .select('assignment_id, earned_points')
+        .eq('student_id', user.id)
+        .in('assignment_id', assignmentIds)
+
+    const progressMap = new Map(progress?.map(p => [p.assignment_id, p.earned_points || 0]) || [])
+
+    const stats: Record<string, { totalPoints: number, earnedPoints: number }> = {}
+
+    schoolClassIds.forEach(cid => {
+        stats[cid] = { totalPoints: 0, earnedPoints: 0 }
+    })
+
+    assignments.forEach(a => {
+        const cid = a.classroom_id
+        if (stats[cid]) {
+            const max = a.points || 0
+            const earned = progressMap.get(a.id) || 0
+            stats[cid].totalPoints += max
+            stats[cid].earnedPoints += earned
+        }
+    })
+
+    return { success: true, stats }
+}
