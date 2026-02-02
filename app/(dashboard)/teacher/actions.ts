@@ -447,6 +447,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const generationType = formData.get('generationType') as 'exact' | 'similar' || 'exact'
     const isVariationMode = variationCount > 1
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
+    const exerciseType = formData.get('exerciseType') as 'auto' | 'numerical' | 'multiple_choice' || 'auto'
     const generateSolution = formData.get('generateSolution') === 'true'
 
     const file = formData.get('image') as File
@@ -469,6 +470,20 @@ export async function generateExerciseFromImage(formData: FormData) {
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
   
   Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
+
+  EXERCISE TYPE RULES (CRITICAL):
+  ${exerciseType === 'numerical' ? `
+  - FORCED TYPE: Numerical calculation.
+  - You MUST generate "numerical" type questions only.
+  - If the image contains a multiple-choice question, IGNORE the options and transform it into a direct calculation/numerical question.
+  ` : exerciseType === 'multiple_choice' ? `
+  - FORCED TYPE: Multiple choice.
+  - You MUST generate "multiple_choice" type questions only.
+  - If the image is a numerical problem, you MUST create 4 plausible multiple-choice options (A, B, C, D) based on common mistakes or likely outcomes.
+  ` : `
+  - TYPE DETECTION: Auto-detect.
+  - Determine if the question is naturally "numerical" or "multiple_choice" based on the image content.
+  `}
 
   ${generateSolution ? `
   SOLUTION MANUAL MODE:

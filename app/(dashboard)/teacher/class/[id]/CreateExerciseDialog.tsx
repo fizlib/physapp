@@ -88,6 +88,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [variationCount, setVariationCount] = useState(6)
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [generationType, setGenerationType] = useState<'exact' | 'similar'>('exact')
+    const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice'>('auto')
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
     const [pointsEnabled, setPointsEnabled] = useState(false)
@@ -155,6 +156,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             } else {
                 formData.append('generationType', generationType)
             }
+            formData.append('exerciseType', aiExerciseType)
             formData.append('generateSolution', generateSolution.toString())
             const result = await generateExerciseFromImage(formData)
 
@@ -407,6 +409,54 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         </p>
                                     </div>
                                 )}
+
+                                <div className="space-y-4 pt-2 border-t border-dashed">
+                                    <Label className="text-sm font-semibold block">Exercise Type</Label>
+                                    <div className="flex flex-col gap-2 pl-4">
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                id="type-auto"
+                                                name="aiExerciseType"
+                                                value="auto"
+                                                checked={aiExerciseType === 'auto'}
+                                                onChange={() => setAiExerciseType('auto')}
+                                                className="accent-primary h-4 w-4"
+                                            />
+                                            <Label htmlFor="type-auto" className="text-sm font-normal cursor-pointer">
+                                                Auto <span className="text-xs text-muted-foreground ml-1">(Infer from image)</span>
+                                            </Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                id="type-numerical"
+                                                name="aiExerciseType"
+                                                value="numerical"
+                                                checked={aiExerciseType === 'numerical'}
+                                                onChange={() => setAiExerciseType('numerical')}
+                                                className="accent-primary h-4 w-4"
+                                            />
+                                            <Label htmlFor="type-numerical" className="text-sm font-normal cursor-pointer">
+                                                Numerical <span className="text-xs text-muted-foreground ml-1">(Calculation)</span>
+                                            </Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                id="type-mc"
+                                                name="aiExerciseType"
+                                                value="multiple_choice"
+                                                checked={aiExerciseType === 'multiple_choice'}
+                                                onChange={() => setAiExerciseType('multiple_choice')}
+                                                className="accent-primary h-4 w-4"
+                                            />
+                                            <Label htmlFor="type-mc" className="text-sm font-normal cursor-pointer">
+                                                Multiple Choice <span className="text-xs text-muted-foreground ml-1">(Options A-D)</span>
+                                            </Label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex items-center space-x-2 pt-2 border-t">
