@@ -9,6 +9,8 @@ import * as math from "mathjs"
 
 export function TestInterface({
     question,
+    questionId,
+    questionPoints = 1,
     onCorrect,
     // Points mode props
     pointsMode = false,
@@ -16,11 +18,13 @@ export function TestInterface({
     onPointsSubmit
 }: {
     question: any,
+    questionId?: string,
+    questionPoints?: number,
     onCorrect?: () => void,
     // Points mode props
     pointsMode?: boolean,
     disabled?: boolean,
-    onPointsSubmit?: (answer: string, isCorrect: boolean) => void
+    onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void
 }) {
     const [latexInput, setLatexInput] = useState("")
     const [asciiInput, setAsciiInput] = useState("")
@@ -53,8 +57,8 @@ export function TestInterface({
             const isCorrect = Math.abs(val - correct) <= margin
 
             // Points mode: don't show feedback, just submit
-            if (pointsMode) {
-                onPointsSubmit?.(String(val), isCorrect)
+            if (pointsMode && questionId) {
+                onPointsSubmit?.(questionId, questionPoints, String(val), isCorrect)
                 return
             }
 
@@ -77,8 +81,8 @@ export function TestInterface({
             const isCorrect = mcqInput === question.correct_answer?.trim().toUpperCase()
 
             // Points mode: don't show feedback, just submit
-            if (pointsMode) {
-                onPointsSubmit?.(mcqInput, isCorrect)
+            if (pointsMode && questionId) {
+                onPointsSubmit?.(questionId, questionPoints, mcqInput, isCorrect)
                 return
             }
 

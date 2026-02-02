@@ -144,42 +144,61 @@ export async function checkAssignmentPublished(assignmentId: string): Promise<{ 
     return { isPublished: false }
 }
 
-// New action for point-based exercises - one try only
+// New action for point-based exercises - one try per question part
 export async function submitPointsAnswer(
     assignmentId: string,
+    questionId: string,
     submittedAnswer: string,
     isCorrect: boolean,
-    exercisePoints: number
+    pointsPerPart: number,
+    totalQuestions: number
 ): Promise<ActionState & { alreadySubmitted?: boolean }> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // Check if already submitted
+    // Fetch existing progress
     const { data: existing } = await supabase
         .from('assignment_progress')
-        .select('submitted_answer')
+        .select('submitted_answers, earned_points_per_part, completed_question_indices')
         .eq('student_id', user.id)
         .eq('assignment_id', assignmentId)
         .single()
 
-    if (existing?.submitted_answer) {
-        // Already submitted - cannot change answer
-        return { success: false, error: "Answer already submitted", alreadySubmitted: true }
+    // Parse existing per-part data
+    const submittedAnswers: Record<string, string> = existing?.submitted_answers || {}
+    const earnedPointsPerPart: Record<string, number> = existing?.earned_points_per_part || {}
+    const completedIndices: number[] = existing?.completed_question_indices || []
+
+    // Check if this specific question was already submitted
+    if (submittedAnswers[questionId] !== undefined) {
+        return { success: false, error: "Answer already submitted for this part", alreadySubmitted: true }
     }
 
-    const earnedPoints = isCorrect ? exercisePoints : 0
+    // Add this question's submission
+    submittedAnswers[questionId] = submittedAnswer
+    earnedPointsPerPart[questionId] = isCorrect ? pointsPerPart : 0
+
+    // Calculate total earned points
+    const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
+
+    // Count how many questions have been submitted
+    const submittedCount = Object.keys(submittedAnswers).length
+
+    // Mark as completed only when all questions are submitted
+    const isFullyCompleted = submittedCount >= totalQuestions
 
     const { error } = await supabase
         .from('assignment_progress')
         .upsert({
             student_id: user.id,
             assignment_id: assignmentId,
-            completed_question_indices: isCorrect ? [0] : [],
-            is_completed: true,
-            submitted_answer: submittedAnswer,
-            earned_points: earnedPoints,
+            completed_question_indices: completedIndices,
+            is_completed: isFullyCompleted,
+            submitted_answers: submittedAnswers,
+            earned_points_per_part: earnedPointsPerPart,
+            earned_points: totalEarnedPoints,
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'

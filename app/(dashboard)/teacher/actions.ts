@@ -156,7 +156,8 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
         diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
-        solution_text: q.solution_text || null
+        solution_text: q.solution_text || null,
+        points: q.points || 1
     }))
 
     const { error: insertError } = await supabase
@@ -420,7 +421,8 @@ const QuestionSchema = z.object({
     correct_answer: z.string().nullable().optional(),
     diagram_type: z.enum(['graph', 'scheme']).nullable().optional(),
     diagram_svg: z.string().nullable().optional(),
-    solution_text: z.string().nullable().optional()
+    solution_text: z.string().nullable().optional(),
+    points: z.number().min(1).default(1).optional()
 })
 
 const ExerciseSchema = z.object({
@@ -468,7 +470,9 @@ export async function generateExerciseFromImage(formData: FormData) {
     const prompt = `
   Analyze this physics/math problem image.
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
-  
+
+  CRITICAL: All generated output text (title, question_text, options, solution) MUST be in the Lithuanian language, regardless of the language found in the image.
+
   Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
 
   EXERCISE TYPE RULES (CRITICAL):
@@ -487,7 +491,7 @@ export async function generateExerciseFromImage(formData: FormData) {
 
   ${generateSolution ? `
   SOLUTION MANUAL MODE:
-  For each question variation, you MUST also generate a concise, step-by-step solution.
+  For each question variation, you MUST also generate a concise, step-by-step solution in the Lithuanian language.
   - The solution should explain the physics principles used.
   - Show the substituted values into the formula.
   - Provide the final calculation steps.
@@ -503,7 +507,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   
   VARIATION RULES:
   - You MUST change the context / story of the problem (e.g. if the original is about a car, make the next one about a train, a runner, a rocket, etc.).
-  - LEAVE THE LANGUAGE EXCATLY THE SAME AS IN THE PICTURE.
+  - ALWAYS USE LITHUANIAN LANGUAGE for all generated content. Translate carefully if the input is in another language.
   - Keep the exact same physics/math LOGIC and FORMULA types.
   - You can change the numerical values as needed to fit the new context.
   - Ensure the difficulty level remains consistent.
@@ -514,6 +518,12 @@ export async function generateExerciseFromImage(formData: FormData) {
   - IMPORTANT: Check if the specific part involves any diagrams, graphs, or schemes.
   - LATEX FORMATTING: Use LaTeX for ALL math formulas, units, and symbols. 
   - IMPORTANT: For multiple_choice options, you MUST wrap any LaTeX content in single dollar signs, e.g., "$l = 12\\text{ m}$".
+
+  NUMERICAL ANSWER UNITS (CRITICAL FOR NUMERICAL QUESTIONS):
+  - The question text MUST explicitly state what SI units the answer should be given in (e.g., "Raskite greitį (m/s)", "Apskaičiuokite atstumą metrais").
+  - The correct_value MUST always be in SI standard units (meters, seconds, kilograms, m/s, m/s², N, J, W, Pa, etc.).
+  - You may use non-SI units (km/h, cm, g, etc.) in the exercise description/story, but the final answer and correct_value must be converted to SI.
+  - Example: If the problem uses km/h for speed, convert the correct_value to m/s and ask for the answer in m/s.
   
   CRITICAL INSTRUCTION FOR MULTI-PART PROBLEMS (Explicit numbered parts OR Implicit split parts):
   If the problem has a common description/background text followed by multiple parts:
@@ -700,7 +710,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
         diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
-        solution_text: q.solution_text || null
+        solution_text: q.solution_text || null,
+        points: q.points || 1
     }))
 
     const { error: questionError } = await supabase

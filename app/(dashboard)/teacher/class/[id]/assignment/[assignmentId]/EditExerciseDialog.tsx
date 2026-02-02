@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award } from "lucide-react"
+import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown } from "lucide-react"
 import { updateAssignmentWithQuestion } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -28,6 +28,7 @@ interface QuestionData {
     diagram_type?: 'graph' | 'scheme' | null
     diagram_svg?: string | null
     solution_text?: string | null
+    points?: number
 }
 
 interface ExerciseData {
@@ -69,7 +70,8 @@ const DEFAULT_QUESTION: QuestionData = {
     correct_answer: 'A',
     diagram_type: null,
     diagram_svg: null,
-    solution_text: null
+    solution_text: null,
+    points: 1
 }
 
 interface EditExerciseDialogProps {
@@ -109,7 +111,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 correct_answer: q.correct_answer || 'A',
                 diagram_type: q.diagram_type,
                 diagram_svg: q.diagram_svg,
-                solution_text: q.solution_text
+                solution_text: q.solution_text,
+                points: q.points || 1
             })) || [{ ...DEFAULT_QUESTION }]
 
             setData({
@@ -162,13 +165,28 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         setData({ ...data, questions: newQuestions })
     }
 
+    const moveQuestionUp = (index: number) => {
+        if (index === 0) return
+        const newQuestions = [...data.questions]
+            ;[newQuestions[index - 1], newQuestions[index]] = [newQuestions[index], newQuestions[index - 1]]
+        setData({ ...data, questions: newQuestions })
+    }
+
+    const moveQuestionDown = (index: number) => {
+        if (index === data.questions.length - 1) return
+        const newQuestions = [...data.questions]
+            ;[newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]]
+        setData({ ...data, questions: newQuestions })
+    }
+
     const handleSave = async () => {
         setLoading(true)
         try {
             const saveData = {
                 ...data,
                 points_enabled: isClasswork ? pointsEnabled : false,
-                points: pointsEnabled ? points : undefined
+                // Total points is sum of all question points
+                points: pointsEnabled ? data.questions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined
             }
             const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
             if (result.success) {
@@ -239,18 +257,11 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
 
                                 {pointsEnabled && (
                                     <div className="pl-6 space-y-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label htmlFor="edit-points-value" className="text-sm">Points for this exercise</Label>
-                                        <Input
-                                            id="edit-points-value"
-                                            type="number"
-                                            min={1}
-                                            max={100}
-                                            value={points}
-                                            onChange={(e) => setPoints(Math.max(1, parseInt(e.target.value) || 1))}
-                                            className="w-24"
-                                        />
                                         <p className="text-xs text-muted-foreground">
-                                            Students get one try. Results shown after collection is complete.
+                                            Set points for each question below. Total: <span className="font-semibold text-amber-600">{data.questions.reduce((sum, q) => sum + (q.points || 1), 0)} points</span>
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Students get one try per question. Results shown after collection is complete.
                                         </p>
                                     </div>
                                 )}
@@ -266,15 +277,57 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                 <CardHeader className="pb-3">
                                     <div className="flex justify-between items-center">
                                         <CardTitle className="text-base font-medium">Question {index + 1}</CardTitle>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-destructive hover:text-destructive/90"
-                                            onClick={() => removeQuestion(index)}
-                                            disabled={data.questions.length === 1}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            {/* Reorder buttons - only show when multiple questions */}
+                                            {data.questions.length > 1 && (
+                                                <div className="flex items-center gap-0.5">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7"
+                                                        onClick={() => moveQuestionUp(index)}
+                                                        disabled={index === 0}
+                                                        title="Move up"
+                                                    >
+                                                        <ChevronUp className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-7 w-7"
+                                                        onClick={() => moveQuestionDown(index)}
+                                                        disabled={index === data.questions.length - 1}
+                                                        title="Move down"
+                                                    >
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                            {/* Per-question points input - only when points enabled */}
+                                            {pointsEnabled && (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Award className="h-3.5 w-3.5 text-amber-500" />
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        max={100}
+                                                        value={q.points || 1}
+                                                        onChange={(e) => updateQuestion(index, 'points', Math.max(1, parseInt(e.target.value) || 1))}
+                                                        className="w-16 h-7 text-xs"
+                                                    />
+                                                    <span className="text-xs text-muted-foreground">pts</span>
+                                                </div>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive hover:text-destructive/90"
+                                                onClick={() => removeQuestion(index)}
+                                                disabled={data.questions.length === 1}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-4">

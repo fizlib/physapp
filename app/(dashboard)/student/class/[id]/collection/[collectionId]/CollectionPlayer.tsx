@@ -488,7 +488,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     // Points mode props
                     pointsEnabled={currentAssignment.points_enabled || false}
                     exercisePoints={currentAssignment.points || 1}
-                    initialSubmittedAnswer={currentProgress?.submitted_answer}
+                    initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
                 />
             </div>
         </div>

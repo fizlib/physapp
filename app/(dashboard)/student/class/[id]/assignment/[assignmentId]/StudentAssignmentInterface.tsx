@@ -30,7 +30,7 @@ export function StudentAssignmentInterface({
     // Points mode props
     pointsEnabled = false,
     exercisePoints = 1,
-    initialSubmittedAnswer = null
+    initialSubmittedAnswers = {}
 }: {
     assignment: any,
     classId: string,
@@ -47,15 +47,17 @@ export function StudentAssignmentInterface({
     // Points mode props
     pointsEnabled?: boolean,
     exercisePoints?: number,
-    initialSubmittedAnswer?: string | null
+    initialSubmittedAnswers?: Record<string, string>
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
-    // Points mode state - locked after first submission
-    const [isPointsLocked, setIsPointsLocked] = useState(!!initialSubmittedAnswer)
+    // Points mode state - track which question IDs have been submitted
+    const [lockedQuestionIds, setLockedQuestionIds] = useState<Set<string>>(
+        new Set(Object.keys(initialSubmittedAnswers || {}))
+    )
     const router = useRouter()
 
     const questions = assignment.questions || []
@@ -153,25 +155,29 @@ export function StudentAssignmentInterface({
         toast.info("Solution revealed. Please solve a different variation.")
     }
 
-    // Points mode submission handler - one try only
-    const handlePointsSubmit = async (answer: string, isCorrect: boolean) => {
-        setIsPointsLocked(true)
+    // Points mode submission handler - one try per question
+    const handlePointsSubmit = async (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => {
+        // Lock this specific question
+        setLockedQuestionIds(prev => new Set(prev).add(questionId))
 
         const result = await submitPointsAnswer(
             assignment.id,
+            questionId,
             answer,
             isCorrect,
-            exercisePoints
+            questionPoints,
+            totalQuestions
         )
 
         if (result.success) {
             toast.success("Answer submitted!")
-            // Move on to next exercise or finish
-            if (onFinish) {
+            // Check if all questions are now submitted
+            const updatedLockedCount = lockedQuestionIds.size + 1
+            if (updatedLockedCount >= totalQuestions && onFinish) {
                 onFinish()
             }
         } else if (result.alreadySubmitted) {
-            toast.error("Answer was already submitted")
+            toast.error("Answer was already submitted for this part")
         } else {
             toast.error(result.error || "Failed to submit answer")
         }
@@ -298,9 +304,11 @@ export function StudentAssignmentInterface({
                                                 <TestInterface
                                                     key={q.id || index}
                                                     question={q}
+                                                    questionId={q.id}
+                                                    questionPoints={q.points || 1}
                                                     onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
                                                     pointsMode={pointsEnabled}
-                                                    disabled={isPointsLocked}
+                                                    disabled={lockedQuestionIds.has(q.id)}
                                                     onPointsSubmit={handlePointsSubmit}
                                                 />
                                             </div>
@@ -418,15 +426,17 @@ export function StudentAssignmentInterface({
                                 <TestInterface
                                     key={questions[currentIndex].id || currentIndex}
                                     question={questions[currentIndex]}
+                                    questionId={questions[currentIndex].id}
+                                    questionPoints={questions[currentIndex].points || 1}
                                     onCorrect={handleCorrect}
                                     pointsMode={pointsEnabled}
-                                    disabled={isPointsLocked}
+                                    disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     onPointsSubmit={handlePointsSubmit}
                                 />
                             </div>
 
                             {/* Points mode indicator */}
-                            {pointsEnabled && !isPointsLocked && (
+                            {pointsEnabled && !lockedQuestionIds.has(questions[currentIndex].id) && (
                                 <div className="flex items-center gap-3 text-amber-700 bg-amber-50/50 p-4 rounded-xl border border-amber-200/50 animate-in fade-in slide-in-from-bottom-2">
                                     <div className="bg-amber-100 p-2 rounded-full">
                                         <Award className="h-5 w-5 text-amber-600" />
