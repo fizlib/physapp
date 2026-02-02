@@ -111,7 +111,7 @@ export function CircularGradeDisplay({
                         {displayGrade}
                     </span>
                     <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">
-                        Grade
+                        Pažymys
                     </span>
                 </div>
             </div>
@@ -121,7 +121,7 @@ export function CircularGradeDisplay({
                     {earnedPoints} / {maxPoints}
                 </div>
                 <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                    Total Points Earned
+                    Viso surinkta taškų
                 </div>
             </div>
         </div>
