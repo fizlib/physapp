@@ -30,7 +30,8 @@ export function StudentAssignmentInterface({
     // Points mode props
     pointsEnabled = false,
     exercisePoints = 1,
-    initialSubmittedAnswers = {}
+    initialSubmittedAnswers = {},
+    isLastExercise = false
 }: {
     assignment: any,
     classId: string,
@@ -47,7 +48,8 @@ export function StudentAssignmentInterface({
     // Points mode props
     pointsEnabled?: boolean,
     exercisePoints?: number,
-    initialSubmittedAnswers?: Record<string, string>
+    initialSubmittedAnswers?: Record<string, string>,
+    isLastExercise?: boolean
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
@@ -339,6 +341,22 @@ export function StudentAssignmentInterface({
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
                             onClick={async () => {
+                                // Auto-submit unanswered points questions when finishing
+                                if (pointsEnabled) {
+                                    for (const q of questions) {
+                                        if (!lockedQuestionIds.has(q.id)) {
+                                            await submitPointsAnswer(
+                                                assignment.id,
+                                                q.id,
+                                                '',
+                                                false,
+                                                q.points || 1,
+                                                totalQuestions
+                                            )
+                                        }
+                                    }
+                                }
+
                                 // Save completion status
                                 await upsertAssignmentProgress(
                                     assignment.id,
@@ -354,7 +372,7 @@ export function StudentAssignmentInterface({
                                 }
                             }}
                         >
-                            {onFinish ? "Next Exercise" : "Finish Assignment"}
+                            {onFinish ? (isLastExercise ? "Finish" : "Next Exercise") : "Finish Assignment"}
                             <CheckCircle2 className="h-4 w-4" />
                         </Button>
                     </div>
@@ -487,6 +505,22 @@ export function StudentAssignmentInterface({
                                         variant="default"
                                         className="bg-green-600 hover:bg-green-700 text-white gap-2"
                                         onClick={async () => {
+                                            // Auto-submit unanswered points questions when finishing
+                                            if (pointsEnabled) {
+                                                for (const q of questions) {
+                                                    if (!lockedQuestionIds.has(q.id)) {
+                                                        await submitPointsAnswer(
+                                                            assignment.id,
+                                                            q.id,
+                                                            '',
+                                                            false,
+                                                            q.points || 1,
+                                                            totalQuestions
+                                                        )
+                                                    }
+                                                }
+                                            }
+
                                             // Save completion status
                                             await upsertAssignmentProgress(
                                                 assignment.id,
@@ -502,7 +536,7 @@ export function StudentAssignmentInterface({
                                             }
                                         }}
                                     >
-                                        {onFinish ? "Next Exercise" : "Finish Assignment"}
+                                        {onFinish ? (isLastExercise ? "Finish" : "Next Exercise") : "Finish Assignment"}
                                         <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                 )}

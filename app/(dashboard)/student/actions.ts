@@ -236,6 +236,82 @@ export async function submitPointsAnswer(
     return { success: true }
 }
 
+// Auto-submit all unanswered points questions for all exercises in a collection
+export async function autoSubmitCollectionPointsAnswers(collectionId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Fetch all assignments in collection with points enabled
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select('id, points_enabled, questions(id, points)')
+        .eq('collection_id', collectionId)
+        .eq('points_enabled', true)
+
+    if (!assignments || assignments.length === 0) {
+        return { success: true } // No points-enabled exercises
+    }
+
+    // Fetch existing progress for all these assignments
+    const assignmentIds = assignments.map(a => a.id)
+    const { data: progressData } = await supabase
+        .from('assignment_progress')
+        .select('assignment_id, submitted_answers, earned_points_per_part')
+        .eq('student_id', user.id)
+        .in('assignment_id', assignmentIds)
+
+    const progressMap = new Map(progressData?.map(p => [p.assignment_id, p]) || [])
+
+    // Process each assignment
+    for (const assignment of assignments) {
+        const questions = (assignment as any).questions || []
+        if (questions.length === 0) continue
+
+        const progress = progressMap.get(assignment.id)
+        const submittedAnswers: Record<string, string> = progress?.submitted_answers || {}
+        const earnedPointsPerPart: Record<string, number> = progress?.earned_points_per_part || {}
+
+        let hasNewSubmissions = false
+
+        // Submit empty answers for unanswered questions
+        for (const question of questions) {
+            if (submittedAnswers[question.id] === undefined) {
+                submittedAnswers[question.id] = ''
+                earnedPointsPerPart[question.id] = 0
+                hasNewSubmissions = true
+            }
+        }
+
+        if (hasNewSubmissions) {
+            // Calculate total earned points
+            const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
+
+            // Upsert the progress with all answers submitted
+            const { error } = await supabase
+                .from('assignment_progress')
+                .upsert({
+                    student_id: user.id,
+                    assignment_id: assignment.id,
+                    submitted_answers: submittedAnswers,
+                    earned_points_per_part: earnedPointsPerPart,
+                    earned_points: totalEarnedPoints,
+                    is_completed: true,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'student_id, assignment_id'
+                })
+
+            if (error) {
+                console.error("Auto-submit error for assignment", assignment.id, error)
+            }
+        }
+    }
+
+    return { success: true }
+}
+
 // Get collection results for student (points summary)
 export async function getCollectionResults(collectionId: string): Promise<{
     success: boolean

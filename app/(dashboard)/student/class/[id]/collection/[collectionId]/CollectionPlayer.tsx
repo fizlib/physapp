@@ -15,7 +15,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess, getCollectionAssignments, getCollectionResults } from "../../../../actions"
+import { checkIpAccess, getCollectionAssignments, getCollectionResults, autoSubmitCollectionPointsAnswers } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 
 interface CollectionPlayerProps {
@@ -162,7 +162,10 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
             const nextIndex = currentAssignmentIndex + 1
             setCurrentAssignmentIndex(nextIndex)
         } else {
-            // No more published assignments
+            // No more published assignments - finishing the collection
+            // Auto-submit all unanswered points questions for ALL exercises in collection
+            await autoSubmitCollectionPointsAnswers(collection.id)
+
             if (isClasswork) {
                 // Classwork: check if there's an unpublished one to wait for
                 const nextUnpublished = getNextAssignmentFromAllAssignments()
@@ -491,6 +494,8 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     pointsEnabled={currentAssignment.points_enabled || false}
                     exercisePoints={currentAssignment.points || 1}
                     initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
+                    // Last exercise in collection - show "Finish" instead of "Next Exercise"
+                    isLastExercise={currentAssignmentIndex === totalAssignments - 1}
                 />
             </div>
         </div>
