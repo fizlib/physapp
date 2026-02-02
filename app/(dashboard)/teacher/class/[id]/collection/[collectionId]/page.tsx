@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { CollectionManager, RemoveExerciseButton, TogglePublishButton } from "./CollectionManager"
 import { CreateExerciseDialog } from "../../CreateExerciseDialog"
 import { SortableExerciseList } from "./SortableExerciseList"
+import { CollectionBatchActions } from "./CollectionBatchActions"
+import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
 
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
@@ -70,6 +72,16 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 classroomId={id}
                                 collectionId={collectionId}
                                 availableExercises={availableExercises || []}
+                            />
+                            {collection.category === 'classwork' && (
+                                <CollectionBatchActions
+                                    assignments={assignments}
+                                    classroomId={id}
+                                />
+                            )}
+                            <CollectionSettingsDialog
+                                classroomId={id}
+                                collectionId={collectionId}
                                 currentTitle={collection.title}
                                 currentCategory={collection.category}
                                 currentScheduledDate={collection.scheduled_date}

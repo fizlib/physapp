@@ -736,6 +736,43 @@ export async function toggleAssignmentPublish(assignmentId: string, classroomId:
     return { success: true }
 }
 
+export async function batchUpdateAssignments(
+    assignmentIds: string[],
+    classroomId: string,
+    updates: any
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('assignments')
+        .update(updates)
+        .in('id', assignmentIds)
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error("Batch update error:", error)
+        return { success: false, error: "Failed to perform bulk update" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
 export async function updateClassroomType(classroomId: string, type: 'private_student' | 'school_class'): Promise<ActionState> {
     const supabase = await createClient()
 
