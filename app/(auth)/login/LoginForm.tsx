@@ -15,7 +15,7 @@ function SubmitButton({ text }: { text: string }) {
     const { pending } = useFormStatus()
     return (
         <Button disabled={pending} type="submit" className="w-full font-medium tracking-wide">
-            {pending ? 'Processing...' : text}
+            {pending ? 'Apdorojama...' : text}
         </Button>
     )
 }
@@ -38,40 +38,36 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
             <div className="mb-8 flex flex-col items-center gap-2 text-center">
                 <Logo size="xl" />
-                <p className="text-muted-foreground text-sm">
-                    Master the universe, one equation at a time.
-                </p>
             </div>
 
             <Card className="w-full max-w-[400px] border-border/60 shadow-xl shadow-primary/5">
                 <CardHeader className="space-y-1 text-center">
-                    <CardTitle className="text-xl font-medium">
-                        {isLogin ? 'Welcome back' : 'Create an account'}
-                    </CardTitle>
-                    <CardDescription>
-                        {isLogin ? 'Enter your credentials to access your lab.' : 'Start your journey today.'}
-                    </CardDescription>
+                    {!isLogin && (
+                        <CardTitle className="text-xl font-medium">
+                            Sukurti paskyrą
+                        </CardTitle>
+                    )}
                 </CardHeader>
                 <CardContent>
                     <form action={handleSubmit} className="flex flex-col gap-5">
                         {!isLogin && (
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="firstName" className="text-xs uppercase tracking-wider text-muted-foreground">First Name</Label>
+                                    <Label htmlFor="firstName" className="text-xs uppercase tracking-wider text-muted-foreground">Vardas</Label>
                                     <Input
                                         id="firstName"
                                         name="firstName"
-                                        placeholder="John"
+                                        placeholder="Jonas"
                                         required
                                         className="bg-muted/30"
                                     />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="lastName" className="text-xs uppercase tracking-wider text-muted-foreground">Last Name</Label>
+                                    <Label htmlFor="lastName" className="text-xs uppercase tracking-wider text-muted-foreground">Pavardė</Label>
                                     <Input
                                         id="lastName"
                                         name="lastName"
-                                        placeholder="Doe"
+                                        placeholder="Jonaitis"
                                         required
                                         className="bg-muted/30"
                                     />
@@ -79,18 +75,18 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                             </div>
                         )}
                         <div className="grid gap-2">
-                            <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">Email</Label>
+                            <Label htmlFor="email" className="text-xs uppercase tracking-wider text-muted-foreground">El. paštas</Label>
                             <Input
                                 id="email"
                                 name="email"
                                 type="email"
-                                placeholder="name@example.com"
+                                placeholder="vardas@pavyzdys.lt"
                                 required
                                 className="bg-muted/30"
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Password</Label>
+                            <Label htmlFor="password" className="text-xs uppercase tracking-wider text-muted-foreground">Slaptažodis</Label>
                             <Input
                                 id="password"
                                 name="password"
@@ -107,7 +103,7 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                                     htmlFor="remember"
                                     className="text-sm font-medium leading-none text-muted-foreground"
                                 >
-                                    Remember me
+                                    Prisiminti mane
                                 </label>
                             </div>
                         )}
@@ -121,7 +117,7 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                         )}
 
                         <div className="pt-2">
-                            <SubmitButton text={isLogin ? 'Sign In' : 'Create Account'} />
+                            <SubmitButton text={isLogin ? 'Prisijungti' : 'Sukurti paskyrą'} />
                         </div>
 
                         <div className="text-center text-sm">
@@ -131,7 +127,7 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                                     onClick={() => setIsLogin(!isLogin)}
                                     className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
                                 >
-                                    {isLogin ? "New to Protus? Create an account" : "Have an account? Sign in"}
+                                    {isLogin ? "Pirmą kartą Protus? Sukurti paskyrą" : "Turite paskyrą? Prisijunkite"}
                                 </button>
                             ) : (
                                 !isLogin && (
@@ -140,12 +136,12 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                                         onClick={() => setIsLogin(true)}
                                         className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
                                     >
-                                        Already have an account? Sign in
+                                        Jau turite paskyrą? Prisijunkite
                                     </button>
                                 )
                             )}
                             {!isRegistrationEnabled && isLogin && (
-                                <p className="text-muted-foreground text-xs mt-2">Registration is currently closed.</p>
+                                <p className="text-muted-foreground text-xs mt-2">Registracija šiuo metu uždaryta.</p>
                             )}
                         </div>
                     </form>

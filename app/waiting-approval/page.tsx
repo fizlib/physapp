@@ -40,9 +40,6 @@ export default function WaitingApprovalPage() {
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
             <div className="mb-8 flex flex-col items-center gap-2 text-center">
                 <Logo size="xl" />
-                <p className="text-muted-foreground text-sm max-w-xs">
-                    Welcome to the physics lab. Your journey is about to begin.
-                </p>
             </div>
 
             <Card className="w-full max-w-[450px] border-border/60 shadow-xl shadow-primary/5">
@@ -51,26 +48,26 @@ export default function WaitingApprovalPage() {
                         <Clock className="h-6 w-6 animate-pulse" />
                     </div>
                     <CardTitle className="text-2xl font-semibold tracking-tight">
-                        Waiting for Approval
+                        Laukiama patvirtinimo
                     </CardTitle>
                     <CardDescription className="text-base">
-                        Your registration has been received successfully.
+                        Jūsų registracija sėkmingai gauta.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col items-center gap-6 text-center">
                     <div className="space-y-4">
                         <p className="text-muted-foreground text-sm">
-                            An administrator needs to confirm your account before you can start classes.
-                            This page will automatically update once you are approved.
+                            Administratorius turi patvirtinti jūsų paskyrą, kad galėtumėte pradėti mokslus.
+                            Šis puslapis automatiškai atsinaujins, kai būsite patvirtinti.
                         </p>
 
                         <div className="flex flex-col items-center gap-3 pt-2">
                             <div className="flex items-center gap-2 text-primary font-medium">
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                <span className="text-sm">Polling for status update...</span>
+                                <span className="text-sm">Tikrinama būsena...</span>
                             </div>
                             <p className="text-[10px] text-muted-foreground uppercase tracking-widest px-4 py-1 bg-muted rounded-full">
-                                Do not close this window
+                                Neuždarykite šio lango
                             </p>
                         </div>
                     </div>
@@ -79,7 +76,7 @@ export default function WaitingApprovalPage() {
                         <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                                 <ShieldCheck className="h-3.5 w-3.5 text-green-500" />
-                                Securing your account
+                                Saugome jūsų paskyrą
                             </div>
                         </div>
                     </div>

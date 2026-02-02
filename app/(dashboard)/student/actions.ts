@@ -168,6 +168,44 @@ export async function getCollectionAssignments(collectionId: string): Promise<{ 
     return { success: true, assignments: data }
 }
 
+// Fetch progress data for all assignments in a collection
+export async function getCollectionProgress(collectionId: string): Promise<{
+    success: boolean
+    progress?: any[]
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // First get all assignment IDs in this collection
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('collection_id', collectionId)
+
+    if (!assignments || assignments.length === 0) {
+        return { success: true, progress: [] }
+    }
+
+    const assignmentIds = assignments.map(a => a.id)
+
+    // Fetch progress for these assignments
+    const { data: progress, error } = await supabase
+        .from('assignment_progress')
+        .select('*')
+        .eq('student_id', user.id)
+        .in('assignment_id', assignmentIds)
+
+    if (error) {
+        console.error("Error fetching collection progress:", error)
+        return { success: false, error: "Failed to fetch progress" }
+    }
+
+    return { success: true, progress: progress || [] }
+}
+
 // New action for point-based exercises - one try per question part
 export async function submitPointsAnswer(
     assignmentId: string,
@@ -243,12 +281,14 @@ export async function autoSubmitCollectionPointsAnswers(collectionId: string): P
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // Fetch all assignments in collection with points enabled
+    // Fetch all PUBLISHED assignments in collection with points enabled
+    // IMPORTANT: Only process published assignments to avoid pre-submitting for unpublished exercises
     const { data: assignments } = await supabase
         .from('assignments')
         .select('id, points_enabled, questions(id, points)')
         .eq('collection_id', collectionId)
         .eq('points_enabled', true)
+        .eq('published', true)
 
     if (!assignments || assignments.length === 0) {
         return { success: true } // No points-enabled exercises

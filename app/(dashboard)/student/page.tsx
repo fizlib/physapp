@@ -13,7 +13,7 @@ export default async function StudentDashboard() {
 
     if (!user) return (
         <div className="flex h-screen items-center justify-center text-muted-foreground">
-            Please log in to view this page.
+            Prašome prisijungti, kad matytumėte šį puslapį.
         </div>
     )
 
@@ -33,10 +33,10 @@ export default async function StudentDashboard() {
                 <div className="flex flex-col gap-4 border-b border-border/40 pb-6 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                            My Classes
+                            Mano klasės
                         </h1>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Welcome back. Continue your exploration of the universe.
+                            Sveiki sugrįžę. Tęskite savo mokslus.
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -69,7 +69,7 @@ export default async function StudentDashboard() {
                                     </CardHeader>
                                     <CardContent>
                                         <div className="text-sm text-muted-foreground group-hover:text-foreground/80">
-                                            View modules & assignments &rarr;
+                                            Peržiūrėti modulius ir užduotis &rarr;
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -84,11 +84,11 @@ export default async function StudentDashboard() {
                                 <BookOpen className="h-8 w-8 opacity-40" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="text-lg font-medium text-foreground">No classrooms found</h3>
-                                <p className="text-sm">You aren't enrolled in any classes yet.</p>
+                                <h3 className="text-lg font-medium text-foreground">Klasių nerasta</h3>
+                                <p className="text-sm">Jūs dar nesate įtraukti į jokią klasę.</p>
                             </div>
                             <p className="max-w-xs text-xs opacity-70">
-                                Contact your instructor to be added to their class.
+                                Susisiekite su savo mokytoju, kad būtumėte pridėti prie klasės.
                             </p>
                         </div>
                     )}

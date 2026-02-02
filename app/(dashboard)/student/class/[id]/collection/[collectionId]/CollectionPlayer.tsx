@@ -15,7 +15,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess, getCollectionAssignments, getCollectionResults, autoSubmitCollectionPointsAnswers } from "../../../../actions"
+import { checkIpAccess, getCollectionAssignments, getCollectionResults, autoSubmitCollectionPointsAnswers, getCollectionProgress } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 
 interface CollectionPlayerProps {
@@ -33,13 +33,18 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const [assignments, setAssignments] = useState(collection.assignments || [])
     // Also track allAssignments as state to update dropdown locked status
     const [allAssignmentsState, setAllAssignmentsState] = useState(initialAllAssignments)
+    // Track progress data as state so we can refresh it when assignments update
+    const [progressDataState, setProgressDataState] = useState(progressData)
 
     // Determine initial state based on progress
-    // Create a map for easy lookup
-    const progressMap = new Map()
-    progressData.forEach(p => {
-        progressMap.set(p.assignment_id, p)
-    })
+    // Create a map for easy lookup - use useMemo to recalculate when progressDataState changes
+    const progressMap = useMemo(() => {
+        const map = new Map()
+        progressDataState.forEach(p => {
+            map.set(p.assignment_id, p)
+        })
+        return map
+    }, [progressDataState])
 
     // Better logic for initial index:
     let initialIndex = 0
@@ -215,6 +220,12 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     setAllAssignmentsState(result.assignments)
                     setAssignments(result.assignments.filter(a => a.published))
 
+                    // Also refresh progress data to ensure we have correct state for all assignments
+                    const progressResult = await getCollectionProgress(collection.id)
+                    if (progressResult.success && progressResult.progress) {
+                        setProgressDataState(progressResult.progress)
+                    }
+
                     // Navigate to the new assignment
                     // Find where it is in the published list
                     const newPublishedList = result.assignments.filter(a => a.published)
@@ -244,16 +255,16 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         <ShieldAlert className="h-10 w-10 text-red-600" />
                     </div>
                     <div className="space-y-2">
-                        <h1 className="text-2xl font-bold tracking-tight">Access Restricted</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">Prieiga apribota</h1>
                         <p className="text-muted-foreground">
-                            Your network connection has changed. This classwork is restricted to the classroom network only.
-                            You are currently connected from <span className="font-mono text-red-500">{restrictionData.studentIp}</span>.
+                            Jūsų tinklo ryšys pasikeitė. Šis darbas klasėje yra skirtas tik mokyklos tinklui.
+                            Šiuo metu esate prisijungę iš <span className="font-mono text-red-500">{restrictionData.studentIp}</span>.
                         </p>
                     </div>
                     <Button asChild variant="outline" className="w-full">
                         <Link href={`/student/class/${classroomId}`}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Return to Classroom
+                            Grįžti į klasę
                         </Link>
                     </Button>
                 </div>
@@ -286,9 +297,9 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     if (assignments.length === 0) {
         return (
             <div className="text-center py-12">
-                <p>This collection has no exercises.</p>
+                <p>Šiame rinkinyje nėra užduočių.</p>
                 <Button asChild className="mt-4" variant="outline">
-                    <Link href={`/student/class/${classroomId}`}>Back to Class</Link>
+                    <Link href={`/student/class/${classroomId}`}>Grįžti į klasę</Link>
                 </Button>
             </div>
         )
@@ -309,9 +320,9 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                             <Layers className="h-12 w-12 text-primary" />
                         </div>
                         <div className="space-y-2">
-                            <h2 className="text-2xl font-bold tracking-tight">Collection Completed!</h2>
+                            <h2 className="text-2xl font-bold tracking-tight">Rinkinys baigtas!</h2>
                             <p className="text-muted-foreground">
-                                You have successfully finished all exercises in <span className="font-semibold text-foreground">{collection.title}</span>.
+                                Jūs sėkmingai atlikote visas užduotis rinkinyje <span className="font-semibold text-foreground">{collection.title}</span>.
                             </p>
                         </div>
 
@@ -321,7 +332,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                 <div className="flex items-center justify-center gap-3">
                                     <Award className="h-6 w-6 text-amber-500" />
                                     <span className="text-xl font-bold">
-                                        {pointsResults.earnedPoints} / {pointsResults.totalPoints} points
+                                        {pointsResults.earnedPoints} / {pointsResults.totalPoints} taškai
                                     </span>
                                 </div>
 
@@ -330,10 +341,10 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                         <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                                             <span className="flex items-center gap-2">
                                                 {ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                                                Exercise {idx + 1}
+                                                Užduotis {idx + 1}
                                             </span>
                                             <span className="font-medium">
-                                                {ex.earnedPoints ?? 0} / {ex.points} pts
+                                                {ex.earnedPoints ?? 0} / {ex.points} taškai
                                             </span>
                                         </div>
                                     ))}
@@ -342,10 +353,10 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         )}
 
                         <Button onClick={() => router.push(`/student/class/${classroomId}`)} size="lg" className="w-full">
-                            Return to Class
+                            Grįžti į klasę
                         </Button>
                         <Button onClick={() => window.location.href = pathname} variant="outline" size="lg" className="w-full">
-                            Review Collection
+                            Peržiūrėti rinkinį
                         </Button>
                     </CardContent>
                 </Card>
@@ -363,20 +374,20 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                             <Loader2 className="h-12 w-12 text-amber-600 animate-spin" />
                         </div>
                         <div className="space-y-2">
-                            <h2 className="text-2xl font-bold tracking-tight">Waiting for Teacher</h2>
+                            <h2 className="text-2xl font-bold tracking-tight">Laukiama mokytojo</h2>
                             <p className="text-muted-foreground">
-                                Please wait for your teacher to unlock the next exercise...
+                                Prašome palaukti, kol mokytojas atrakins kitą užduotį...
                             </p>
                         </div>
                         <div className="flex flex-col gap-2 w-full">
                             {currentAssignmentIndex > 0 && (
                                 <Button onClick={handlePrevious} variant="outline" size="lg" className="w-full">
                                     <ArrowLeft className="mr-2 h-4 w-4" />
-                                    Go Back to Previous Exercise
+                                    Grįžti į ankstesnę užduotį
                                 </Button>
                             )}
                             <Button onClick={() => router.push(`/student/class/${classroomId}`)} variant="ghost" size="lg" className="w-full">
-                                Exit Collection
+                                Išeiti iš rinkinio
                             </Button>
                         </div>
                     </CardContent>
@@ -394,14 +405,14 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
                             <Link href={`/student/class/${classroomId}`}>
                                 <ArrowLeft className="mr-2 h-4 w-4" />
-                                Exit Collection
+                                Išeiti iš rinkinio
                             </Link>
                         </Button>
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                                    Exercise {allAssignmentsState.length > 0 ? [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1 : currentAssignmentIndex + 1} of {allAssignmentsState.length > 0 ? allAssignmentsState.length : totalAssignments}
+                                    Užduotis {allAssignmentsState.length > 0 ? [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1 : currentAssignmentIndex + 1} iš {allAssignmentsState.length > 0 ? allAssignmentsState.length : totalAssignments}
                                     <ChevronDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -427,7 +438,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                                     className={isCurrent ? "bg-accent" : ""}
                                                 >
                                                     <span className="flex items-center gap-2">
-                                                        Exercise {index + 1}
+                                                        Užduotis {index + 1}
                                                         {assignment.points_enabled && (
                                                             <Award className="h-3.5 w-3.5 text-amber-500" />
                                                         )}

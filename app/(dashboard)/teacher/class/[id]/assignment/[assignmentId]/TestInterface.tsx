@@ -42,11 +42,11 @@ export function TestInterface({
                 val = typeof evaluated === 'number' ? evaluated : parseFloat(evaluated?.toString());
 
                 if (isNaN(val)) {
-                    setFeedback("Please enter a valid mathematical expression")
+                    setFeedback("Prašome įvesti galiojančią matematinę išraišką")
                     return
                 }
             } catch (e) {
-                setFeedback("Please enter a valid mathematical expression")
+                setFeedback("Prašome įvesti galiojančią matematinę išraišką")
                 return
             }
 
@@ -65,16 +65,16 @@ export function TestInterface({
             // Normal mode: show feedback
             if (isCorrect) {
                 setResult('correct')
-                setFeedback(`Correct! ${val} matches the target (within ${tolerance}%).`)
+                setFeedback(`Teisingai! ${val} atitinka tikslą (paklaida ${tolerance}%).`)
                 onCorrect?.()
             } else {
                 setResult('incorrect')
-                setFeedback(`Incorrect. Your result was ${val}, but it outside the allowed range.`)
+                setFeedback(`Neteisingai. Jūsų rezultatas buvo ${val}, bet jis yra už leistino diapazono ribų.`)
             }
         } else {
             // MCQ
             if (!mcqInput) {
-                setFeedback("Please select an option")
+                setFeedback("Prašome pasirinkti variantą")
                 return
             }
 
@@ -89,11 +89,11 @@ export function TestInterface({
             // Normal mode: show feedback
             if (isCorrect) {
                 setResult('correct')
-                setFeedback("Correct option selected!")
+                setFeedback("Pasirinktas teisingas variantas!")
                 onCorrect?.()
             } else {
                 setResult('incorrect')
-                setFeedback(`Incorrect. Try another option.`)
+                setFeedback(`Neteisingai. Bandykite kitą variantą.`)
             }
         }
     }
@@ -104,10 +104,10 @@ export function TestInterface({
             <div className="p-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
                 <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
                     <Check className="h-4 w-4" />
-                    <span className="font-medium">Answer submitted</span>
+                    <span className="font-medium">Atsakymas pateiktas</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                    Results will be shown when the collection is complete.
+                    Rezultatai bus parodyti baigus visą rinkinį.
                 </p>
             </div>
         )
@@ -142,7 +142,7 @@ export function TestInterface({
                                 }}
                             />
                         </div>
-                        <Button type="button" onClick={checkAnswer}>{pointsMode ? 'Submit' : 'Check'}</Button>
+                        <Button type="button" onClick={checkAnswer}>{pointsMode ? 'Pateikti' : 'Tikrinti'}</Button>
                     </div>
                 </div>
             ) : (
@@ -171,7 +171,7 @@ export function TestInterface({
                         })}
                     </div>
                     <Button className="mt-1" onClick={checkAnswer} disabled={!mcqInput}>
-                        {pointsMode ? 'Submit' : 'Check Answer'}
+                        {pointsMode ? 'Pateikti' : 'Tikrinti atsakymą'}
                     </Button>
                 </div>
             )}
@@ -184,7 +184,7 @@ export function TestInterface({
                         <X className="h-5 w-5 mt-0.5" />
                     )}
                     <div>
-                        <p className="font-medium">{result === 'correct' ? "Correct!" : "Incorrect"}</p>
+                        <p className="font-medium">{result === 'correct' ? "Teisingai!" : "Neteisingai"}</p>
                         <p className="text-sm opacity-90">{feedback}</p>
                     </div>
                 </div>

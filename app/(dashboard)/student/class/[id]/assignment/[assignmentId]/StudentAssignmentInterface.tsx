@@ -139,7 +139,7 @@ export function StudentAssignmentInterface({
     }
 
     const handleRevealSolution = async () => {
-        if (!confirm("Are you sure? If you reveal the solution, you will not be able to submit this variation and will need to solve a different one.")) {
+        if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai variacijai ir turėsite spręsti kitą.")) {
             return
         }
 
@@ -154,7 +154,7 @@ export function StudentAssignmentInterface({
             currentIndex,
             Array.from(newRevealed)
         )
-        toast.info("Solution revealed. Please solve a different variation.")
+        toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
     }
 
     // Points mode submission handler - one try per question
@@ -172,16 +172,16 @@ export function StudentAssignmentInterface({
         )
 
         if (result.success) {
-            toast.success("Answer submitted!")
+            toast.success("Atsakymas pateiktas!")
             // Check if all questions are now submitted
             const updatedLockedCount = lockedQuestionIds.size + 1
             if (updatedLockedCount >= totalQuestions && onFinish) {
                 onFinish()
             }
         } else if (result.alreadySubmitted) {
-            toast.error("Answer was already submitted for this part")
+            toast.error("Šio varianto atsakymas jau buvo pateiktas")
         } else {
-            toast.error(result.error || "Failed to submit answer")
+            toast.error(result.error || "Nepavyko pateikti atsakymo")
         }
     }
 
@@ -211,7 +211,7 @@ export function StudentAssignmentInterface({
                     <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
                         <Link href={`/student/class/${classId}`}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Class
+                            Grįžti į klasę
                         </Link>
                     </Button>
                     <div className="flex items-center gap-4">
@@ -228,7 +228,7 @@ export function StudentAssignmentInterface({
                 <Card className="bg-muted/30 border-dashed">
                     <CardHeader className="py-3 px-4">
                         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            Scenario Reference
+                            Scenarijaus nuoroda
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
@@ -277,10 +277,10 @@ export function StudentAssignmentInterface({
                                                 <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
                                                     <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
                                                         <BookOpen className="h-4 w-4" />
-                                                        Step-by-Step Solution
+                                                        Išsamus sprendimas
                                                     </div>
                                                     <div className="text-zinc-800 text-sm leading-relaxed border-t border-blue-100 pt-3">
-                                                        <MathDisplay content={q.solution_text || "No solution manual available."} />
+                                                        <MathDisplay content={q.solution_text || "Sprendimo instrukcijos nėra."} />
                                                     </div>
                                                 </div>
                                             )}
@@ -292,14 +292,14 @@ export function StudentAssignmentInterface({
                                                         size="sm"
                                                         className="text-muted-foreground hover:text-blue-600 hover:bg-blue-50 gap-2 h-7 px-2 text-[10px]"
                                                         onClick={async () => {
-                                                            if (!confirm("Reveal solution? Submission for this question will be disabled.")) return
+                                                            if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
                                                             const newRevealed = new Set(revealedIndices).add(index)
                                                             setRevealedIndices(newRevealed)
                                                             await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed))
                                                         }}
                                                     >
                                                         <HelpCircle className="h-3 w-3" />
-                                                        Reveal Solution
+                                                        Rodyti sprendimą
                                                     </Button>
                                                 </div>
                                             )}
@@ -332,7 +332,7 @@ export function StudentAssignmentInterface({
                                 onClick={onPrevious}
                             >
                                 <ArrowLeft className="h-4 w-4" />
-                                Previous Exercise
+                                Ankstesnė užduotis
                             </Button>
                         )}
                         <Button
@@ -372,7 +372,7 @@ export function StudentAssignmentInterface({
                                 }
                             }}
                         >
-                            {onFinish ? (isLastExercise ? "Finish" : "Next Exercise") : "Finish Assignment"}
+                            {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
                             <CheckCircle2 className="h-4 w-4" />
                         </Button>
                     </div>
@@ -384,19 +384,19 @@ export function StudentAssignmentInterface({
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
                                 <CardTitle className="text-xl">
-                                    {isVariationMode ? `Variation ${completedIndices.size + 1} of ${requiredVariations}` : `Question ${currentIndex + 1}`}
+                                    {isVariationMode ? `Variacija ${completedIndices.size + 1} iš ${requiredVariations}` : `Klausimas ${currentIndex + 1}`}
                                 </CardTitle>
                                 {pointsEnabled && (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
                                         <Award className="h-3 w-3" />
-                                        Points
+                                        Taškai
                                     </span>
                                 )}
                             </div>
                             <CardDescription>
                                 {isVariationMode
-                                    ? `Complete ${requiredVariations} variations to pass. (${completedIndices.size} solved)`
-                                    : (totalQuestions > 1 ? `Step ${currentIndex + 1} of ${totalQuestions}` : 'Solve the problem below')
+                                    ? `Atlikite ${requiredVariations} variacijas, kad išlaikytumėte. (${completedIndices.size} išspręsta)`
+                                    : (totalQuestions > 1 ? `Žingsnis ${currentIndex + 1} iš ${totalQuestions}` : 'Išspręskite žemiau esančią problemą')
                                 }
                             </CardDescription>
                         </div>
@@ -416,14 +416,14 @@ export function StudentAssignmentInterface({
                                 <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
                                     <div className="flex items-center gap-2 text-blue-700 font-semibold">
                                         <BookOpen className="h-5 w-5" />
-                                        Step-by-Step Solution
+                                        Išsamus sprendimas
                                     </div>
                                     <div className="text-zinc-800 leading-relaxed border-t border-blue-100 pt-3">
-                                        <MathDisplay content={questions[currentIndex].solution_text || "No solution manual available for this variation."} />
+                                        <MathDisplay content={questions[currentIndex].solution_text || "Sprendimo instrukcijos šiai variacijai nėra."} />
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-100/50 p-2 rounded">
                                         <AlertCircle className="h-3.5 w-3.5" />
-                                        Manual revealed. Submission disabled for this variation.
+                                        Sprendimas parodytas. Atsakymo pateikimas šiai variacijai išjungtas.
                                     </div>
                                 </div>
                             )}
@@ -437,7 +437,7 @@ export function StudentAssignmentInterface({
                                         onClick={handleRevealSolution}
                                     >
                                         <HelpCircle className="h-4 w-4" />
-                                        Reveal Solution
+                                        Rodyti sprendimą
                                     </Button>
                                 </div>
                             )}
@@ -462,8 +462,8 @@ export function StudentAssignmentInterface({
                                         <Award className="h-5 w-5 text-amber-600" />
                                     </div>
                                     <div className="space-y-0.5">
-                                        <span className="text-sm font-bold block">Points exercise</span>
-                                        <span className="text-xs text-amber-600/80">You have one attempt for {exercisePoints} {exercisePoints === 1 ? 'point' : 'points'}. Solve carefully!</span>
+                                        <span className="text-sm font-bold block">Taškais vertinama užduotis</span>
+                                        <span className="text-xs text-amber-600/80">Turite vieną bandymą už {exercisePoints} {exercisePoints === 1 ? 'tašką' : 'taškus'}. Spręskite atidžiai!</span>
                                     </div>
                                 </div>
                             )}
@@ -476,7 +476,7 @@ export function StudentAssignmentInterface({
                                         onClick={onPrevious}
                                     >
                                         <ArrowLeft className="h-4 w-4" />
-                                        Previous Exercise
+                                        Ankstesnė užduotis
                                     </Button>
                                 )}
                                 {!isLastQuestion || (isVariationMode && completedIndices.size < requiredVariations) ? (
@@ -496,7 +496,7 @@ export function StudentAssignmentInterface({
                                         disabled={!canProceed}
                                         className="gap-2"
                                     >
-                                        {isVariationMode ? "Next Variation" : "Next Question"}
+                                        {isVariationMode ? "Kita variacija" : "Kitas klausimas"}
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 ) : (
@@ -536,7 +536,7 @@ export function StudentAssignmentInterface({
                                             }
                                         }}
                                     >
-                                        {onFinish ? (isLastExercise ? "Finish" : "Next Exercise") : "Finish Assignment"}
+                                        {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
                                         <CheckCircle2 className="h-4 w-4" />
                                     </Button>
                                 )}

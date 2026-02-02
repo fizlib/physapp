@@ -43,7 +43,7 @@ export function ClassroomCard({ classroom }: ClassroomCardProps) {
                             trigger={
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Settings className="h-4 w-4" />
-                                    <span className="sr-only">Settings</span>
+                                    <span className="sr-only">Nustatymai</span>
                                 </Button>
                             }
                         />
@@ -57,10 +57,10 @@ export function ClassroomCard({ classroom }: ClassroomCardProps) {
                         onClick={handleManageStudentsClick}
                     >
                         <Users className="h-3.5 w-3.5" />
-                        <span>Manage Students</span>
+                        <span>Valdyti mokinius</span>
                     </button>
                     <span className="text-xs opacity-50 group-hover:opacity-100 transition-opacity">
-                        Enter Class &rarr;
+                        Eiti į klasę &rarr;
                     </span>
                 </div>
             </CardContent>

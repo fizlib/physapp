@@ -14,7 +14,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     const studentIp = await getClientIp()
 
-    if (!user) return <div>Please log in</div>
+    if (!user) return <div>Prašome prisijungti</div>
 
     // 1. Fetch Classroom, Published Standalone Assignments, and Collections
     const [classroomResult, assignmentsResult, collectionsResult] = await Promise.all([
@@ -93,7 +93,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                     <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
                         <Link href="/student">
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Dashboard
+                            Grįžti į pagrindinį
                         </Link>
                     </Button>
                     <div className="flex flex-col gap-4 border-b border-border/40 pb-6 md:flex-row md:items-start md:justify-between">
@@ -119,7 +119,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                     <div className="space-y-4">
                                         <h3 className="text-lg font-medium text-foreground/80 flex items-center gap-2 text-primary">
                                             <Layers className="h-4 w-4" />
-                                            Classwork
+                                            Darbas klasėje
                                         </h3>
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
@@ -134,19 +134,19 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                         {isClassworkRestricted && <Lock className="h-3 w-3 text-red-500" />}
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                        <span>{totalAssignmentCounts.get(collection.id) || 0} Exercises</span>
+                                                                        <span>{totalAssignmentCounts.get(collection.id) || 0} Užduotys</span>
                                                                         <span>•</span>
-                                                                        <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                                        <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
                                                                     </div>
                                                                 </div>
-                                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Classwork</span>
+                                                                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Darbas klasėje</span>
                                                             </div>
 
                                                             {/* IP Restriction message for classwork */}
                                                             {isClassworkRestricted && (
                                                                 <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
                                                                     <ShieldAlert className="h-3.5 w-3.5" />
-                                                                    <span className="text-[10px] font-medium leading-tight">Access restricted to classroom network only</span>
+                                                                    <span className="text-[10px] font-medium leading-tight">Prieiga ribojama tik klasės tinklui</span>
                                                                 </div>
                                                             )}
                                                         </CardContent>
@@ -172,7 +172,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                     <div className="space-y-4">
                                         <h3 className="text-lg font-medium text-foreground/80 flex items-center gap-2 text-indigo-500">
                                             <Layers className="h-4 w-4" />
-                                            Homework
+                                            Namų darbai
                                         </h3>
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => {
@@ -185,26 +185,26 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                     <div className="space-y-1.5 flex-1 pr-4">
                                                                         <h3 className="font-semibold leading-none">{collection.title}</h3>
                                                                         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                            <span>{collection.assignments?.length || 0} Exercises</span>
+                                                                            <span>{collection.assignments?.length || 0} Užduotys</span>
                                                                             <span>•</span>
-                                                                            <span>Posted {new Date(collection.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                                                                            <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
                                                                         </div>
                                                                     </div>
-                                                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Homework</span>
+                                                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Namų darbai</span>
                                                                 </div>
 
                                                                 {/* Progress Section */}
                                                                 <div className="space-y-2">
                                                                     {progress > 0 && progress < 100 && (
                                                                         <div className="flex justify-between text-xs text-muted-foreground">
-                                                                            <span>{Math.round(progress)}% Complete</span>
+                                                                            <span>{Math.round(progress)}% Atlikta</span>
                                                                         </div>
                                                                     )}
 
                                                                     {progress === 100 ? (
                                                                         <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
                                                                             <CheckCircle2 className="h-4 w-4" />
-                                                                            <span className="text-xs font-medium">Completed</span>
+                                                                            <span className="text-xs font-medium">Atlikta</span>
                                                                         </div>
                                                                     ) : (
                                                                         <Progress value={progress} className="h-1.5" />
@@ -221,7 +221,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                             </div>
                         ) : (
                             <div className="mb-8">
-                                <p className="text-sm text-muted-foreground italic">No collections assigned yet.</p>
+                                <p className="text-sm text-muted-foreground italic">Kolekcijų dar nepaskirta.</p>
                             </div>
                         )}
 

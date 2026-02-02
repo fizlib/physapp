@@ -13,7 +13,7 @@ export function LogoutButton() {
             className="text-muted-foreground hover:text-black gap-2"
         >
             <LogOut className="h-4 w-4" />
-            Logout
+            Atsijungti
         </Button>
     )
 }

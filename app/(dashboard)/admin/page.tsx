@@ -12,12 +12,12 @@ export default function AdminDashboard() {
                         <Button variant="ghost" size="icon" asChild>
                             <Link href="/teacher">
                                 <ArrowLeft className="h-4 w-4" />
-                                <span className="sr-only">Back</span>
+                                <span className="sr-only">Grįžti</span>
                             </Link>
                         </Button>
-                        <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">Administratoriaus aplinka</h1>
                     </div>
-                    <p className="text-muted-foreground mt-1 ml-14">Manage users and platform settings.</p>
+                    <p className="text-muted-foreground mt-1 ml-14">Valdykite naudotojus ir platformos nustatymus.</p>
                 </div>
             </div>
 
@@ -27,10 +27,10 @@ export default function AdminDashboard() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Users className="h-5 w-5" />
-                                Manage Users
+                                Valdyti naudotojus
                             </CardTitle>
                             <CardDescription>
-                                View, create, and manage user accounts.
+                                Peržiūrėkite, kurkite ir valdykite naudotojų paskyras.
                             </CardDescription>
                         </CardHeader>
                     </Card>
@@ -41,10 +41,10 @@ export default function AdminDashboard() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Settings className="h-5 w-5" />
-                                Site Settings
+                                Svetainės nustatymai
                             </CardTitle>
                             <CardDescription>
-                                Configure platform-wide settings like registration.
+                                Konfigūruokite platformos nustatymus, pvz., registraciją.
                             </CardDescription>
                         </CardHeader>
                     </Card>

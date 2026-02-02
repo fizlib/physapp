@@ -14,7 +14,7 @@ export default async function TeacherDashboard() {
 
     if (!user) return (
         <div className="flex h-screen items-center justify-center text-muted-foreground">
-            Please log in to view this page.
+            Prašome prisijungti, kad matytumėte šį puslapį.
         </div>
     )
 
@@ -35,11 +35,11 @@ export default async function TeacherDashboard() {
                     <div>
                         <div className="flex items-center gap-3">
                             <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                                Instructor Hub
+                                Klasės
                             </h1>
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Manage your classrooms, assignments, and students.
+                            Valdykite savo klases, užduotis ir mokinius.
                         </p>
                     </div>
 
@@ -62,8 +62,8 @@ export default async function TeacherDashboard() {
                                 <Plus className="h-8 w-8 opacity-40" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="text-lg font-medium text-foreground">No classrooms yet</h3>
-                                <p className="text-sm">Create your first class to get started.</p>
+                                <h3 className="text-lg font-medium text-foreground">Dar nėra klasių</h3>
+                                <p className="text-sm">Sukurkite savo pirmąją klasę, kad pradėtumėte.</p>
                             </div>
                         </div>
                     )}

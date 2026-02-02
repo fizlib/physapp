@@ -11,7 +11,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     if (error) {
         return (
             <div className="p-8 text-red-500">
-                Error loading users: {error}
+                Klaida įkeliant naudotojus: {error}
             </div>
         )
     }
@@ -24,10 +24,10 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                         <Button variant="ghost" size="icon" asChild>
                             <Link href="/admin">
                                 <ArrowLeft className="h-4 w-4" />
-                                <span className="sr-only">Back</span>
+                                <span className="sr-only">Grįžti</span>
                             </Link>
                         </Button>
-                        <h1 className="text-3xl font-bold tracking-tight">Manage Users</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">Valdyti naudotojus</h1>
                     </div>
                 </div>
             </div>

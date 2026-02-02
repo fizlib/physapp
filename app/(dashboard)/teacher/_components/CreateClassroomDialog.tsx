@@ -17,13 +17,13 @@ import { Label } from "@/components/ui/label"
 import { createClassroom } from "../actions"
 
 const DAYS_OF_WEEK = [
-    { value: 1, label: 'Monday', short: 'Mon' },
-    { value: 2, label: 'Tuesday', short: 'Tue' },
-    { value: 3, label: 'Wednesday', short: 'Wed' },
-    { value: 4, label: 'Thursday', short: 'Thu' },
-    { value: 5, label: 'Friday', short: 'Fri' },
-    { value: 6, label: 'Saturday', short: 'Sat' },
-    { value: 0, label: 'Sunday', short: 'Sun' },
+    { value: 1, label: 'Pirmadienis', short: 'Pr' },
+    { value: 2, label: 'Antradienis', short: 'An' },
+    { value: 3, label: 'Trečiadienis', short: 'Tr' },
+    { value: 4, label: 'Ketvirtadienis', short: 'Kt' },
+    { value: 5, label: 'Penktadienis', short: 'Pn' },
+    { value: 6, label: 'Šeštadienis', short: 'Št' },
+    { value: 0, label: 'Sekmadienis', short: 'Sk' },
 ]
 
 const TIME_OPTIONS = [
@@ -88,24 +88,24 @@ export function CreateClassroomDialog() {
             <DialogTrigger asChild>
                 <Button className="gap-2 shadow-sm">
                     <Plus className="h-4 w-4" />
-                    New Classroom
+                    Nauja klasė
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
                 <form action={handleSubmit}>
                     <DialogHeader>
-                        <DialogTitle className="font-serif text-2xl">Create Classroom</DialogTitle>
+                        <DialogTitle className="font-serif text-2xl">Sukurti klasę</DialogTitle>
                         <DialogDescription>
-                            Enter the name for your new class.
+                            Įveskite naujos klasės pavadinimą.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="name" className="text-xs uppercase tracking-wider text-muted-foreground">Classroom Name</Label>
-                            <Input id="name" name="name" placeholder="e.g. Advanced Quantum Mechanics" required className="bg-muted/30" />
+                            <Label htmlFor="name" className="text-xs uppercase tracking-wider text-muted-foreground">Klasės pavadinimas</Label>
+                            <Input id="name" name="name" placeholder="pvz. Išplėstinė kvantinė mechanika" required className="bg-muted/30" />
                         </div>
                         <div className="grid gap-2">
-                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Classroom Type</Label>
+                            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Klasės tipas</Label>
                             <div className="flex gap-4">
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <input
@@ -116,7 +116,7 @@ export function CreateClassroomDialog() {
                                         onChange={() => setClassroomType('school_class')}
                                         className="accent-primary"
                                     />
-                                    School Class
+                                    Mokyklos klasė
                                 </label>
                                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                                     <input
@@ -127,11 +127,11 @@ export function CreateClassroomDialog() {
                                         onChange={() => setClassroomType('private_student')}
                                         className="accent-primary"
                                     />
-                                    Private Student
+                                    Privatus mokinys
                                 </label>
                             </div>
                             <p className="text-[10px] text-muted-foreground">
-                                School Classes have Classwork/Homework. Private Students only have Homework.
+                                Mokyklos klasės turi darbą klasėje ir namų darbus. Privatūs mokiniai turi tik namų darbus.
                             </p>
                         </div>
 
@@ -141,11 +141,11 @@ export function CreateClassroomDialog() {
                                 <div className="flex items-center gap-2">
                                     <Clock className="h-4 w-4 text-muted-foreground" />
                                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                                        Lesson Schedule (Optional)
+                                        Pamokų tvarkaraštis (pasirinktinai)
                                     </Label>
                                 </div>
                                 <p className="text-[10px] text-muted-foreground -mt-1">
-                                    Select days and times when lessons occur. This helps with scheduling classwork.
+                                    Pasirinkite dienas ir laikus, kada vyksta pamokos. Tai padeda planuojant darbą klasėje.
                                 </p>
                                 <div className="space-y-2">
                                     {DAYS_OF_WEEK.slice(0, 5).map((day) => (
@@ -172,7 +172,7 @@ export function CreateClassroomDialog() {
                                 </div>
                                 {lessonSchedule.length > 0 && (
                                     <p className="text-xs text-primary">
-                                        {lessonSchedule.length} lesson{lessonSchedule.length > 1 ? 's' : ''} per week
+                                        {lessonSchedule.length} lesson(s) per week
                                     </p>
                                 )}
                             </div>
@@ -180,7 +180,7 @@ export function CreateClassroomDialog() {
                     </div>
                     <DialogFooter>
                         <Button type="submit" disabled={isPending}>
-                            {isPending ? "Creating..." : "Create"}
+                            {isPending ? "Kuriamas..." : "Sukurti"}
                         </Button>
                     </DialogFooter>
                 </form>

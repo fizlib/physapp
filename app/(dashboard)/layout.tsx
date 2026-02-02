@@ -35,9 +35,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 </div>
 
                 <nav className="flex flex-1 flex-col gap-2">
-                    <NavItem href="/student" icon={Home} label="Dashboard" />
-                    <NavItem href={studentClassroomId ? `/student/class/${studentClassroomId}` : "/student"} icon={BookOpen} label="Class" />
-                    <NavItem href="/profile" icon={User} label="Profile" />
+                    <NavItem href="/student" icon={Home} label="Pagrindinis" />
+                    <NavItem href={studentClassroomId ? `/student/class/${studentClassroomId}` : "/student"} icon={BookOpen} label="Klasė" />
+                    <NavItem href="/profile" icon={User} label="Profilis" />
                     {isAdmin && <NavItem href="/admin" icon={Shield} label="Admin" />}
                 </nav>
 
@@ -55,9 +55,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             {/* Mobile Bottom Nav */}
             <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-border/40 bg-background/80 px-4 backdrop-blur-md md:hidden">
-                <MobileNavItem href="/student" icon={Home} label="Home" />
-                <MobileNavItem href={studentClassroomId ? `/student/class/${studentClassroomId}` : "/student"} icon={BookOpen} label="Class" />
-                <MobileNavItem href="/profile" icon={User} label="Profile" />
+                <MobileNavItem href="/student" icon={Home} label="Pagrindinis" />
+                <MobileNavItem href={studentClassroomId ? `/student/class/${studentClassroomId}` : "/student"} icon={BookOpen} label="Klasė" />
+                <MobileNavItem href="/profile" icon={User} label="Profilis" />
                 {isAdmin && <MobileNavItem href="/admin" icon={Shield} label="Admin" />}
             </nav>
         </div>
