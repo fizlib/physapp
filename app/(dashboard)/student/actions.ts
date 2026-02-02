@@ -144,6 +144,30 @@ export async function checkAssignmentPublished(assignmentId: string): Promise<{ 
     return { isPublished: false }
 }
 
+export async function getCollectionAssignments(collectionId: string): Promise<{ success: boolean, assignments?: any[] }> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('assignments')
+        .select('*, questions(*)')
+        .eq('collection_id', collectionId)
+        .order('order_index', { ascending: true })
+
+    if (error) {
+        console.error("Error fetching collection assignments:", error)
+        return { success: false }
+    }
+
+    // Sort questions for each assignment
+    data?.forEach((assign: any) => {
+        if (assign.questions) {
+            assign.questions.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        }
+    })
+
+    return { success: true, assignments: data }
+}
+
 // New action for point-based exercises - one try per question part
 export async function submitPointsAnswer(
     assignmentId: string,

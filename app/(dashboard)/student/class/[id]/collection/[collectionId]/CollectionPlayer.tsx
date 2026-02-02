@@ -15,7 +15,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess, checkAssignmentPublished, getCollectionResults } from "../../../../actions"
+import { checkIpAccess, getCollectionAssignments, getCollectionResults } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
 
 interface CollectionPlayerProps {
@@ -203,23 +203,25 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         if (!isWaitingForUnlock || !waitingForAssignmentId) return
 
         const checkPublished = async () => {
-            const result = await checkAssignmentPublished(waitingForAssignmentId)
-            if (result.isPublished && result.assignment) {
-                // Exercise is now published - add it to assignments and navigate to it
-                setAssignments((prev: any[]) => {
-                    // Add the new assignment and sort by order_index
-                    const updated = [...prev, result.assignment]
-                    updated.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
-                    return updated
-                })
-                // Update allAssignmentsState to mark this exercise as published
-                setAllAssignmentsState((prev: any[]) =>
-                    prev.map((a: any) => a.id === waitingForAssignmentId ? { ...a, published: true } : a)
-                )
-                // Navigate to the new assignment (it will be at the end after adding)
-                setCurrentAssignmentIndex(prev => prev + 1)
-                setIsWaitingForUnlock(false)
-                setWaitingForAssignmentId(null)
+            const result = await getCollectionAssignments(collection.id)
+            if (result.success && result.assignments) {
+                const targetAssignment = result.assignments.find(a => a.id === waitingForAssignmentId)
+                if (targetAssignment?.published) {
+                    // The exercise we are waiting for is now published
+                    // Update both lists from the fresh data
+                    setAllAssignmentsState(result.assignments)
+                    setAssignments(result.assignments.filter(a => a.published))
+
+                    // Navigate to the new assignment
+                    // Find where it is in the published list
+                    const newPublishedList = result.assignments.filter(a => a.published)
+                    const newIndex = newPublishedList.findIndex(a => a.id === waitingForAssignmentId)
+                    if (newIndex >= 0) {
+                        setCurrentAssignmentIndex(newIndex)
+                        setIsWaitingForUnlock(false)
+                        setWaitingForAssignmentId(null)
+                    }
+                }
             }
         }
 
@@ -229,7 +231,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         // Then poll every 3 seconds
         const interval = setInterval(checkPublished, 3000)
         return () => clearInterval(interval)
-    }, [isWaitingForUnlock, waitingForAssignmentId])
+    }, [isWaitingForUnlock, waitingForAssignmentId, collection.id])
 
     if (restrictionData.isRestricted) {
         return (
