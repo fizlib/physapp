@@ -1098,7 +1098,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     // 1. Fetch Collections
     const { data: collections } = await supabase
         .from('collections')
-        .select('*, assignments(id)')
+        .select('*, assignments(id, points, points_enabled, published)')
         .eq('classroom_id', classroomId)
         .order('created_at', { ascending: false })
 
@@ -1111,33 +1111,83 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     const supabaseAdmin = createAdminClient()
 
     let completedAssignmentIds = new Set<string>()
+    let earnedPointsMap = new Map<string, number>()
+    let submittedAnswersMap = new Map<string, any>()
+
     if (allAssignmentIds.length > 0) {
         const { data: progressData } = await supabaseAdmin
             .from('assignment_progress')
-            .select('assignment_id, is_completed')
+            .select('assignment_id, is_completed, earned_points, submitted_answers')
             .in('assignment_id', allAssignmentIds)
             .eq('student_id', studentId)
-            .eq('is_completed', true)
+
         if (progressData) {
-            progressData.forEach((p: any) => completedAssignmentIds.add(p.assignment_id))
+            progressData.forEach((p: any) => {
+                if (p.is_completed) completedAssignmentIds.add(p.assignment_id)
+                if (p.earned_points != null) earnedPointsMap.set(p.assignment_id, p.earned_points)
+                if (p.submitted_answers) submittedAnswersMap.set(p.assignment_id, p.submitted_answers)
+            })
         }
     }
 
-    // 3. calculate progress
+    // 3. calculate progress and points
+    let classroomTotalPoints = 0
+    let classroomEarnedPoints = 0
+
     const collectionsWithProgress = collections.map((collection: any) => {
         const total = collection.assignments.length
         const completed = collection.assignments.filter((a: any) => completedAssignmentIds.has(a.id)).length
         const progress = total === 0 ? 0 : (completed / total) * 100
 
+        // Map assignments to status objects
+        const assignmentStatuses = collection.assignments
+            .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
+            .map((a: any) => {
+                const earned = earnedPointsMap.get(a.id)
+                const submitted = submittedAnswersMap.get(a.id)
+                const totalPts = a.points || 0
+
+                let status: 'correct' | 'incorrect' | 'unsubmitted' = 'unsubmitted'
+
+                // If submitted answers exists and is not empty
+                if (submitted && Object.keys(submitted).length > 0) {
+                    if (earned != null && earned >= totalPts && totalPts > 0) {
+                        status = 'correct'
+                    } else {
+                        status = 'incorrect'
+                    }
+                }
+
+                return {
+                    id: a.id,
+                    status,
+                    points: totalPts,
+                    earned: earned || 0
+                }
+            })
+
+        // Calculate points for this collection
+        collection.assignments.forEach((a: any) => {
+            if (a.points_enabled && a.published) {
+                classroomTotalPoints += (a.points || 0)
+                classroomEarnedPoints += (earnedPointsMap.get(a.id) || 0)
+            }
+        })
+
         return {
             ...collection,
             progress,
             totalAssignments: total,
-            completedAssignments: completed
+            completedAssignments: completed,
+            assignmentStatuses
         }
     })
 
-    return collectionsWithProgress
+    return {
+        collections: collectionsWithProgress,
+        totalPoints: classroomTotalPoints,
+        earnedPoints: classroomEarnedPoints
+    }
 }
 
 
