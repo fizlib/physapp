@@ -54,6 +54,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
     const [isBulkDeleting, setIsBulkDeleting] = useState(false)
     const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false)
     const [isBulkApproveDialogOpen, setIsBulkApproveDialogOpen] = useState(false)
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
 
     useEffect(() => {
         if (selectedUserId) {
@@ -193,12 +194,30 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
         }
     }
 
-    const toggleUserSelection = (userId: string, checked: boolean) => {
-        if (checked) {
-            setSelectedUserIds(prev => [...prev, userId])
+    const toggleUserSelection = (userId: string, checked: boolean, index: number, isShiftKey: boolean) => {
+        if (isShiftKey && lastSelectedIndex !== null) {
+            const start = Math.min(lastSelectedIndex, index)
+            const end = Math.max(lastSelectedIndex, index)
+            const rangeIds = users.slice(start, end + 1).map(u => u.id)
+
+            if (checked) {
+                // When selecting a range, we add all users in the range
+                setSelectedUserIds(prev => {
+                    const next = new Set([...prev, ...rangeIds])
+                    return Array.from(next)
+                })
+            } else {
+                // When deselecting a range, we remove all users in the range
+                setSelectedUserIds(prev => prev.filter(id => !rangeIds.includes(id)))
+            }
         } else {
-            setSelectedUserIds(prev => prev.filter(id => id !== userId))
+            if (checked) {
+                setSelectedUserIds(prev => [...prev, userId])
+            } else {
+                setSelectedUserIds(prev => prev.filter(id => id !== userId))
+            }
         }
+        setLastSelectedIndex(index)
     }
 
     const toggleAllSelection = (checked: boolean) => {
@@ -207,6 +226,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
         } else {
             setSelectedUserIds([])
         }
+        setLastSelectedIndex(null)
     }
 
     const handleBulkApprove = async () => {
@@ -540,7 +560,7 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {users.map((user) => (
+                                {users.map((user, index) => (
                                     <TableRow
                                         key={user.id}
                                         className="cursor-pointer hover:bg-muted/50"
@@ -549,7 +569,16 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                         <TableCell onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
                                                 checked={selectedUserIds.includes(user.id)}
-                                                onCheckedChange={(checked) => toggleUserSelection(user.id, !!checked)}
+                                                onCheckedChange={(checked) => {
+                                                    // We can't easily get the shift key from onCheckedChange
+                                                    // So we use the native event if available or a workaround.
+                                                    // However, standard mouse events bubble through Checkbox.
+                                                }}
+                                                onClick={(e) => {
+                                                    // Checkbox click event
+                                                    const isChecked = !selectedUserIds.includes(user.id)
+                                                    toggleUserSelection(user.id, isChecked, index, e.shiftKey)
+                                                }}
                                                 aria-label={`Select ${user.email}`}
                                             />
                                         </TableCell>
