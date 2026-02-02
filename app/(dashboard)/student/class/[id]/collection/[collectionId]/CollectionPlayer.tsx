@@ -344,7 +344,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         <Button onClick={() => router.push(`/student/class/${classroomId}`)} size="lg" className="w-full">
                             Return to Class
                         </Button>
-                        <Button onClick={() => setIsReviewing(true)} variant="outline" size="lg" className="w-full">
+                        <Button onClick={() => window.location.href = pathname} variant="outline" size="lg" className="w-full">
                             Review Collection
                         </Button>
                     </CardContent>
