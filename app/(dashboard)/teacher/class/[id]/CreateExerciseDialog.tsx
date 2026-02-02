@@ -87,6 +87,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [variationMode, setVariationMode] = useState(false)
     const [variationCount, setVariationCount] = useState(6)
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
+    const [generationType, setGenerationType] = useState<'exact' | 'similar'>('exact')
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
     const [pointsEnabled, setPointsEnabled] = useState(false)
@@ -151,6 +152,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             if (variationMode) {
                 formData.append('variationCount', variationCount.toString())
                 formData.append('variationType', variationType)
+            } else {
+                formData.append('generationType', generationType)
             }
             formData.append('generateSolution', generateSolution.toString())
             const result = await generateExerciseFromImage(formData)
@@ -303,6 +306,42 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                     />
                                     <Label htmlFor="variation-mode" className="font-medium">Create Variations</Label>
                                 </div>
+
+                                {!variationMode && (
+                                    <div className="space-y-4 pt-2 border-t border-dashed">
+                                        <Label className="text-sm font-semibold block">Generation Type</Label>
+                                        <div className="flex flex-col gap-2 pl-4">
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="gen-type-exact"
+                                                    name="generationType"
+                                                    value="exact"
+                                                    checked={generationType === 'exact'}
+                                                    onChange={() => setGenerationType('exact')}
+                                                    className="accent-primary h-4 w-4"
+                                                />
+                                                <Label htmlFor="gen-type-exact" className="text-sm font-normal cursor-pointer">
+                                                    Exact Copy <span className="text-xs text-muted-foreground ml-1">(Same as in image)</span>
+                                                </Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="gen-type-similar"
+                                                    name="generationType"
+                                                    value="similar"
+                                                    checked={generationType === 'similar'}
+                                                    onChange={() => setGenerationType('similar')}
+                                                    className="accent-primary h-4 w-4"
+                                                />
+                                                <Label htmlFor="gen-type-similar" className="text-sm font-normal cursor-pointer">
+                                                    Similar Exercise <span className="text-xs text-muted-foreground ml-1">(Different numbers & description)</span>
+                                                </Label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {variationMode && (
                                     <div className="grid grid-cols-2 gap-4 pl-6 animate-in fade-in slide-in-from-top-2">

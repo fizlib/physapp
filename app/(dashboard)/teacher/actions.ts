@@ -444,6 +444,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     }
 
     const variationCount = parseInt(formData.get('variationCount') as string || '1')
+    const generationType = formData.get('generationType') as 'exact' | 'similar' || 'exact'
     const isVariationMode = variationCount > 1
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
     const generateSolution = formData.get('generateSolution') === 'true'
@@ -479,28 +480,20 @@ export async function generateExerciseFromImage(formData: FormData) {
   - Keep it professional and educational.
   ` : ''}
 
-  ${isVariationMode ? `
-  GENERATION MODE: VARIATIONS (${variationType === 'descriptions' ? 'DIFFERENT DESCRIPTIONS' : 'ONLY NUMBERS'})
-  You are requested to generate ${variationCount} DISTINCT variations of the problem shown in the image.
-  - ALL ${variationCount} variations must be NEW problems based on the one in the image.
+  ${(isVariationMode || (generationType === 'similar' && !isVariationMode)) ? `
+  GENERATION MODE: ${isVariationMode ? `VARIATIONS (${variationType === 'descriptions' ? 'DIFFERENT DESCRIPTIONS' : 'ONLY NUMBERS'})` : 'SIMILAR EXERCISE (DIFFERENT DESCRIPTION/NUMBERS)'}
+  You are requested to generate ${isVariationMode ? variationCount : 1} DISTINCT variation(s) of the problem shown in the image.
+  - The variations must be NEW problems based on the one in the image.
   - DO NOT include an exact copy of the problem from the image, even as the first variation.
   
-  ${variationType === 'descriptions' ? `
-  VARIATION RULES (DIFFERENT DESCRIPTIONS):
-  - You MUST change the context / story of the problem for each variation (e.g. if the original is about a car, make the next one about a train, a runner, a rocket, etc.).
+  VARIATION RULES:
+  - You MUST change the context / story of the problem (e.g. if the original is about a car, make the next one about a train, a runner, a rocket, etc.).
   - LEAVE THE LANGUAGE EXCATLY THE SAME AS IN THE PICTURE.
   - Keep the exact same physics/math LOGIC and FORMULA types.
   - You can change the numerical values as needed to fit the new context.
   - Ensure the difficulty level remains consistent.
-  ` : `
-  VARIATION RULES (ONLY NUMBERS):
-  - Keep the same context/story if possible, just different numbers.
-  - Change the numerical values / inputs.
-  - Keep the same physics/math logic and difficulty.
-  `}
   - Calculate the new correct values based on your new numbers.
   ` : ''}
- 
   For each question:
   - Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
   - IMPORTANT: Check if the specific part involves any diagrams, graphs, or schemes.
