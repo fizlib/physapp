@@ -1306,3 +1306,152 @@ export async function updateAssignmentOrder(
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
     return { success: true }
 }
+
+export async function getTeacherClassrooms(currentClassroomId: string) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase
+        .from('classrooms')
+        .select('id, name')
+        .eq('teacher_id', user.id)
+        .neq('id', currentClassroomId)
+        .order('name')
+
+    if (error) {
+        console.error('Error fetching teacher classrooms:', error)
+        return []
+    }
+
+    return data
+}
+
+export async function getClassroomCollections(classroomId: string) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase
+        .from('collections')
+        .select('id, title, category')
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: false })
+
+    if (error) {
+        console.error('Error fetching classroom collections:', error)
+        return []
+    }
+
+    return data
+}
+
+export async function importCollection(targetClassroomId: string, sourceCollectionId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // 1. Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    try {
+        // 2. Fetch Source Collection
+        const { data: sourceCollection, error: colError } = await supabase
+            .from('collections')
+            .select('*')
+            .eq('id', sourceCollectionId)
+            .single()
+
+        if (colError || !sourceCollection) {
+            return { success: false, error: "Source collection not found" }
+        }
+
+        // 3. Fetch Source Assignments and their Questions
+        const { data: sourceAssignments, error: assError } = await supabase
+            .from('assignments')
+            .select('*, questions(*)')
+            .eq('collection_id', sourceCollectionId)
+            .order('order_index', { ascending: true })
+
+        if (assError) {
+            console.error("Error fetching source assignments:", assError)
+            return { success: false, error: "Failed to fetch source exercises" }
+        }
+
+        // 4. Create New Collection in Target Classroom
+        const { data: newCollection, error: newColError } = await supabase
+            .from('collections')
+            .insert({
+                classroom_id: targetClassroomId,
+                title: sourceCollection.title,
+                category: sourceCollection.category,
+                scheduled_date: null // Don't copy schedule
+            })
+            .select()
+            .single()
+
+        if (newColError || !newCollection) {
+            console.error("Error creating new collection:", newColError)
+            return { success: false, error: "Failed to create new collection" }
+        }
+
+        // 5. Copy Assignments and Questions
+        if (sourceAssignments && sourceAssignments.length > 0) {
+            for (const sourceAss of sourceAssignments) {
+                // Copy Assignment
+                const { data: newAss, error: newAssError } = await supabase
+                    .from('assignments')
+                    .insert({
+                        classroom_id: targetClassroomId,
+                        collection_id: newCollection.id,
+                        title: sourceAss.title,
+                        published: false, // Default to unpublished
+                        order_index: sourceAss.order_index,
+                        show_all_questions: sourceAss.show_all_questions,
+                        required_variations_count: sourceAss.required_variations_count,
+                        points_enabled: sourceAss.points_enabled,
+                        points: sourceAss.points
+                    })
+                    .select()
+                    .single()
+
+                if (newAssError || !newAss) {
+                    console.error("Error copying assignment:", newAssError)
+                    continue // Skip this assignment if it fails
+                }
+
+                // Copy Questions
+                if (sourceAss.questions && sourceAss.questions.length > 0) {
+                    const questionsToInsert = sourceAss.questions.map((q: any) => ({
+                        assignment_id: newAss.id,
+                        latex_text: q.latex_text,
+                        question_type: q.question_type,
+                        correct_value: q.correct_value,
+                        tolerance_percent: q.tolerance_percent,
+                        options: q.options,
+                        correct_answer: q.correct_answer,
+                        diagram_type: q.diagram_type,
+                        diagram_svg: q.diagram_svg,
+                        solution_text: q.solution_text,
+                        points: q.points
+                    }))
+
+                    const { error: newQuestError } = await supabase
+                        .from('questions')
+                        .insert(questionsToInsert)
+
+                    if (newQuestError) {
+                        console.error("Error copying questions:", newQuestError)
+                    }
+                }
+            }
+        }
+
+        revalidatePath(`/teacher/class/${targetClassroomId}`)
+        return { success: true }
+    } catch (err) {
+        console.error("Import error:", err)
+        return { success: false, error: "An unexpected error occurred during import" }
+    }
+}

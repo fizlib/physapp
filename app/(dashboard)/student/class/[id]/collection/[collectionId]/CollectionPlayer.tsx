@@ -495,7 +495,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     exercisePoints={currentAssignment.points || 1}
                     initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
                     // Last exercise in collection - show "Finish" instead of "Next Exercise"
-                    isLastExercise={currentAssignmentIndex === totalAssignments - 1}
+                    isLastExercise={!getNextAssignmentFromAllAssignments()}
                 />
             </div>
         </div>

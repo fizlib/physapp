@@ -8,6 +8,7 @@ import { StudentManager } from "./StudentManager"
 import { EditableClassroomTitle } from "./EditableClassroomTitle"
 import { CreateExerciseDialog } from "./CreateExerciseDialog"
 import { CreateCollectionDialog } from "./CreateCollectionDialog"
+import { ImportCollectionDialog } from "./ImportCollectionDialog"
 import { ClassSettingsDialog } from "./ClassSettingsDialog"
 import { DeleteCollectionButton } from "./DeleteCollectionButton"
 import { TeacherIpSync } from "../../TeacherIpSync"
@@ -191,7 +192,10 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                         <div className="space-y-6 animate-fade-in-up">
                             <div className="flex items-center justify-between">
                                 <h2 className="font-serif text-xl font-semibold tracking-tight">Exercise Collections</h2>
-                                <CreateCollectionDialog classroomId={id} classroomType={classroom.type} lessonSchedule={classroom.lesson_schedule} />
+                                <div className="flex gap-2">
+                                    <ImportCollectionDialog classroomId={id} />
+                                    <CreateCollectionDialog classroomId={id} classroomType={classroom.type} lessonSchedule={classroom.lesson_schedule} />
+                                </div>
                             </div>
 
                             {classroom.type === 'school_class' ? (
@@ -327,6 +331,6 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
