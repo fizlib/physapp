@@ -3,6 +3,7 @@ npm run build
 
 2. 
 Delete previous folders in SSH terminal:
+cd physapp
 rm -rf .next public
 
 Upload only these in Filezilla:
@@ -19,6 +20,5 @@ next.config.js
 
 3. in VM ssh:
 
-cd physapp
 npm install --production
 pm2 restart physapp
