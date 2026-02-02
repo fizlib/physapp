@@ -183,7 +183,9 @@ export function StudentAssignmentInterface({
         }
     }
 
-    const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex)
+    // In points mode, a locked question (submitted answer) counts as "completed" for navigation
+    const isCurrentQuestionLocked = pointsEnabled && questions[currentIndex]?.id && lockedQuestionIds.has(questions[currentIndex].id)
+    const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex) || isCurrentQuestionLocked
     const isLastQuestion = isVariationMode
         ? completedIndices.size >= requiredVariations - 1 // Logic: if we are at size == target-1, solving this makes it last
         : currentIndex === totalQuestions - 1
@@ -332,7 +334,7 @@ export function StudentAssignmentInterface({
                             </Button>
                         )}
                         <Button
-                            disabled={!canSkip && completedIndices.size !== totalQuestions}
+                            disabled={!canSkip && (pointsEnabled ? lockedQuestionIds.size !== totalQuestions : completedIndices.size !== totalQuestions)}
                             variant="default"
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
