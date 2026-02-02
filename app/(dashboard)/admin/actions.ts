@@ -346,3 +346,50 @@ export async function adminResetUserProgress(userId: string) {
         return { success: false, error: 'Internal server error' }
     }
 }
+
+export async function adminBulkApproveUsers(userIds: string[]) {
+    try {
+        await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        const { error } = await supabaseAdmin
+            .from('profiles')
+            .update({ approved: true })
+            .in('id', userIds)
+
+        if (error) {
+            console.error('Error bulk approving users:', error)
+            return { success: false, error: 'Failed to approve users' }
+        }
+
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (error) {
+        console.error('Unexpected error in adminBulkApproveUsers:', error)
+        return { success: false, error: 'Internal server error' }
+    }
+}
+
+export async function adminBulkDeleteUsers(userIds: string[]) {
+    try {
+        await checkAdmin()
+
+        // We call the individual delete function for each user to ensure all related data is cleaned up
+        // This handles cases where some users are students and some are teachers correctly
+        const results = await Promise.all(userIds.map(id => adminDeleteUser(id)))
+
+        const failures = results.filter(r => !r.success)
+        if (failures.length > 0) {
+            return {
+                success: false,
+                error: `Failed to delete ${failures.length} users. ${failures[0].error}`
+            }
+        }
+
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (error) {
+        console.error('Unexpected error in adminBulkDeleteUsers:', error)
+        return { success: false, error: 'Internal server error' }
+    }
+}

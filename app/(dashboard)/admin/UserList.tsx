@@ -1,8 +1,8 @@
 'use client'
 
-import { AdminUser, adminApproveUser, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
+import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
 import { CopyButton } from "@/components/ui/copy-button"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
     Table,
@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy } from "lucide-react"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 export function UserList({ initialUsers, selectedUserId }: { initialUsers: AdminUser[], selectedUserId?: string }) {
     const [users, setUsers] = useState<AdminUser[]>(initialUsers)
@@ -46,6 +47,13 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [userToReset, setUserToReset] = useState<AdminUser | null>(null)
     const [isResetting, setIsResetting] = useState(false)
+
+    // Bulk selection state
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+    const [isBulkApproving, setIsBulkApproving] = useState(false)
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+    const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false)
+    const [isBulkApproveDialogOpen, setIsBulkApproveDialogOpen] = useState(false)
 
     useEffect(() => {
         if (selectedUserId) {
@@ -182,6 +190,66 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
             toast.error('An error occurred')
         } finally {
             setIsResetting(false)
+        }
+    }
+
+    const toggleUserSelection = (userId: string, checked: boolean) => {
+        if (checked) {
+            setSelectedUserIds(prev => [...prev, userId])
+        } else {
+            setSelectedUserIds(prev => prev.filter(id => id !== userId))
+        }
+    }
+
+    const toggleAllSelection = (checked: boolean) => {
+        if (checked) {
+            setSelectedUserIds(users.map(u => u.id))
+        } else {
+            setSelectedUserIds([])
+        }
+    }
+
+    const handleBulkApprove = async () => {
+        setIsBulkApproving(true)
+        try {
+            const result = await adminBulkApproveUsers(selectedUserIds)
+            if (result.success) {
+                setUsers(users.map(u =>
+                    selectedUserIds.includes(u.id)
+                        ? { ...u, approved: true }
+                        : u
+                ))
+                toast.success(`${selectedUserIds.length} users approved successfully`)
+                setSelectedUserIds([])
+                setIsBulkApproveDialogOpen(false)
+                router.refresh()
+            } else {
+                toast.error('Failed to approve users: ' + result.error)
+            }
+        } catch (error) {
+            toast.error('An error occurred')
+        } finally {
+            setIsBulkApproving(false)
+        }
+    }
+
+    const handleBulkDelete = async () => {
+        setIsBulkDeleting(true)
+        try {
+            const result = await adminBulkDeleteUsers(selectedUserIds)
+            if (result.success) {
+                setUsers(users.filter(u => !selectedUserIds.includes(u.id)))
+                toast.success(`${selectedUserIds.length} users deleted successfully`)
+                setSelectedUserIds([])
+                setIsBulkDeleteDialogOpen(false)
+                router.refresh()
+            } else {
+                toast.error('Failed to delete users: ' + result.error)
+            }
+        } catch (error) {
+            toast.error('An error occurred')
+        } finally {
+            setIsBulkDeleting(false)
         }
     }
 
@@ -457,6 +525,13 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-[50px]">
+                                        <Checkbox
+                                            checked={selectedUserIds.length === users.length && users.length > 0}
+                                            onCheckedChange={(checked) => toggleAllSelection(!!checked)}
+                                            aria-label="Select all"
+                                        />
+                                    </TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
                                     <TableHead>Status</TableHead>
@@ -471,6 +546,13 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                                         className="cursor-pointer hover:bg-muted/50"
                                         onClick={() => setSelectedUser(user)}
                                     >
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selectedUserIds.includes(user.id)}
+                                                onCheckedChange={(checked) => toggleUserSelection(user.id, !!checked)}
+                                                aria-label={`Select ${user.email}`}
+                                            />
+                                        </TableCell>
                                         <TableCell className="font-medium">
                                             {user.email}
                                             {user.is_admin && (
@@ -586,6 +668,108 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                         >
                             {isResetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Reset Progress
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Action Toolbar */}
+            {selectedUserIds.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <Card className="shadow-2xl border-primary/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+                        <CardContent className="py-3 px-6 flex items-center gap-6">
+                            <div className="flex items-center gap-2 border-r pr-6">
+                                <Badge variant="secondary" className="px-2 py-0.5">
+                                    {selectedUserIds.length}
+                                </Badge>
+                                <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                                    Users selected
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setIsBulkApproveDialogOpen(true)}
+                                    className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100 hover:text-green-800"
+                                >
+                                    <Check className="h-4 w-4 mr-2" />
+                                    Approve All
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => setIsBulkDeleteDialogOpen(true)}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete All
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setSelectedUserIds([])}
+                                    className="h-8 w-8 ml-2"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Bulk Actions Confirmation Dialogs */}
+            <Dialog open={isBulkApproveDialogOpen} onOpenChange={setIsBulkApproveDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Approve Multiple Users</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to approve {selectedUserIds.length} selected users?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsBulkApproveDialogOpen(false)}
+                            disabled={isBulkApproving}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleBulkApprove}
+                            disabled={isBulkApproving}
+                        >
+                            {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Approve {selectedUserIds.length} Users
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Multiple Users</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete {selectedUserIds.length} selected users? This action cannot be undone and will delete all their data.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsBulkDeleteDialogOpen(false)}
+                            disabled={isBulkDeleting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleBulkDelete}
+                            disabled={isBulkDeleting}
+                        >
+                            {isBulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete {selectedUserIds.length} Users
                         </Button>
                     </DialogFooter>
                 </DialogContent>
