@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, GripVertical } from "lucide-react"
+import { ArrowLeft, BookOpen, Clock, GripVertical, BarChart2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { CollectionManager, RemoveExerciseButton, TogglePublishButton } from "./CollectionManager"
 import { CreateExerciseDialog } from "../../CreateExerciseDialog"
@@ -87,6 +87,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 currentScheduledDate={collection.scheduled_date}
                                 lessonSchedule={classroom?.lesson_schedule}
                             />
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/teacher/class/${id}/collection/${collectionId}/statistics`}>
+                                    <BarChart2 className="mr-2 h-4 w-4" />
+                                    Statistics
+                                </Link>
+                            </Button>
                         </div>
                     </div>
                 </div>
