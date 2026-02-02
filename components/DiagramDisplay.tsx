@@ -30,9 +30,13 @@ function sanitizeSvg(svg: string): string {
     result = result.replace(/\\r/g, '')
     result = result.trim()
 
-    // Add width and height to SVG if not present (needed for proper rendering)
-    if (result.includes('<svg') && !result.match(/<svg[^>]*\swidth\s*=/i)) {
-        result = result.replace(/<svg/i, '<svg width="100%" height="auto"')
+    // Remove existing width and height attributes to make it responsive
+    result = result.replace(/(<svg[^>]*)\s+width=["'][^"']*["']/i, '$1')
+    result = result.replace(/(<svg[^>]*)\s+height=["'][^"']*["']/i, '$1')
+
+    // Add responsive attributes and preserve aspect ratio
+    if (result.includes('<svg')) {
+        result = result.replace(/<svg/i, '<svg width="100%" height="auto" preserveAspectRatio="xMidYMid meet"')
     }
 
     return result
@@ -55,10 +59,10 @@ export function DiagramDisplay({ diagramType, diagramSvg }: DiagramDisplayProps)
 
             <Dialog>
                 <DialogTrigger asChild>
-                    <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[300px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
+                    <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
                         <div
                             dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
-                            className="w-full max-w-[400px] pointer-events-none"
+                            className="w-full pointer-events-none"
                         />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <div className="bg-white/90 p-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-medium">
