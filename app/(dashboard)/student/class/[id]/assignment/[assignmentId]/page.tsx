@@ -57,6 +57,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     classId={id}
                     initialCompletedIndices={initialCompletedIndices}
                     initialRevealedIndices={initialRevealedIndices}
+                    initialActiveQuestionIndex={progress?.active_question_index}
                     initialIsCompleted={initialIsCompleted}
                     hideRevealSolution={isClasswork}
                 />

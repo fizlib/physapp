@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
-import { ShieldAlert, ArrowLeft } from "lucide-react"
+import { ShieldAlert, ArrowLeft, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
@@ -109,6 +110,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     }
 
     return (
-        <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} />
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} />
+        </Suspense>
     )
 }

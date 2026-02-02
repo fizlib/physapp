@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useMemo } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award } from "lucide-react"
 import Link from "next/link"
@@ -62,13 +62,39 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         }
     }
 
-    const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(initialIndex)
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const pathname = usePathname()
+    const urlIndex = searchParams.get('ex')
+    const parsedUrlIndex = useMemo(() => {
+        if (!urlIndex) return null
+        const idx = parseInt(urlIndex) - 1
+        return isNaN(idx) ? null : idx
+    }, [urlIndex])
+
+    const [currentAssignmentIndex, setCurrentAssignmentIndex] = useState(() => {
+        if (parsedUrlIndex !== null && parsedUrlIndex >= 0 && parsedUrlIndex < assignments.length) {
+            // Respect URL if valid
+            return parsedUrlIndex
+        }
+        return initialIndex
+    })
+
+    // Sync URL with currentAssignmentIndex
+    useEffect(() => {
+        const params = new URLSearchParams(searchParams.toString())
+        const currentEx = (currentAssignmentIndex + 1).toString()
+        if (params.get('ex') !== currentEx) {
+            params.set('ex', currentEx)
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }
+    }, [currentAssignmentIndex, pathname, router, searchParams])
+
     const [maxReachedIndex, setMaxReachedIndex] = useState(initialMaxReached) // For homework sequential unlock
     const [isCompleted, setIsCompleted] = useState(allDone)
     const [restrictionData, setRestrictionData] = useState<{ isRestricted: boolean, studentIp?: string }>({ isRestricted: false })
     const [isWaitingForUnlock, setIsWaitingForUnlock] = useState(false)
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
-    const router = useRouter()
     const { width, height } = useWindowSize()
     const totalAssignments = assignments.length
     const currentAssignment = assignments[currentAssignmentIndex]
