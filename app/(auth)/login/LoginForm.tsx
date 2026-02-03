@@ -120,17 +120,32 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                             <SubmitButton text={isLogin ? 'Prisijungti' : 'Sukurti paskyrą'} />
                         </div>
 
-                        <div className="text-center text-sm">
-                            {isRegistrationEnabled ? (
-                                <button
-                                    type="button"
-                                    onClick={() => setIsLogin(!isLogin)}
-                                    className="text-muted-foreground hover:text-foreground hover:underline transition-colors"
-                                >
-                                    {isLogin ? "Pirmą kartą Protus? Sukurti paskyrą" : "Turite paskyrą? Prisijunkite"}
-                                </button>
-                            ) : (
-                                !isLogin && (
+                        <div className="space-y-4">
+                            {isRegistrationEnabled && isLogin && (
+                                <>
+                                    <div className="relative py-2">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <span className="w-full border-t border-border/60" />
+                                        </div>
+                                        <div className="relative flex justify-center text-xs uppercase">
+                                            <span className="bg-background px-2 text-muted-foreground">
+                                                Arba
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="w-full font-medium tracking-wide"
+                                        onClick={() => setIsLogin(false)}
+                                    >
+                                        Sukurti naują paskyrą
+                                    </Button>
+                                </>
+                            )}
+
+                            <div className="text-center text-sm">
+                                {!isLogin && (
                                     <button
                                         type="button"
                                         onClick={() => setIsLogin(true)}
@@ -138,11 +153,11 @@ export function LoginForm({ isRegistrationEnabled }: { isRegistrationEnabled: bo
                                     >
                                         Jau turite paskyrą? Prisijunkite
                                     </button>
-                                )
-                            )}
-                            {!isRegistrationEnabled && isLogin && (
-                                <p className="text-muted-foreground text-xs mt-2">Registracija šiuo metu uždaryta.</p>
-                            )}
+                                )}
+                                {!isRegistrationEnabled && isLogin && (
+                                    <p className="text-muted-foreground text-xs">Registracija šiuo metu uždaryta.</p>
+                                )}
+                            </div>
                         </div>
                     </form>
                 </CardContent>
