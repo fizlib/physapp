@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { headers } from 'next/headers'
 import { GoogleGenerativeAI, Part } from '@google/generative-ai'
+import { generateContentWithFallback } from '@/lib/gemini'
 
 // ... (keep existing code) ...
 
@@ -439,11 +440,6 @@ const ExerciseSchema = z.object({
 
 export async function generateExerciseFromImage(formData: FormData) {
     console.log("Starting generateExerciseFromImage...")
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) {
-        console.error("Missing GEMINI_API_KEY")
-        return { error: "Gemini API Key not found" }
-    }
 
     const variationCount = parseInt(formData.get('variationCount') as string || '1')
     const generationType = formData.get('generationType') as 'exact' | 'similar' || 'exact'
@@ -463,9 +459,6 @@ export async function generateExerciseFromImage(formData: FormData) {
     const buffer = Buffer.from(arrayBuffer)
     const base64Image = buffer.toString('base64')
     console.log("Image length (base64):", base64Image.length)
-
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" })
 
     const prompt = `
   Analyze this physics/math problem image.
@@ -564,15 +557,24 @@ export async function generateExerciseFromImage(formData: FormData) {
     }
 
     try {
-        console.log("Calling Gemini API...")
-        const result = await model.generateContent([prompt, imagePart])
+        console.log("Calling Gemini API with key pool...")
+        const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt, imagePart])
         console.log("Gemini API call complete. Resolving response...")
         const response = await result.response
         const text = response.text()
         console.log("Gemini Raw Response:", text)
 
         // Clean up markdown code blocks if present
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+        let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+
+        // Fix common JSON issues from Gemini output
+        // Replace literal newlines inside strings with escaped newlines
+        // This regex finds strings and replaces unescaped newlines within them
+        jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+            // Replace actual newlines with escaped ones inside the string
+            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+        })
+
         const data = JSON.parse(jsonStr)
         console.log("Parsed Data:", data)
 
