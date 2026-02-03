@@ -39,28 +39,43 @@ async function checkAdmin() {
     return user
 }
 
-export async function adminGetAllUsers(): Promise<{ users: AdminUser[], error: string | null }> {
+export async function adminGetAllUsers(page: number = 1, perPage: number = 30): Promise<{ users: AdminUser[], totalCount: number, error: string | null }> {
     try {
         await checkAdmin()
 
         const supabaseAdmin = createAdminClient()
 
-        // Fetch all auth users
-        const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers()
+        // Get total count first
+        const { count, error: countError } = await supabaseAdmin
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+
+        if (countError) {
+            console.error('Error fetching user count:', countError)
+            return { users: [], totalCount: 0, error: 'Failed to fetch user count' }
+        }
+
+        // Fetch paginated auth users
+        const { data: { users: authUsers }, error: authError } = await supabaseAdmin.auth.admin.listUsers({
+            page: page,
+            perPage: perPage
+        })
 
         if (authError) {
             console.error('Error fetching auth users:', authError)
-            return { users: [], error: 'Failed to fetch users' }
+            return { users: [], totalCount: count || 0, error: 'Failed to fetch users' }
         }
 
-        // Fetch all profiles
+        // Fetch profiles only for these users to be efficient
+        const userIds = authUsers.map(u => u.id)
         const { data: profiles, error: profilesError } = await supabaseAdmin
             .from('profiles')
             .select('*')
+            .in('id', userIds)
 
         if (profilesError) {
             console.error('Error fetching profiles:', profilesError)
-            return { users: [], error: 'Failed to fetch profiles' }
+            return { users: [], totalCount: count || 0, error: 'Failed to fetch profiles' }
         }
 
         // Merge data
@@ -79,11 +94,11 @@ export async function adminGetAllUsers(): Promise<{ users: AdminUser[], error: s
             }
         })
 
-        return { users, error: null }
+        return { users, totalCount: count || 0, error: null }
 
     } catch (error) {
         console.error('Unexpected error in adminGetAllUsers:', error)
-        return { users: [], error: 'Internal server error' }
+        return { users: [], totalCount: 0, error: 'Internal server error' }
     }
 }
 

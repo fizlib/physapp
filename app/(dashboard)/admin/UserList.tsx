@@ -4,6 +4,7 @@ import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUser
 import { CopyButton } from "@/components/ui/copy-button"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import {
     Table,
     TableBody,
@@ -15,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X } from "lucide-react"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -30,7 +31,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 
-export function UserList({ initialUsers, selectedUserId }: { initialUsers: AdminUser[], selectedUserId?: string }) {
+export function UserList({
+    initialUsers,
+    selectedUserId,
+    totalCount,
+    currentPage,
+    perPage
+}: {
+    initialUsers: AdminUser[],
+    selectedUserId?: string,
+    totalCount: number,
+    currentPage: number,
+    perPage: number
+}) {
     const [users, setUsers] = useState<AdminUser[]>(initialUsers)
     const [isLoading, setIsLoading] = useState<string | null>(null)
     const [isCreating, setIsCreating] = useState(false)
@@ -64,6 +77,12 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
             }
         }
     }, [selectedUserId, users])
+
+    useEffect(() => {
+        setUsers(initialUsers)
+        setSelectedUserIds([])
+        setLastSelectedIndex(null)
+    }, [initialUsers])
 
     const router = useRouter()
 
@@ -641,6 +660,62 @@ export function UserList({ initialUsers, selectedUserId }: { initialUsers: Admin
                         </Table>
                     </div>
                 </CardContent>
+
+                <CardFooter className="flex items-center justify-between border-t py-4">
+                    <div className="text-sm text-muted-foreground">
+                        Rodoma {((currentPage - 1) * perPage) + 1} - {Math.min(currentPage * perPage, totalCount)} iš {totalCount} naudotojų
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            asChild
+                            disabled={currentPage === 1}
+                            className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                        >
+                            <Link href={`/admin/users?page=${currentPage - 1}`}>
+                                <ChevronLeft className="h-4 w-4 mr-1" />
+                                Ankstesnis
+                            </Link>
+                        </Button>
+                        <div className="flex items-center gap-1 mx-2">
+                            {Array.from({ length: Math.ceil(totalCount / perPage) }, (_, i) => i + 1)
+                                .filter(p => {
+                                    // Show first, last, and pages around current
+                                    const totalPages = Math.ceil(totalCount / perPage)
+                                    return p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1
+                                })
+                                .map((p, i, arr) => (
+                                    <div key={p} className="flex items-center">
+                                        {i > 0 && arr[i - 1] !== p - 1 && <span className="px-2 text-muted-foreground">...</span>}
+                                        <Button
+                                            variant={currentPage === p ? "default" : "outline"}
+                                            size="sm"
+                                            asChild
+                                            className="w-8 h-8 p-0"
+                                        >
+                                            <Link href={`/admin/users?page=${p}`}>
+                                                {p}
+                                            </Link>
+                                        </Button>
+                                    </div>
+                                ))
+                            }
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            asChild
+                            disabled={currentPage >= Math.ceil(totalCount / perPage)}
+                            className={currentPage >= Math.ceil(totalCount / perPage) ? "pointer-events-none opacity-50" : ""}
+                        >
+                            <Link href={`/admin/users?page=${currentPage + 1}`}>
+                                Kitas
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                            </Link>
+                        </Button>
+                    </div>
+                </CardFooter>
 
                 <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
                     <DialogContent>
