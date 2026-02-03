@@ -1,8 +1,9 @@
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { getSiteSetting } from "./actions"
+import { getSiteSetting, getGeminiKeys } from "./actions"
 import { SettingsForm } from "./SettingsForm"
+import { GeminiKeysManager } from "./GeminiKeysManager"
 
 export default async function AdminSettingsPage() {
     const registrationEnabledStr = await getSiteSetting('registration_enabled')
@@ -26,6 +27,7 @@ export default async function AdminSettingsPage() {
 
             <div className="grid gap-6">
                 <SettingsForm initialRegistrationEnabled={registrationEnabled} />
+                <GeminiKeysManager initialKeys={await getGeminiKeys()} />
             </div>
         </div>
     )

@@ -36,3 +36,34 @@ export async function updateSiteSetting(key: string, value: string) {
     revalidatePath('/admin/settings')
     return { success: true }
 }
+
+export async function addGeminiKey(key: string, label: string) {
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('add_gemini_key', {
+        key_text: key,
+        label_text: label
+    })
+    if (error) return { error: error.message }
+    revalidatePath('/admin/settings')
+    return { success: true, id: data }
+}
+
+export async function deleteGeminiKey(id: string) {
+    const supabase = await createClient()
+    const { error } = await supabase.rpc('delete_gemini_key', {
+        key_id: id
+    })
+    if (error) return { error: error.message }
+    revalidatePath('/admin/settings')
+    return { success: true }
+}
+
+export async function getGeminiKeys() {
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('get_gemini_keys')
+    if (error) {
+        console.error('Error fetching Gemini keys:', error)
+        return []
+    }
+    return data || []
+}
