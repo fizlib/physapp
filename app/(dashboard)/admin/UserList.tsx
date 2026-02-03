@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X, ChevronLeft, ChevronRight, Search } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -36,15 +36,18 @@ export function UserList({
     selectedUserId,
     totalCount,
     currentPage,
-    perPage
+    perPage,
+    searchQuery
 }: {
     initialUsers: AdminUser[],
     selectedUserId?: string,
     totalCount: number,
     currentPage: number,
-    perPage: number
+    perPage: number,
+    searchQuery?: string
 }) {
     const [users, setUsers] = useState<AdminUser[]>(initialUsers)
+    const [search, setSearch] = useState(searchQuery || "")
     const [isLoading, setIsLoading] = useState<string | null>(null)
     const [isCreating, setIsCreating] = useState(false)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -83,6 +86,22 @@ export function UserList({
         setSelectedUserIds([])
         setLastSelectedIndex(null)
     }, [initialUsers])
+
+    useEffect(() => {
+        setSearch(searchQuery || "")
+    }, [searchQuery])
+
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault()
+        const params = new URLSearchParams(window.location.search)
+        if (search) {
+            params.set('search', search)
+            params.set('page', '1')
+        } else {
+            params.delete('search')
+        }
+        router.push(`/admin/users?${params.toString()}`)
+    }
 
     const router = useRouter()
 
@@ -559,7 +578,35 @@ export function UserList({
                         </DialogContent>
                     </Dialog>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                    <form onSubmit={handleSearch} className="flex gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="search"
+                                placeholder="Ieškoti pagal el. paštą, vardą arba pavardę..."
+                                className="pl-8"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <Button type="submit" variant="outline">
+                            Ieškoti
+                        </Button>
+                        {searchQuery && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                    setSearch("")
+                                    router.push("/admin/users")
+                                }}
+                            >
+                                <X className="h-4 w-4 mr-2" />
+                                Išvalyti
+                            </Button>
+                        )}
+                    </form>
                     <div className="rounded-md border">
                         <Table>
                             <TableHeader>
@@ -673,7 +720,7 @@ export function UserList({
                             disabled={currentPage === 1}
                             className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                         >
-                            <Link href={`/admin/users?page=${currentPage - 1}`}>
+                            <Link href={`/admin/users?page=${currentPage - 1}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}`}>
                                 <ChevronLeft className="h-4 w-4 mr-1" />
                                 Ankstesnis
                             </Link>
@@ -694,7 +741,7 @@ export function UserList({
                                             asChild
                                             className="w-8 h-8 p-0"
                                         >
-                                            <Link href={`/admin/users?page=${p}`}>
+                                            <Link href={`/admin/users?page=${p}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}`}>
                                                 {p}
                                             </Link>
                                         </Button>
@@ -709,7 +756,7 @@ export function UserList({
                             disabled={currentPage >= Math.ceil(totalCount / perPage)}
                             className={currentPage >= Math.ceil(totalCount / perPage) ? "pointer-events-none opacity-50" : ""}
                         >
-                            <Link href={`/admin/users?page=${currentPage + 1}`}>
+                            <Link href={`/admin/users?page=${currentPage + 1}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}`}>
                                 Kitas
                                 <ChevronRight className="h-4 w-4 ml-1" />
                             </Link>

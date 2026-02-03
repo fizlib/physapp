@@ -4,11 +4,11 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
-export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ id?: string, page?: string }> }) {
-    const { id: selectedUserId, page: pageStr } = await searchParams
+export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ id?: string, page?: string, search?: string }> }) {
+    const { id: selectedUserId, page: pageStr, search } = await searchParams
     const currentPage = parseInt(pageStr || '1')
     const perPage = 30
-    const { users, totalCount, error } = await adminGetAllUsers(currentPage, perPage)
+    const { users, totalCount, error } = await adminGetAllUsers(currentPage, perPage, search)
 
     if (error) {
         return (
@@ -40,6 +40,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
                 totalCount={totalCount}
                 currentPage={currentPage}
                 perPage={perPage}
+                searchQuery={search}
             />
         </div>
     )

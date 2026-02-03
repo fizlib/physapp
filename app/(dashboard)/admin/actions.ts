@@ -39,11 +39,52 @@ async function checkAdmin() {
     return user
 }
 
-export async function adminGetAllUsers(page: number = 1, perPage: number = 30): Promise<{ users: AdminUser[], totalCount: number, error: string | null }> {
+export async function adminGetAllUsers(page: number = 1, perPage: number = 30, search?: string): Promise<{ users: AdminUser[], totalCount: number, error: string | null }> {
     try {
         await checkAdmin()
 
         const supabaseAdmin = createAdminClient()
+
+        if (search) {
+            // Search profiles first because auth.admin.listUsers doesn't support filtering by name
+            // and has limited search capabilities.
+            const { data: profiles, count, error: profilesError } = await supabaseAdmin
+                .from('profiles')
+                .select('*', { count: 'exact' })
+                .or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%`)
+                .order('created_at', { ascending: false })
+                .range((page - 1) * perPage, page * perPage - 1)
+
+            if (profilesError) {
+                console.error('Error searching profiles:', profilesError)
+                return { users: [], totalCount: 0, error: 'Failed to search users' }
+            }
+
+            if (!profiles || profiles.length === 0) {
+                return { users: [], totalCount: count || 0, error: null }
+            }
+
+            // Fetch corresponding auth users to get email_confirmed_at
+            const userIds = profiles.map(p => p.id)
+            const authUsersResults = await Promise.all(userIds.map(id => supabaseAdmin.auth.admin.getUserById(id)))
+
+            const users: AdminUser[] = profiles.map(profile => {
+                const authUser = authUsersResults.find(r => r.data.user?.id === profile.id)?.data.user
+                return {
+                    id: profile.id,
+                    email: authUser?.email || profile.email || undefined,
+                    first_name: profile.first_name || null,
+                    last_name: profile.last_name || null,
+                    role: profile.role || null,
+                    is_admin: profile.is_admin || false,
+                    email_confirmed_at: authUser?.email_confirmed_at || null,
+                    approved: profile.approved || false,
+                    created_at: authUser?.created_at || profile.created_at
+                }
+            })
+
+            return { users, totalCount: count || 0, error: null }
+        }
 
         // Get total count first
         const { count, error: countError } = await supabaseAdmin
