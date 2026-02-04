@@ -87,29 +87,36 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                 >
                     <DialogTitle className="sr-only">{title}</DialogTitle>
 
-                    <div className="relative flex-1 flex items-center justify-center p-2 sm:p-4">
-                        <DialogClose className="absolute top-0 right-0 sm:-top-8 sm:-right-8 p-2 text-white hover:text-zinc-300 transition-colors z-50">
-                            <X className="w-8 h-8" />
-                            <span className="sr-only">Uždaryti</span>
-                        </DialogClose>
-
-                        {diagramImageUrl ? (
-                            <div className="relative w-full h-[85vh] min-h-[300px]">
-                                <Image
-                                    src={diagramImageUrl}
-                                    alt="Illustration"
-                                    fill
-                                    className="object-contain"
-                                    sizes="95vw"
-                                    priority
-                                />
+                    <div className="relative w-full max-h-[95vh] flex flex-col items-center justify-center p-4">
+                        <div className="relative w-full max-w-[1400px] flex flex-col items-center">
+                            {/* Close button - now positioned more tightly to the content area */}
+                            <div className="w-full flex justify-end mb-2 px-2">
+                                <DialogClose className="p-2 text-white hover:text-zinc-300 transition-shadow bg-zinc-900/50 rounded-full hover:bg-zinc-800/80 transition-colors">
+                                    <X className="w-8 h-8 md:w-10 md:h-10" />
+                                    <span className="sr-only">Uždaryti</span>
+                                </DialogClose>
                             </div>
-                        ) : (
-                            <div
-                                dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                className="w-full h-full max-w-[1400px] bg-zinc-950/90 rounded-xl p-8 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[85vh]"
-                            />
-                        )}
+
+                            <div className="w-full relative flex items-center justify-center">
+                                {diagramImageUrl ? (
+                                    <div className="relative w-full h-[75vh] min-h-[200px] max-h-[900px]">
+                                        <Image
+                                            src={diagramImageUrl}
+                                            alt="Illustration"
+                                            fill
+                                            className="object-contain"
+                                            sizes="95vw"
+                                            priority
+                                        />
+                                    </div>
+                                ) : (
+                                    <div
+                                        dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
+                                        className="w-full h-auto max-h-[75vh] bg-zinc-900/50 rounded-xl p-4 sm:p-8 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[75vh]"
+                                    />
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>
