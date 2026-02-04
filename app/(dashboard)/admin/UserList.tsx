@@ -63,6 +63,9 @@ export function UserList({
     const [copiedId, setCopiedId] = useState<string | null>(null)
     const [userToReset, setUserToReset] = useState<AdminUser | null>(null)
     const [isResetting, setIsResetting] = useState(false)
+    const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false)
+    const [activeLink, setActiveLink] = useState<string>("")
+    const [forcePasswordReset, setForcePasswordReset] = useState(false)
 
     // Bulk selection state
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
@@ -193,15 +196,13 @@ export function UserList({
         }
     }
 
-    const handleCopyMagicLink = async (userId: string) => {
+    const handleCopyMagicLink = async (userId: string, forceReset: boolean = forcePasswordReset) => {
         setIsLoadingLink(true)
         try {
-            const result = await adminGenerateMagicLink(userId)
+            const result = await adminGenerateMagicLink(userId, forceReset)
             if (result.success && result.link) {
-                await navigator.clipboard.writeText(result.link)
-                setCopiedId(`link-${userId}`)
-                setTimeout(() => setCopiedId(null), 2000)
-                toast.success('Login link copied to clipboard')
+                setActiveLink(result.link)
+                setIsLinkDialogOpen(true)
             } else {
                 toast.error(result.error || 'Failed to generate login link')
             }
@@ -211,6 +212,12 @@ export function UserList({
             setIsLoadingLink(false)
         }
     }
+
+    useEffect(() => {
+        if (isLinkDialogOpen && selectedUser) {
+            handleCopyMagicLink(selectedUser.id)
+        }
+    }, [forcePasswordReset])
 
     const handleResetProgress = async () => {
         if (!userToReset) return
@@ -396,12 +403,10 @@ export function UserList({
                                         >
                                             {isLoadingLink ? (
                                                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                            ) : copiedId === `link-${selectedUser.id}` ? (
-                                                <Check className="h-4 w-4 mr-1" />
                                             ) : (
                                                 <Copy className="h-4 w-4 mr-1" />
                                             )}
-                                            {copiedId === `link-${selectedUser.id}` ? "Copied!" : "Copy Login Link"}
+                                            Login Link
                                         </Button>
                                         <Button
                                             variant="destructive"
@@ -478,6 +483,70 @@ export function UserList({
                             >
                                 {isResetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Reset Progress
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={isLinkDialogOpen} onOpenChange={(open) => {
+                    setIsLinkDialogOpen(open)
+                    if (!open) setForcePasswordReset(false)
+                }}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Login Link</DialogTitle>
+                            <DialogDescription>
+                                Copy the link or scan the QR code to log in as this user.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex flex-col items-center space-y-4 py-4">
+                            <div className="bg-white p-4 rounded-xl border-2 border-slate-100 shadow-sm">
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(activeLink)}`}
+                                    alt="Login QR Code"
+                                    className="w-48 h-48"
+                                />
+                            </div>
+                            <div className="flex items-center space-x-2 w-full px-1">
+                                <Checkbox
+                                    id="forceReset"
+                                    checked={forcePasswordReset}
+                                    onCheckedChange={(checked) => setForcePasswordReset(!!checked)}
+                                />
+                                <Label
+                                    htmlFor="forceReset"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    New password on login
+                                </Label>
+                            </div>
+                            <div className="flex w-full items-center space-x-2">
+                                <div className="grid flex-1 gap-2">
+                                    <Label htmlFor="link" className="sr-only">
+                                        Link
+                                    </Label>
+                                    <Input
+                                        id="link"
+                                        defaultValue={activeLink}
+                                        readOnly
+                                        className="h-9"
+                                    />
+                                </div>
+                                <CopyButton
+                                    value={activeLink}
+                                    successMessage="Link copied to clipboard"
+                                    variant="secondary"
+                                    className="shrink-0"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter className="sm:justify-start">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setIsLinkDialogOpen(false)}
+                            >
+                                Close
                             </Button>
                         </DialogFooter>
                     </DialogContent>

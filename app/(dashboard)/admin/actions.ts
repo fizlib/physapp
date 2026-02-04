@@ -322,7 +322,7 @@ export async function adminDeleteUser(userId: string) {
     }
 }
 
-export async function adminGenerateMagicLink(userId: string) {
+export async function adminGenerateMagicLink(userId: string, forcePasswordReset: boolean = false) {
     try {
         await checkAdmin()
 
@@ -336,7 +336,20 @@ export async function adminGenerateMagicLink(userId: string) {
             return { success: false, error: 'Failed to fetch user email' }
         }
 
-        // 2. Generate magic link
+        // 2. If forcePasswordReset is true, update the profile
+        if (forcePasswordReset) {
+            const { error: profileError } = await supabaseAdmin
+                .from('profiles')
+                .update({ must_change_password: true })
+                .eq('id', userId)
+
+            if (profileError) {
+                console.error('Error updating profile for must_change_password:', profileError)
+                return { success: false, error: 'Failed to update password reset status' }
+            }
+        }
+
+        // 3. Generate magic link
         const headersList = await headers()
         const host = headersList.get('host')
         const protocol = host?.includes('localhost') ? 'http' : 'https'
