@@ -94,10 +94,10 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                                         <MathDisplay content={question.latex_text || "No question text"} />
                                     </div>
                                     <DiagramDisplay
-                                        diagramType={question.diagram_type}
-                                        diagramLatex={question.diagram_latex}
-                                        diagramSvg={question.diagram_svg}
-                                        diagramImageUrl={question.diagram_image_url}
+                                        diagramType={question.diagram_type || assignment.questions?.[0]?.diagram_type}
+                                        diagramLatex={question.diagram_latex || assignment.questions?.[0]?.diagram_latex}
+                                        diagramSvg={question.diagram_svg || assignment.questions?.[0]?.diagram_svg}
+                                        diagramImageUrl={question.diagram_image_url || assignment.questions?.[0]?.diagram_image_url}
                                     />
                                 </CardContent>
                             </Card>

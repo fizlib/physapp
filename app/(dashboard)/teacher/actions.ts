@@ -669,8 +669,8 @@ export async function generateExerciseFromImage(formData: FormData) {
                     q.solution_text = q.solution
                 }
 
-                // Inject diagram_image_url if we uploaded one (only for the first question)
-                if (index === 0 && diagramImageUrl) {
+                // Inject diagram_image_url if we uploaded one (apply to all questions/variations)
+                if (diagramImageUrl) {
                     q.diagram_image_url = diagramImageUrl
                 }
 

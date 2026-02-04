@@ -119,7 +119,7 @@ export function StudentAssignmentInterface({
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
-    const hasPersistentDiagram = firstQuestion?.diagram_type && firstQuestion.diagram_type !== 'none'
+    const hasPersistentDiagram = (firstQuestion?.diagram_type && firstQuestion.diagram_type !== 'none') || !!firstQuestion?.diagram_image_url
     // Show persistent diagram if we are NOT on the first question AND the first question has a diagram AND we are NOT showing all questions
     const showPersistentDiagram = !showAll && currentIndex > 0 && hasPersistentDiagram
 
@@ -432,12 +432,14 @@ export function StudentAssignmentInterface({
                         <div className="text-lg leading-relaxed">
                             <MathDisplay content={questions[currentIndex].latex_text || "No question text"} />
                         </div>
-                        <DiagramDisplay
-                            diagramType={questions[currentIndex].diagram_type}
-                            diagramLatex={questions[currentIndex].diagram_latex}
-                            diagramSvg={questions[currentIndex].diagram_svg}
-                            diagramImageUrl={questions[currentIndex].diagram_image_url}
-                        />
+                        {!showPersistentDiagram && (
+                            <DiagramDisplay
+                                diagramType={questions[currentIndex].diagram_type || firstQuestion?.diagram_type}
+                                diagramLatex={questions[currentIndex].diagram_latex || firstQuestion?.diagram_latex}
+                                diagramSvg={questions[currentIndex].diagram_svg || firstQuestion?.diagram_svg}
+                                diagramImageUrl={questions[currentIndex].diagram_image_url || firstQuestion?.diagram_image_url}
+                            />
+                        )}
 
                         <div className="pt-6 border-t space-y-6">
                             {revealedIndices.has(currentIndex) && (

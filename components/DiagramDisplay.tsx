@@ -8,6 +8,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Maximize2 } from "lucide-react"
+import Image from "next/image"
 
 interface DiagramDisplayProps {
     diagramType: 'graph' | 'scheme' | null
@@ -62,11 +63,16 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                 <DialogTrigger asChild>
                     <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
                         {diagramImageUrl ? (
-                            <img
-                                src={diagramImageUrl}
-                                alt="Illustration"
-                                className="max-w-full h-auto max-h-[300px] object-contain"
-                            />
+                            <div className="relative w-full h-[200px] sm:h-[300px]">
+                                <Image
+                                    src={diagramImageUrl}
+                                    alt="Illustration"
+                                    fill
+                                    className="object-contain"
+                                    sizes="(max-width: 768px) 100vw, 800px"
+                                    priority={false}
+                                />
+                            </div>
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
@@ -87,11 +93,15 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                     </DialogHeader>
                     <div className="flex-1 overflow-auto flex items-center justify-center mt-2">
                         {diagramImageUrl ? (
-                            <img
-                                src={diagramImageUrl}
-                                alt="Illustration"
-                                className="max-w-full h-auto max-h-[85vh] object-contain"
-                            />
+                            <div className="relative w-full h-[70vh]">
+                                <Image
+                                    src={diagramImageUrl}
+                                    alt="Illustration"
+                                    fill
+                                    className="object-contain"
+                                    sizes="95vw"
+                                />
+                            </div>
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
