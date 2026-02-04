@@ -1,4 +1,4 @@
-import { adminGetAllUsers } from "../actions"
+import { adminGetAllUsers, adminGetUserById } from "../actions"
 import { UserList } from "../UserList"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,21 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
     const { id: selectedUserId, page: pageStr, search } = await searchParams
     const currentPage = parseInt(pageStr || '1')
     const perPage = 30
-    const { users, totalCount, error } = await adminGetAllUsers(currentPage, perPage, search)
+    let { users, totalCount, error } = await adminGetAllUsers(currentPage, perPage, search)
+
+    if (selectedUserId && !error) {
+        // If an ID is provided, check if the user is already in the list
+        const userInList = users.find(u => u.id === selectedUserId)
+        if (!userInList) {
+            // If not in list (e.g. on another page), fetch them specifically
+            const { user: specificUser, error: specificError } = await adminGetUserById(selectedUserId)
+            if (specificUser) {
+                users = [specificUser, ...users]
+            } else if (specificError) {
+                console.error('Error fetching specific user:', specificError)
+            }
+        }
+    }
 
     if (error) {
         return (

@@ -449,3 +449,49 @@ export async function adminBulkDeleteUsers(userIds: string[]) {
         return { success: false, error: 'Internal server error' }
     }
 }
+
+export async function adminGetUserById(userId: string): Promise<{ user: AdminUser | null, error: string | null }> {
+    try {
+        await checkAdmin()
+
+        const supabaseAdmin = createAdminClient()
+
+        // Fetch profile
+        const { data: profile, error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+
+        if (profileError) {
+            console.error('Error fetching profile:', profileError)
+            return { user: null, error: 'Failed to fetch user profile' }
+        }
+
+        // Fetch auth user
+        const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId)
+
+        if (authError || !authUser) {
+            console.error('Error fetching auth user:', authError)
+            return { user: null, error: 'Failed to fetch auth user' }
+        }
+
+        const adminUser: AdminUser = {
+            id: authUser.id,
+            email: authUser.email,
+            first_name: profile.first_name || null,
+            last_name: profile.last_name || null,
+            role: profile.role || null,
+            is_admin: profile.is_admin || false,
+            email_confirmed_at: authUser.email_confirmed_at || null,
+            approved: profile.approved || false,
+            created_at: authUser.created_at
+        }
+
+        return { user: adminUser, error: null }
+
+    } catch (error) {
+        console.error('Unexpected error in adminGetUserById:', error)
+        return { user: null, error: 'Internal server error' }
+    }
+}
