@@ -6,8 +6,9 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
+    DialogClose,
 } from "@/components/ui/dialog"
-import { Maximize2 } from "lucide-react"
+import { Maximize2, X } from "lucide-react"
 import Image from "next/image"
 
 interface DiagramDisplayProps {
@@ -52,13 +53,6 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
 
     return (
         <div className="mt-4 border rounded-lg p-4 bg-muted/10">
-            <div className="text-sm text-muted-foreground mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span>{diagramImageUrl ? '🖼️' : '📊'}</span>
-                    <span>{title}</span>
-                </div>
-            </div>
-
             <Dialog>
                 <DialogTrigger asChild>
                     <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
@@ -87,11 +81,18 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                         </div>
                     </div>
                 </DialogTrigger>
-                <DialogContent className="max-w-[98vw] w-full sm:max-w-[90vw] max-h-[98vh] flex flex-col p-2 sm:p-4 bg-zinc-950/95 border-zinc-800">
-                    <DialogHeader className="px-4 py-2 border-b border-zinc-800">
-                        <DialogTitle className="text-zinc-100">{title}</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-auto flex items-center justify-center p-2 sm:p-4">
+                <DialogContent
+                    showCloseButton={false}
+                    className="max-w-[98vw] w-full sm:max-w-[90vw] max-h-[98vh] flex flex-col p-0 bg-transparent border-none shadow-none"
+                >
+                    <DialogTitle className="sr-only">{title}</DialogTitle>
+
+                    <div className="relative flex-1 flex items-center justify-center p-2 sm:p-4">
+                        <DialogClose className="absolute top-0 right-0 sm:-top-8 sm:-right-8 p-2 text-white hover:text-zinc-300 transition-colors z-50">
+                            <X className="w-8 h-8" />
+                            <span className="sr-only">Uždaryti</span>
+                        </DialogClose>
+
                         {diagramImageUrl ? (
                             <div className="relative w-full h-[85vh] min-h-[300px]">
                                 <Image
@@ -106,7 +107,7 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                className="w-full h-full max-w-[1400px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[85vh]"
+                                className="w-full h-full max-w-[1400px] bg-zinc-950/90 rounded-xl p-8 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[85vh]"
                             />
                         )}
                     </div>
