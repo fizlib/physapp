@@ -160,7 +160,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
 
     const handleAssignmentFinish = async () => {
         // Double check IP before moving to next assignment
-        const result = await checkIpAccess(classroomId, collection.category)
+        const result = await checkIpAccess(classroomId, collection.category, collection.id)
         if (result.isRestricted) {
             setRestrictionData(result)
             return
@@ -201,7 +201,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         if (isCompleted || collection.category !== 'classwork') return
 
         const check = async () => {
-            const result = await checkIpAccess(classroomId, collection.category)
+            const result = await checkIpAccess(classroomId, collection.category, collection.id)
             if (result.isRestricted) {
                 setRestrictionData(result)
             }

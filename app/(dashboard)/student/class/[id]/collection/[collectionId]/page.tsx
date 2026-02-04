@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
@@ -49,7 +50,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         .single()
 
     // Check for IP bypass
-    const { data: bypass } = await supabase
+    const { data: bypass } = await createAdminClient()
         .from('ip_bypasses')
         .select('id')
         .eq('user_id', user.id)

@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getClientIp } from '@/lib/ip'
@@ -44,6 +45,7 @@ export async function upsertAssignmentProgress(
             classroom_id,
             published,
             collections (
+                id,
                 category
             ),
             classrooms (
@@ -66,7 +68,18 @@ export async function upsertAssignmentProgress(
         // Only restrict 'classwork'
         if (collection?.category === 'classwork' && classroom?.ip_check_enabled && classroom?.allowed_ip) {
             if (studentIp !== classroom.allowed_ip) {
-                return { success: false, error: "Access restricted: You have moved to a different network. Please reconnect to the classroom network to save progress." }
+                // Check for bypass
+                const { data: bypass } = await createAdminClient()
+                    .from('ip_bypasses')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('collection_id', collection.id)
+                    .gt('expires_at', new Date().toISOString())
+                    .maybeSingle()
+
+                if (!bypass) {
+                    return { success: false, error: "Access restricted: You have moved to a different network. Please reconnect to the classroom network to save progress." }
+                }
             }
         }
     }
@@ -102,9 +115,10 @@ export async function upsertAssignmentProgress(
     return { success: true }
 }
 
-export async function checkIpAccess(classroomId: string, category: string): Promise<{ isRestricted: boolean, studentIp?: string }> {
+export async function checkIpAccess(classroomId: string, category: string, collectionId?: string): Promise<{ isRestricted: boolean, studentIp?: string }> {
     const supabase = await createClient()
     const studentIp = await getClientIp()
+    const { data: { user } } = await supabase.auth.getUser()
 
     const { data: classroom } = await supabase
         .from('classrooms')
@@ -114,10 +128,25 @@ export async function checkIpAccess(classroomId: string, category: string): Prom
 
     if (!classroom) return { isRestricted: false }
 
-    const isRestricted = category === 'classwork' &&
+    let isRestricted = category === 'classwork' &&
         classroom.ip_check_enabled &&
         classroom.allowed_ip &&
         studentIp !== classroom.allowed_ip
+
+    if (isRestricted && user && collectionId) {
+        // Check for bypass
+        const { data: bypass } = await createAdminClient()
+            .from('ip_bypasses')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('collection_id', collectionId)
+            .gt('expires_at', new Date().toISOString())
+            .maybeSingle()
+
+        if (bypass) {
+            isRestricted = false
+        }
+    }
 
     return { isRestricted, studentIp }
 }

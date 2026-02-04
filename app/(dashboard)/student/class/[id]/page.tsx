@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,7 +18,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
     if (!user) return <div>Prašome prisijungti</div>
 
     // 1. Fetch Classroom, Published Standalone Assignments, and Collections
-    const [classroomResult, assignmentsResult, collectionsResult] = await Promise.all([
+    const [classroomResult, assignmentsResult, collectionsResult, bypassesResult] = await Promise.all([
         supabase
             .from('classrooms')
             .select('*')
@@ -35,12 +36,19 @@ export default async function StudentClassroomPage({ params }: { params: Promise
             .select('*, assignments(*)')
             .eq('classroom_id', id)
             .or(`scheduled_date.is.null,scheduled_date.lte.${new Date().toISOString()}`)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+        createAdminClient()
+            .from('ip_bypasses')
+            .select('collection_id')
+            .eq('user_id', user.id)
+            .gt('expires_at', new Date().toISOString())
     ])
 
     const { data: classroom } = classroomResult
     const { data: assignments } = assignmentsResult
     let { data: collections } = collectionsResult
+    const { data: activeBypasses } = bypassesResult
+
 
     // Store total assignment counts (including unpublished) before filtering - for classwork cards
     const totalAssignmentCounts = new Map<string, number>()
@@ -83,7 +91,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     if (!classroom) notFound()
 
-    const isClassworkRestricted = classroom.ip_check_enabled && classroom.allowed_ip && studentIp !== classroom.allowed_ip
+    const isIpRestricted = classroom.ip_check_enabled && classroom.allowed_ip && studentIp !== classroom.allowed_ip
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -124,14 +132,17 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
                                                 const progress = getCollectionProgress(collection)
+                                                const hasBypass = activeBypasses?.some((b: any) => b.collection_id === collection.id)
+                                                const isRestricted = isIpRestricted && !hasBypass
+
                                                 const cardContent = (
-                                                    <Card className={`transition-colors bg-secondary/10 ${isClassworkRestricted ? 'opacity-75' : 'cursor-pointer hover:border-primary/50'}`}>
+                                                    <Card className={`transition-colors bg-secondary/10 ${isRestricted ? 'opacity-75' : 'cursor-pointer hover:border-primary/50'}`}>
                                                         <CardContent className="p-6 space-y-4">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="space-y-1.5 flex-1 pr-4">
                                                                     <div className="flex items-center gap-2">
                                                                         <h3 className="font-semibold leading-none">{collection.title}</h3>
-                                                                        {isClassworkRestricted && <Lock className="h-3 w-3 text-red-500" />}
+                                                                        {isRestricted && <Lock className="h-3 w-3 text-red-500" />}
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                                                                         <span>{totalAssignmentCounts.get(collection.id) || 0} Užduotys</span>
@@ -143,7 +154,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                             </div>
 
                                                             {/* IP Restriction message for classwork */}
-                                                            {isClassworkRestricted && (
+                                                            {isRestricted && (
                                                                 <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
                                                                     <ShieldAlert className="h-3.5 w-3.5" />
                                                                     <span className="text-[10px] font-medium leading-tight">Prieiga ribojama tik klasės tinklui</span>
@@ -153,7 +164,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                     </Card>
                                                 )
 
-                                                if (isClassworkRestricted) {
+                                                if (isRestricted) {
                                                     return <div key={collection.id}>{cardContent}</div>
                                                 }
 
@@ -163,6 +174,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                     </Link>
                                                 )
                                             })}
+
                                         </div>
                                     </div>
                                 )}
