@@ -508,3 +508,83 @@ export async function adminGetUserById(userId: string): Promise<{ user: AdminUse
         return { user: null, error: 'Internal server error' }
     }
 }
+
+export async function adminGetUserCollections(userId: string) {
+    try {
+        await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        // 1. Get classrooms the user is enrolled in
+        const { data: enrollments, error: enrollError } = await supabaseAdmin
+            .from('enrollments')
+            .select('classroom_id')
+            .eq('student_id', userId)
+
+        if (enrollError) throw enrollError
+        if (!enrollments || enrollments.length === 0) return { collections: [] }
+
+        const classroomIds = enrollments.map(e => e.classroom_id)
+
+        // 2. Get classwork collections for these classrooms
+        const { data: collections, error: collError } = await supabaseAdmin
+            .from('collections')
+            .select('id, title, classroom_id, category')
+            .in('classroom_id', classroomIds)
+            .eq('category', 'classwork')
+
+        if (collError) throw collError
+
+        return { collections: collections || [] }
+    } catch (error) {
+        console.error('Error in adminGetUserCollections:', error)
+        return { collections: [], error: 'Failed to fetch user collections' }
+    }
+}
+
+export async function adminSetIpBypass(userId: string, collectionId: string, durationMinutes: number = 45) {
+    try {
+        await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000).toISOString()
+
+        const { error } = await supabaseAdmin
+            .from('ip_bypasses')
+            .upsert({
+                user_id: userId,
+                collection_id: collectionId,
+                expires_at: expiresAt
+            }, {
+                onConflict: 'user_id,collection_id'
+            })
+
+        if (error) throw error
+
+        revalidatePath('/admin')
+        return { success: true }
+    } catch (error) {
+        console.error('Error in adminSetIpBypass:', error)
+        return { success: false, error: 'Failed to set IP bypass' }
+    }
+}
+
+export async function adminGetActiveBypass(userId: string) {
+    try {
+        await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        const { data, error } = await supabaseAdmin
+            .from('ip_bypasses')
+            .select('*')
+            .eq('user_id', userId)
+            .gt('expires_at', new Date().toISOString())
+
+        if (error) throw error
+
+        return { bypasses: data || [] }
+    } catch (error) {
+        console.error('Error in adminGetActiveBypass:', error)
+        return { bypasses: [], error: 'Failed to fetch active bypasses' }
+    }
+}
+

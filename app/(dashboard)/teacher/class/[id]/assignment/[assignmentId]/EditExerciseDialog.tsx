@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -12,8 +12,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown } from "lucide-react"
-import { updateAssignmentWithQuestion } from "../../../../actions"
+import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload } from "lucide-react"
+import { updateAssignmentWithQuestion, uploadIllustration } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,6 +40,58 @@ interface ExerciseData {
     points_enabled?: boolean
     points?: number
 }
+
+const compressImage = async (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, width, height);
+                }
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Canvas to Blob failed'));
+                        }
+                    },
+                    'image/jpeg',
+                    0.8
+                );
+            };
+            img.onerror = () => reject(new Error('Image load failed'));
+            img.src = e.target?.result as string;
+        };
+        reader.onerror = () => reject(new Error('FileReader failed'));
+        reader.readAsDataURL(file);
+    });
+};
 
 function sanitizeSvg(svg: string): string {
     let result = svg
@@ -101,6 +153,10 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const [points, setPoints] = useState(1)
     const isClasswork = collectionCategory === 'classwork'
 
+    const [illustrationFile, setIllustrationFile] = useState<File | null>(null)
+    const [illustrationPreview, setIllustrationPreview] = useState<string | null>(null)
+    const illustrationInputRef = useRef<HTMLInputElement>(null)
+
     // Populate data when dialog opens
     useEffect(() => {
         if (initialData && open) {
@@ -126,6 +182,15 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
             })
             setPointsEnabled(initialData.points_enabled || false)
             setPoints(initialData.points || 1)
+
+            // Set initial illustration preview if it exists
+            const firstQuestion = initialData.questions?.[0]
+            if (firstQuestion?.diagram_image_url) {
+                setIllustrationPreview(firstQuestion.diagram_image_url)
+            } else {
+                setIllustrationPreview(null)
+            }
+            setIllustrationFile(null)
         }
     }, [initialData, open])
 
@@ -185,11 +250,49 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const handleSave = async () => {
         setLoading(true)
         try {
+            let currentIllustrationUrl = data.questions[0]?.diagram_image_url
+
+            // Handle new illustration upload
+            if (illustrationFile) {
+                const formData = new FormData()
+                try {
+                    const compressedBlob = await compressImage(illustrationFile)
+                    formData.append('image', compressedBlob, 'illustration.jpg')
+                } catch (err) {
+                    console.error("Compression error:", err)
+                    formData.append('image', illustrationFile)
+                }
+
+                const uploadResult = await uploadIllustration(formData)
+                if (uploadResult.success && uploadResult.url) {
+                    currentIllustrationUrl = uploadResult.url
+                } else {
+                    toast.error(uploadResult.error || "Failed to upload illustration")
+                    setLoading(false)
+                    return
+                }
+            } else if (!illustrationPreview) {
+                // Illustration was removed
+                currentIllustrationUrl = null
+            }
+
+            // Update all questions with the new illustration URL (if we want it on all, or just first)
+            // The logic in actions.ts currently only saves diagram for the first question
+            const updatedQuestions = [...data.questions]
+            if (updatedQuestions[0]) {
+                updatedQuestions[0].diagram_image_url = currentIllustrationUrl
+                // If it's an image, we usually clear SVG to avoid conflict
+                if (currentIllustrationUrl) {
+                    updatedQuestions[0].diagram_svg = null
+                }
+            }
+
             const saveData = {
                 ...data,
+                questions: updatedQuestions,
                 points_enabled: isClasswork ? pointsEnabled : false,
                 // Total points is sum of all question points
-                points: pointsEnabled ? data.questions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined
+                points: pointsEnabled ? updatedQuestions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined
             }
             const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
             if (result.success) {
@@ -421,44 +524,99 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                     </div>
 
                                     {/* Diagram Section */}
-                                    {(q.diagram_type && q.diagram_svg || q.diagram_image_url) && (
-                                        <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
-                                            <div className="flex items-center justify-between">
-                                                <Label className="flex items-center gap-2">
-                                                    <span className="text-lg">📊</span>
-                                                    {q.diagram_image_url ? 'Iliustracija' : `Detected ${q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}`}
-                                                </Label>
-                                            </div>
-
-                                            <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
-                                                {q.diagram_image_url ? (
-                                                    <img
-                                                        src={q.diagram_image_url}
-                                                        alt="Illustration"
-                                                        className="max-w-full max-h-[300px] object-contain"
-                                                    />
-                                                ) : (
-                                                    <div
-                                                        dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
-                                                        className="w-full max-w-[300px]"
-                                                    />
-                                                )}
-                                            </div>
-
-                                            {!q.diagram_image_url && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-sm text-muted-foreground">
-                                                        Edit SVG Code
-                                                    </Label>
-                                                    <textarea
-                                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                        value={q.diagram_svg || ''}
-                                                        onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
-                                                    />
-                                                </div>
+                                    <div className="space-y-3 border-t pt-4">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="flex items-center gap-2">
+                                                <span className="text-lg">📊</span>
+                                                Iliustracija
+                                            </Label>
+                                            {index === 0 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => illustrationInputRef.current?.click()}
+                                                >
+                                                    {illustrationPreview ? 'Pakeisti' : 'Pridėti'}
+                                                </Button>
                                             )}
                                         </div>
-                                    )}
+
+                                        {index === 0 && (
+                                            <div className="space-y-4">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    className="hidden"
+                                                    ref={illustrationInputRef}
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0]
+                                                        if (file) {
+                                                            setIllustrationFile(file)
+                                                            const reader = new FileReader()
+                                                            reader.onloadend = () => {
+                                                                setIllustrationPreview(reader.result as string)
+                                                            }
+                                                            reader.readAsDataURL(file)
+                                                        }
+                                                    }}
+                                                />
+
+                                                {illustrationPreview && (
+                                                    <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                                        <img
+                                                            src={illustrationPreview}
+                                                            alt="Illustration Preview"
+                                                            className="max-w-full max-h-[300px] object-contain"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    setIllustrationFile(null)
+                                                                    setIllustrationPreview(null)
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {q.diagram_svg && !illustrationPreview && (
+                                                    <div className="space-y-2">
+                                                        <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
+                                                            <div
+                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                                className="w-full max-w-[300px]"
+                                                            />
+                                                        </div>
+                                                        <Label className="text-sm text-muted-foreground">
+                                                            Edit SVG Code
+                                                        </Label>
+                                                        <textarea
+                                                            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                            value={q.diagram_svg || ''}
+                                                            onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {!illustrationPreview && !q.diagram_svg && (
+                                                    <p className="text-xs text-muted-foreground italic">
+                                                        Ši užduotis neturi iliustracijos.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                        {index > 0 && (
+                                            <p className="text-xs text-muted-foreground italic">
+                                                Iliustracija valdoma per pirmąjį klausimą.
+                                            </p>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
                         ))}

@@ -48,12 +48,23 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         .eq('id', id)
         .single()
 
+    // Check for IP bypass
+    const { data: bypass } = await supabase
+        .from('ip_bypasses')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('collection_id', collectionId)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle()
+
     const isRestricted = collection.category === 'classwork' &&
         classroom?.ip_check_enabled &&
         classroom?.allowed_ip &&
-        studentIp !== classroom.allowed_ip
+        studentIp !== classroom.allowed_ip &&
+        !bypass
 
     if (isRestricted) {
+
         return (
             <div className="min-h-screen flex items-center justify-center p-6 bg-background">
                 <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">

@@ -124,8 +124,17 @@ export function TestInterface({
                                 <div className="w-8 h-8 flex-none flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 shadow-sm">
                                     {submittedAnswer || "?"}
                                 </div>
-                                <div className="pt-0.5 text-sm leading-relaxed">
-                                    {mcqOption ? <MathDisplay content={mcqOption} /> : "Pasirinktas variantas"}
+                                <div className="pt-0.5 text-sm leading-relaxed w-full">
+                                    {mcqOption ? (
+                                        mcqOption.trim().startsWith('<svg') ? (
+                                            <div
+                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
+                                                dangerouslySetInnerHTML={{ __html: mcqOption }}
+                                            />
+                                        ) : (
+                                            <MathDisplay content={mcqOption} />
+                                        )
+                                    ) : "Pasirinktas variantas"}
                                 </div>
                             </div>
                         )}
@@ -185,8 +194,15 @@ export function TestInterface({
                                     <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${mcqInput === letter ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20'}`}>
                                         {letter}
                                     </div>
-                                    <div className="flex-1">
-                                        <MathDisplay content={opt} />
+                                    <div className="flex-1 w-full overflow-hidden">
+                                        {opt.trim().startsWith('<svg') ? (
+                                            <div
+                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
+                                                dangerouslySetInnerHTML={{ __html: opt }}
+                                            />
+                                        ) : (
+                                            <MathDisplay content={opt} />
+                                        )}
                                     </div>
                                 </div>
                             )

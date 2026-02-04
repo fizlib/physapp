@@ -1,6 +1,6 @@
 'use client'
 
-import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress } from "./actions"
+import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress, adminGetUserCollections, adminSetIpBypass, adminGetActiveBypass } from "./actions"
 import { CopyButton } from "@/components/ui/copy-button"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -74,6 +74,61 @@ export function UserList({
     const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false)
     const [isBulkApproveDialogOpen, setIsBulkApproveDialogOpen] = useState(false)
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
+
+    // IP Bypass state
+    const [userCollections, setUserCollections] = useState<any[]>([])
+    const [activeBypasses, setActiveBypasses] = useState<any[]>([])
+    const [isSettingBypass, setIsSettingBypass] = useState(false)
+    const [selectedCollectionId, setSelectedCollectionId] = useState<string>("")
+    const [isLoadingCollections, setIsLoadingCollections] = useState(false)
+
+    useEffect(() => {
+        if (selectedUser && selectedUser.role === 'student') {
+            fetchUserCollections(selectedUser.id)
+            fetchActiveBypasses(selectedUser.id)
+        }
+    }, [selectedUser])
+
+    const fetchUserCollections = async (userId: string) => {
+        setIsLoadingCollections(true)
+        try {
+            const result = await adminGetUserCollections(userId)
+            if (result.collections) {
+                setUserCollections(result.collections)
+                if (result.collections.length > 0) {
+                    setSelectedCollectionId(result.collections[0].id)
+                }
+            }
+        } finally {
+            setIsLoadingCollections(false)
+        }
+    }
+
+    const fetchActiveBypasses = async (userId: string) => {
+        const result = await adminGetActiveBypass(userId)
+        if (result.bypasses) {
+            setActiveBypasses(result.bypasses)
+        }
+    }
+
+    const handleSetIpBypass = async () => {
+        if (!selectedUser || !selectedCollectionId) return
+
+        setIsSettingBypass(true)
+        try {
+            const result = await adminSetIpBypass(selectedUser.id, selectedCollectionId)
+            if (result.success) {
+                toast.success('IP access control disabled for 45 minutes')
+                fetchActiveBypasses(selectedUser.id)
+            } else {
+                toast.error(result.error || 'Failed to set IP bypass')
+            }
+        } catch (error) {
+            toast.error('An error occurred')
+        } finally {
+            setIsSettingBypass(false)
+        }
+    }
 
     useEffect(() => {
         if (selectedUserId) {
@@ -425,7 +480,79 @@ export function UserList({
                                     </div>
                                 </div>
                             </div>
+
+                            {selectedUser.role === 'student' && (
+
+
+                                <div className="border-t pt-6 mt-6">
+                                    <h3 className="text-lg font-semibold mb-4">IP Access Control</h3>
+                                    <div className="space-y-4">
+                                        {activeBypasses.length > 0 && (
+                                            <div className="bg-green-50 border border-green-200 rounded-md p-4 mb-4">
+                                                <div className="flex items-center gap-2 text-green-800 font-medium mb-2">
+                                                    <Check className="h-5 w-5" />
+                                                    Active IP Bypasses
+                                                </div>
+                                                <ul className="space-y-1">
+                                                    {activeBypasses.map((bypass) => {
+                                                        const collection = userCollections.find(c => c.id === bypass.collection_id)
+                                                        const timeLeft = Math.max(0, Math.floor((new Date(bypass.expires_at).getTime() - Date.now()) / 60000))
+                                                        return (
+                                                            <li key={bypass.id} className="text-sm text-green-700">
+                                                                <span className="font-semibold">{collection?.title || 'Unknown Collection'}</span>: {timeLeft} minutes remaining
+                                                            </li>
+                                                        )
+                                                    })}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col sm:flex-row items-end gap-4">
+                                            <div className="space-y-2 flex-1 w-full">
+                                                <Label htmlFor="collection-select">Select Collection</Label>
+                                                <select
+                                                    id="collection-select"
+                                                    value={selectedCollectionId}
+                                                    onChange={(e) => setSelectedCollectionId(e.target.value)}
+                                                    disabled={isLoadingCollections || userCollections.length === 0}
+                                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 appearance-none transition-colors"
+                                                >
+                                                    {isLoadingCollections ? (
+                                                        <option>Kraunama...</option>
+                                                    ) : userCollections.length === 0 ? (
+                                                        <option>Nėra priskirtų klasių darbų</option>
+                                                    ) : (
+                                                        userCollections.map((col) => (
+                                                            <option key={col.id} value={col.id}>
+                                                                {col.title}
+                                                            </option>
+                                                        ))
+                                                    )}
+                                                </select>
+                                            </div>
+                                            <Button
+                                                onClick={handleSetIpBypass}
+                                                disabled={isSettingBypass || userCollections.length === 0}
+                                                className="w-full sm:w-auto"
+                                            >
+                                                {isSettingBypass ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                ) : (
+                                                    <X className="h-4 w-4 mr-2 rotate-45" />
+                                                )}
+                                                Disable IP Access Control (45m)
+                                            </Button>
+                                        </div>
+                                        {userCollections.length === 0 && !isLoadingCollections && (
+                                            <p className="text-xs text-muted-foreground">
+                                                This student is not enrolled in any classrooms with classwork collections.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
+
                     </Card>
 
                     <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>

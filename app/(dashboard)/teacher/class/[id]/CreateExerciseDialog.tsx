@@ -146,6 +146,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [generationType, setGenerationType] = useState<'exact' | 'similar'>('exact')
     const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice'>('auto')
+    const [answersInSvg, setAnswersInSvg] = useState(false)
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
     const [useImageAsIllustration, setUseImageAsIllustration] = useState(false)
@@ -227,6 +228,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                 formData.append('generationType', generationType)
             }
             formData.append('exerciseType', aiExerciseType)
+            formData.append('answersInSvg', answersInSvg.toString())
             formData.append('generateSolution', generateSolution.toString())
             formData.append('useImageAsIllustration', useImageAsIllustration.toString())
             if (useImageAsIllustration) {
@@ -626,6 +628,18 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                 Multiple Choice <span className="text-xs text-muted-foreground ml-1">(Options A-D)</span>
                                             </Label>
                                         </div>
+                                        {aiExerciseType === 'multiple_choice' && (
+                                            <div className="flex items-center space-x-2 pl-4 pt-1 animate-in fade-in slide-in-from-top-1">
+                                                <Checkbox
+                                                    id="answers-in-svg"
+                                                    checked={answersInSvg}
+                                                    onCheckedChange={(c) => setAnswersInSvg(c as boolean)}
+                                                />
+                                                <Label htmlFor="answers-in-svg" className="text-xs font-medium cursor-pointer">
+                                                    Answers in svg format
+                                                </Label>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -833,6 +847,12 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                             onChange={(e) => updateOption(index, i, e.target.value)}
                                                             placeholder={`Option ${opt}`}
                                                         />
+                                                        {q.options?.[i]?.trim().startsWith('<svg') && (
+                                                            <div
+                                                                className="absolute right-12 top-1/2 -translate-y-1/2 w-8 h-8 pointer-events-none opacity-50 bg-white border rounded p-0.5 overflow-hidden flex items-center justify-center scale-150 origin-right"
+                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.options[i]) }}
+                                                            />
+                                                        )}
                                                         <Button
                                                             type="button"
                                                             size="icon"

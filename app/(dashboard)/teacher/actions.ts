@@ -440,6 +440,39 @@ const ExerciseSchema = z.object({
     points: z.number().min(1).default(1).optional()
 })
 
+export async function uploadIllustration(formData: FormData): Promise<{ success: boolean, url?: string, error?: string }> {
+    const supabase = await createClient()
+
+    // 1. Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const file = formData.get('image') as File
+    if (!file) {
+        return { success: false, error: "No image file provided" }
+    }
+
+    console.log("Uploading illustration to Supabase Storage...")
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`
+    const filePath = `illustrations/${fileName}`
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('illustrations')
+        .upload(filePath, file)
+
+    if (uploadError) {
+        console.error("Storage upload error:", uploadError)
+        return { success: false, error: "Failed to upload illustration" }
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('illustrations')
+        .getPublicUrl(filePath)
+
+    return { success: true, url: publicUrl }
+}
+
 export async function generateExerciseFromImage(formData: FormData) {
     console.log("Starting generateExerciseFromImage...")
 
@@ -448,6 +481,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const isVariationMode = variationCount > 1
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
     const exerciseType = formData.get('exerciseType') as 'auto' | 'numerical' | 'multiple_choice' || 'auto'
+    const answersInSvg = formData.get('answersInSvg') === 'true'
     const generateSolution = formData.get('generateSolution') === 'true'
     const useImageAsIllustration = formData.get('useImageAsIllustration') === 'true'
 
@@ -508,6 +542,11 @@ export async function generateExerciseFromImage(formData: FormData) {
   - FORCED TYPE: Multiple choice.
   - You MUST generate "multiple_choice" type questions only.
   - If the image is a numerical problem, you MUST create 4 plausible multiple-choice options (A, B, C, D) based on common mistakes or likely outcomes.
+  ${answersInSvg ? `
+  - ANSWERS AS ILLUSTRATIONS: Each of the 4 multiple-choice options MUST be a clean, self-contained SVG illustration recreate the physical situation, graph, or scheme for that option.
+  - DO NOT provide text labels in Lithuanian as the primary option text; instead, the SVG itself MUST show the information (e.g., if option is 5m, the SVG shows a vector or object with "5m" label).
+  - Each option in the "options" array MUST be the full <svg>... </svg> code string.
+  ` : ''}
   ` : `
   - TYPE DETECTION: Auto-detect.
   - Determine if the question is naturally "numerical" or "multiple_choice" based on the image content.
@@ -575,7 +614,7 @@ export async function generateExerciseFromImage(formData: FormData) {
             "latex_text": "The question text.",
             "correct_value": number (if numerical, else null),
             "tolerance": number (suggest a tolerance %, e.g., 5, else null),
-            "options": ["Option A", "Option B", "Option C", "Option D"] (if multiple_choice, else null... include strictly 4 options if possible, or as many as in the image. Wrap LaTeX in $),
+            "options": ["Option A contents", "Option B contents", "Option C contents", "Option D contents"] (if multiple_choice, else null... include strictly 4 options. If Answers as Illustrations mode is ON, these MUST be full <svg> strings),
             "correct_answer": "A" | "B" | "C" | "D" (if multiple_choice, else null... MUST be a single upper-case letter corresponding to the correct option index 0=A, 1=B, etc.),
             "diagram_type": "graph" | "scheme" | null (null if no diagram found),
             "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found),
@@ -614,9 +653,34 @@ export async function generateExerciseFromImage(formData: FormData) {
         const data = JSON.parse(jsonStr)
         console.log("Parsed Data:", data)
 
+        const sanitizeOptionSvg = (opt: string) => {
+            if (opt && opt.trim().startsWith('<svg')) {
+                let svg = opt.trim()
+                svg = svg.replace(/&lt;/g, '<')
+                svg = svg.replace(/&gt;/g, '>')
+                svg = svg.replace(/&amp;/g, '&')
+                svg = svg.replace(/&quot;/g, '"')
+                svg = svg.replace(/&#39;/g, "'")
+                svg = svg.replace(/&#x27;/g, "'")
+                svg = svg.replace(/&#x2F;/g, '/')
+                svg = svg.replace(/\\n/g, '\n')
+                svg = svg.replace(/\\r/g, '')
+                // Strip hardcoded width/height to make it responsive
+                svg = svg.replace(/<svg([^>]*)width="[^"]*"/i, '<svg$1')
+                svg = svg.replace(/<svg([^>]*)height="[^"]*"/i, '<svg$1')
+                return svg.trim()
+            }
+            return opt
+        }
+
         // Sanitize data
         if (data.questions) {
             data.questions = data.questions.map((q: any, index: number) => {
+                // Sanitize options if they contain SVG
+                if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options)) {
+                    q.options = q.options.map((opt: string) => sanitizeOptionSvg(opt))
+                }
+
                 // Sanitize SVG content - unescape any escaped characters
                 if (q.diagram_svg && typeof q.diagram_svg === 'string') {
                     // Unescape common HTML entities that might be in the SVG
@@ -667,6 +731,37 @@ export async function generateExerciseFromImage(formData: FormData) {
                 // Map Gemini 'solution' field to our 'solution_text'
                 if (q.solution) {
                     q.solution_text = q.solution
+                }
+
+                // Randomize multiple choice options
+                if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options) && q.options.length > 0) {
+                    const options = [...q.options]
+                    const correctLetter = q.correct_answer || 'A'
+                    const correctIndex = ['A', 'B', 'C', 'D'].indexOf(correctLetter)
+
+                    if (correctIndex !== -1 && correctIndex < options.length) {
+                        const correctValue = options[correctIndex]
+
+                        // Shuffle using Fisher-Yates
+                        for (let i = options.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [options[i], options[j]] = [options[j], options[i]];
+                        }
+
+                        // Find new index of the correct value
+                        const newCorrectIndex = options.indexOf(correctValue)
+                        if (newCorrectIndex !== -1) {
+                            q.options = options
+                            q.correct_answer = ['A', 'B', 'C', 'D'][newCorrectIndex]
+                        }
+                    } else {
+                        // If something is wrong with index, still shuffle but keep correct_answer if possible or default safely
+                        for (let i = options.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [options[i], options[j]] = [options[j], options[i]];
+                        }
+                        q.options = options
+                    }
                 }
 
                 // Inject diagram_image_url if we uploaded one (apply to all questions/variations)
