@@ -27,6 +27,7 @@ interface QuestionData {
     correct_answer?: string | null
     diagram_type?: 'graph' | 'scheme' | null
     diagram_svg?: string | null
+    diagram_image_url?: string | null
     solution_text?: string | null
     points?: number
 }
@@ -70,6 +71,7 @@ const DEFAULT_QUESTION: QuestionData = {
     correct_answer: 'A',
     diagram_type: null,
     diagram_svg: null,
+    diagram_image_url: null,
     solution_text: null,
     points: 1
 }
@@ -111,6 +113,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 correct_answer: q.correct_answer || 'A',
                 diagram_type: q.diagram_type,
                 diagram_svg: q.diagram_svg,
+                diagram_image_url: q.diagram_image_url,
                 solution_text: q.solution_text,
                 points: q.points || 1
             })) || [{ ...DEFAULT_QUESTION }]
@@ -418,32 +421,42 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                     </div>
 
                                     {/* Diagram Section */}
-                                    {q.diagram_type && q.diagram_svg && (
+                                    {(q.diagram_type && q.diagram_svg || q.diagram_image_url) && (
                                         <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
                                             <div className="flex items-center justify-between">
                                                 <Label className="flex items-center gap-2">
                                                     <span className="text-lg">📊</span>
-                                                    Detected {q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}
+                                                    {q.diagram_image_url ? 'Iliustracija' : `Detected ${q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}`}
                                                 </Label>
                                             </div>
 
                                             <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
-                                                <div
-                                                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg) }}
-                                                    className="w-full max-w-[300px]"
-                                                />
+                                                {q.diagram_image_url ? (
+                                                    <img
+                                                        src={q.diagram_image_url}
+                                                        alt="Illustration"
+                                                        className="max-w-full max-h-[300px] object-contain"
+                                                    />
+                                                ) : (
+                                                    <div
+                                                        dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                        className="w-full max-w-[300px]"
+                                                    />
+                                                )}
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <Label className="text-sm text-muted-foreground">
-                                                    Edit SVG Code
-                                                </Label>
-                                                <textarea
-                                                    className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                    value={q.diagram_svg || ''}
-                                                    onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
-                                                />
-                                            </div>
+                                            {!q.diagram_image_url && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-sm text-muted-foreground">
+                                                        Edit SVG Code
+                                                    </Label>
+                                                    <textarea
+                                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                        value={q.diagram_svg || ''}
+                                                        onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </CardContent>

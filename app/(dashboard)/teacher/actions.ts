@@ -157,6 +157,7 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
         diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
+        diagram_image_url: index === 0 ? (q.diagram_image_url || null) : null,
         solution_text: q.solution_text || null,
         points: q.points || 1
     }))
@@ -422,6 +423,7 @@ const QuestionSchema = z.object({
     correct_answer: z.string().nullable().optional(),
     diagram_type: z.enum(['graph', 'scheme']).nullable().optional(),
     diagram_svg: z.string().nullable().optional(),
+    diagram_image_url: z.string().nullable().optional(),
     solution_text: z.string().nullable().optional(),
     points: z.number().min(1).default(1).optional()
 })
@@ -447,6 +449,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
     const exerciseType = formData.get('exerciseType') as 'auto' | 'numerical' | 'multiple_choice' || 'auto'
     const generateSolution = formData.get('generateSolution') === 'true'
+    const useImageAsIllustration = formData.get('useImageAsIllustration') === 'true'
 
     const file = formData.get('image') as File
     if (!file) {
@@ -454,6 +457,34 @@ export async function generateExerciseFromImage(formData: FormData) {
         return { error: "No image file provided" }
     }
     console.log("File received:", file.name, file.size, file.type)
+
+    let diagramImageUrl = null
+    const illustrationFile = formData.get('illustration') as File
+    const fileToUpload = illustrationFile || (useImageAsIllustration ? file : null)
+
+    if (useImageAsIllustration && fileToUpload) {
+        console.log("Uploading image to Supabase Storage...")
+        const supabase = await createClient()
+        const fileExt = fileToUpload.name.split('.').pop()
+        const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`
+        const filePath = `illustrations/${fileName}`
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('illustrations')
+            .upload(filePath, fileToUpload)
+
+        if (uploadError) {
+            console.error("Storage upload error:", uploadError)
+            return { success: false, error: "Failed to upload illustration" }
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('illustrations')
+            .getPublicUrl(filePath)
+
+        diagramImageUrl = publicUrl
+        console.log("Image uploaded successfully:", diagramImageUrl)
+    }
 
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
@@ -523,12 +554,17 @@ export async function generateExerciseFromImage(formData: FormData) {
   - For the FIRST question (part a, 1, or first value): Include the FULL common description text + the specific question text for this part.
   - For the SUBSEQUENT questions (part b, c, or next values): Include ONLY the specific question text for that part (e.g. "Find the acceleration", "How long for the second worker?"). DO NOT repeat the common description text.
   
-  If you find a diagram relevant to a question, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
-  - Be self-contained with proper viewBox attribute
-  - Use appropriate colors (black for lines, gray for grid, labeled axes)
-  - Include text labels, axis labels, and any annotations from the original
-  - For graphs: draw the coordinate system, gridlines, axis arrows, tick marks, and plot the curves/lines accurately
-  - For schemes: recreate the components (resistors, forces, objects) with proper labels
+  If you fine-grained diagram detection is needed:
+  ${useImageAsIllustration ? `
+  - DO NOT generate diagram_svg or diagram_type. The teacher has provided an image illustration already.
+  ` : `
+  - If you find a diagram relevant to a question, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
+    - Be self-contained with proper viewBox attribute
+    - Use appropriate colors (black for lines, gray for grid, labeled axes)
+    - Include text labels, axis labels, and any annotations from the original
+    - For graphs: draw the coordinate system, gridlines, axis arrows, tick marks, and plot the curves/lines accurately
+    - For schemes: recreate the components (resistors, forces, objects) with proper labels
+  `}
   
   Return a JSON object with this EXACT structure (do not wrap in markdown):
   {
@@ -580,7 +616,7 @@ export async function generateExerciseFromImage(formData: FormData) {
 
         // Sanitize data
         if (data.questions) {
-            data.questions = data.questions.map((q: any) => {
+            data.questions = data.questions.map((q: any, index: number) => {
                 // Sanitize SVG content - unescape any escaped characters
                 if (q.diagram_svg && typeof q.diagram_svg === 'string') {
                     // Unescape common HTML entities that might be in the SVG
@@ -631,6 +667,11 @@ export async function generateExerciseFromImage(formData: FormData) {
                 // Map Gemini 'solution' field to our 'solution_text'
                 if (q.solution) {
                     q.solution_text = q.solution
+                }
+
+                // Inject diagram_image_url if we uploaded one (only for the first question)
+                if (index === 0 && diagramImageUrl) {
+                    q.diagram_image_url = diagramImageUrl
                 }
 
                 return q
@@ -712,6 +753,7 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         // Only save diagram for the first question
         diagram_type: index === 0 ? (q.diagram_type || null) : null,
         diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
+        diagram_image_url: index === 0 ? (q.diagram_image_url || null) : null,
         solution_text: q.solution_text || null,
         points: q.points || 1
     }))
@@ -1485,6 +1527,7 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                         correct_answer: q.correct_answer,
                         diagram_type: q.diagram_type,
                         diagram_svg: q.diagram_svg,
+                        diagram_image_url: q.diagram_image_url,
                         solution_text: q.solution_text,
                         points: q.points
                     }))

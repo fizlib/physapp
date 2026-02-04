@@ -97,6 +97,7 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                                         diagramType={question.diagram_type}
                                         diagramLatex={question.diagram_latex}
                                         diagramSvg={question.diagram_svg}
+                                        diagramImageUrl={question.diagram_image_url}
                                     />
                                 </CardContent>
                             </Card>

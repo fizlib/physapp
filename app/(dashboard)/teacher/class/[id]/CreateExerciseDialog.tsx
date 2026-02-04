@@ -26,6 +26,7 @@ interface QuestionData {
     correct_answer?: string | null
     diagram_type?: 'graph' | 'scheme' | null
     diagram_svg?: string | null
+    diagram_image_url?: string | null
     solution_text?: string | null
     points?: number // Points for this specific question (default 1)
 }
@@ -70,6 +71,7 @@ const DEFAULT_QUESTION: QuestionData = {
     correct_answer: 'A',
     diagram_type: null,
     diagram_svg: null,
+    diagram_image_url: null,
     solution_text: null,
     points: 1
 }
@@ -93,9 +95,13 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice'>('auto')
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
+    const [useImageAsIllustration, setUseImageAsIllustration] = useState(false)
+    const [illustrationFile, setIllustrationFile] = useState<File | null>(null)
+    const [illustrationPreview, setIllustrationPreview] = useState<string | null>(null)
     const [pointsEnabled, setPointsEnabled] = useState(false)
     const [points, setPoints] = useState(1)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const illustrationInputRef = useRef<HTMLInputElement>(null)
 
     const isClasswork = collectionCategory === 'classwork'
 
@@ -104,6 +110,15 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
         const reader = new FileReader()
         reader.onloadend = () => {
             setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handleIllustrationSelection = (file: File) => {
+        setIllustrationFile(file)
+        const reader = new FileReader()
+        reader.onloadend = () => {
+            setIllustrationPreview(reader.result as string)
         }
         reader.readAsDataURL(file)
     }
@@ -160,6 +175,10 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             }
             formData.append('exerciseType', aiExerciseType)
             formData.append('generateSolution', generateSolution.toString())
+            formData.append('useImageAsIllustration', useImageAsIllustration.toString())
+            if (useImageAsIllustration && illustrationFile) {
+                formData.append('illustration', illustrationFile)
+            }
             const result = await generateExerciseFromImage(formData)
 
             if (result.success && result.data) {
@@ -426,6 +445,78 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         </p>
                                     </div>
                                 )}
+
+                                <div className="space-y-4 pt-2 border-t border-dashed">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="use-image-as-illustration"
+                                            checked={useImageAsIllustration}
+                                            onCheckedChange={(checked) => setUseImageAsIllustration(checked as boolean)}
+                                        />
+                                        <Label htmlFor="use-image-as-illustration" className="text-sm font-semibold cursor-pointer">
+                                            Naudoti atskirą iliustraciją (vietoj SVG)
+                                        </Label>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground pl-6">
+                                        Jei įjungta, galite įkelti atskirą paveikslėlį, kuris bus rodomas mokiniams.
+                                    </p>
+
+                                    {useImageAsIllustration && (
+                                        <div className="pl-6 pt-2 animate-in fade-in slide-in-from-top-2">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                ref={illustrationInputRef}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) handleIllustrationSelection(file)
+                                                }}
+                                            />
+                                            {!illustrationPreview ? (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full border-dashed"
+                                                    onClick={() => illustrationInputRef.current?.click()}
+                                                >
+                                                    <Upload className="mr-2 h-4 w-4" />
+                                                    Įkelti iliustraciją
+                                                </Button>
+                                            ) : (
+                                                <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                                    <img
+                                                        src={illustrationPreview}
+                                                        alt="Illustration Preview"
+                                                        className="max-w-full max-h-full object-contain"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => illustrationInputRef.current?.click()}
+                                                        >
+                                                            Pakeisti
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setIllustrationFile(null)
+                                                                setIllustrationPreview(null)
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="space-y-4 pt-2 border-t border-dashed">
                                     <Label className="text-sm font-semibold block">Exercise Type</Label>
@@ -708,32 +799,42 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         </div>
 
                                         {/* Diagram Section */}
-                                        {q.diagram_type && q.diagram_svg && (
+                                        {(q.diagram_type && q.diagram_svg || q.diagram_image_url) && (
                                             <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
                                                 <div className="flex items-center justify-between">
                                                     <Label className="flex items-center gap-2">
                                                         <span className="text-lg">📊</span>
-                                                        Detected {q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}
+                                                        {q.diagram_image_url ? 'Iliustracija' : `Detected ${q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}`}
                                                     </Label>
                                                 </div>
 
                                                 <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
-                                                    <div
-                                                        dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg) }}
-                                                        className="w-full max-w-[300px]"
-                                                    />
+                                                    {q.diagram_image_url ? (
+                                                        <img
+                                                            src={q.diagram_image_url}
+                                                            alt="Illustration"
+                                                            className="max-w-full max-h-[300px] object-contain"
+                                                        />
+                                                    ) : (
+                                                        <div
+                                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                            className="w-full max-w-[300px]"
+                                                        />
+                                                    )}
                                                 </div>
 
-                                                <div className="space-y-2">
-                                                    <Label className="text-sm text-muted-foreground">
-                                                        Edit SVG Code
-                                                    </Label>
-                                                    <textarea
-                                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                        value={q.diagram_svg || ''}
-                                                        onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
-                                                    />
-                                                </div>
+                                                {!q.diagram_image_url && (
+                                                    <div className="space-y-2">
+                                                        <Label className="text-sm text-muted-foreground">
+                                                            Edit SVG Code
+                                                        </Label>
+                                                        <textarea
+                                                            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                            value={q.diagram_svg || ''}
+                                                            onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </CardContent>

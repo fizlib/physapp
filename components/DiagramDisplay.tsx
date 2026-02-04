@@ -13,6 +13,7 @@ interface DiagramDisplayProps {
     diagramType: 'graph' | 'scheme' | null
     diagramLatex?: string | null  // Kept for backwards compatibility
     diagramSvg: string | null
+    diagramImageUrl?: string | null
 }
 
 function sanitizeSvg(svg: string): string {
@@ -42,17 +43,17 @@ function sanitizeSvg(svg: string): string {
     return result
 }
 
-export function DiagramDisplay({ diagramType, diagramSvg }: DiagramDisplayProps) {
-    if (!diagramType || !diagramSvg) return null
+export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: DiagramDisplayProps) {
+    if (!diagramImageUrl && (!diagramType || !diagramSvg)) return null
 
-    const sanitizedSvg = sanitizeSvg(diagramSvg)
-    const title = diagramType === 'graph' ? 'Grafikas' : 'Schema'
+    const sanitizedSvg = diagramSvg ? sanitizeSvg(diagramSvg) : null
+    const title = diagramImageUrl ? 'Iliustracija' : (diagramType === 'graph' ? 'Grafikas' : 'Schema')
 
     return (
         <div className="mt-4 border rounded-lg p-4 bg-muted/10">
             <div className="text-sm text-muted-foreground mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span>📊</span>
+                    <span>{diagramImageUrl ? '🖼️' : '📊'}</span>
                     <span>{title}</span>
                 </div>
             </div>
@@ -60,10 +61,18 @@ export function DiagramDisplay({ diagramType, diagramSvg }: DiagramDisplayProps)
             <Dialog>
                 <DialogTrigger asChild>
                     <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
-                        <div
-                            dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
-                            className="w-full pointer-events-none"
-                        />
+                        {diagramImageUrl ? (
+                            <img
+                                src={diagramImageUrl}
+                                alt="Illustration"
+                                className="max-w-full h-auto max-h-[300px] object-contain"
+                            />
+                        ) : (
+                            <div
+                                dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
+                                className="w-full pointer-events-none"
+                            />
+                        )}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <div className="bg-white/90 p-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-medium">
                                 <Maximize2 className="w-4 h-4" />
@@ -77,10 +86,18 @@ export function DiagramDisplay({ diagramType, diagramSvg }: DiagramDisplayProps)
                         <DialogTitle>{title}</DialogTitle>
                     </DialogHeader>
                     <div className="flex-1 overflow-auto flex items-center justify-center mt-2">
-                        <div
-                            dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
-                            className="min-w-[300px] w-full max-w-[1200px]"
-                        />
+                        {diagramImageUrl ? (
+                            <img
+                                src={diagramImageUrl}
+                                alt="Illustration"
+                                className="max-w-full h-auto max-h-[85vh] object-contain"
+                            />
+                        ) : (
+                            <div
+                                dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
+                                className="min-w-[300px] w-full max-w-[1200px]"
+                            />
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>

@@ -245,6 +245,7 @@ export function StudentAssignmentInterface({
                             diagramType={firstQuestion.diagram_type}
                             diagramLatex={firstQuestion.diagram_latex}
                             diagramSvg={firstQuestion.diagram_svg}
+                            diagramImageUrl={firstQuestion.diagram_image_url}
                         />
                         <div className="mt-4 text-sm text-muted-foreground">
                             <MathDisplay content={firstQuestion.latex_text || ""} />
@@ -280,6 +281,7 @@ export function StudentAssignmentInterface({
                                                 diagramType={q.diagram_type}
                                                 diagramLatex={q.diagram_latex}
                                                 diagramSvg={q.diagram_svg}
+                                                diagramImageUrl={q.diagram_image_url}
                                             />
 
                                             {revealedIndices.has(index) && (
@@ -434,6 +436,7 @@ export function StudentAssignmentInterface({
                             diagramType={questions[currentIndex].diagram_type}
                             diagramLatex={questions[currentIndex].diagram_latex}
                             diagramSvg={questions[currentIndex].diagram_svg}
+                            diagramImageUrl={questions[currentIndex].diagram_image_url}
                         />
 
                         <div className="pt-6 border-t space-y-6">
