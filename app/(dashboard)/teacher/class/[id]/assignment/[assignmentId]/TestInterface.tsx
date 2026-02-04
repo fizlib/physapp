@@ -15,6 +15,7 @@ export function TestInterface({
     // Points mode props
     pointsMode = false,
     disabled = false,
+    submittedAnswer,
     onPointsSubmit
 }: {
     question: any,
@@ -24,6 +25,7 @@ export function TestInterface({
     // Points mode props
     pointsMode?: boolean,
     disabled?: boolean,
+    submittedAnswer?: string,
     onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void
 }) {
     const [latexInput, setLatexInput] = useState("")
@@ -42,11 +44,11 @@ export function TestInterface({
                 val = typeof evaluated === 'number' ? evaluated : parseFloat(evaluated?.toString());
 
                 if (isNaN(val)) {
-                    setFeedback("Prašome įvesti galiojančią matematinę išraišką")
+                    setFeedback("Prašome įvesti tinkamą matematinę išraišką")
                     return
                 }
             } catch (e) {
-                setFeedback("Prašome įvesti galiojančią matematinę išraišką")
+                setFeedback("Prašome įvesti tinkamą matematinę išraišką")
                 return
             }
 
@@ -98,17 +100,37 @@ export function TestInterface({
         }
     }
 
-    // If already disabled (points mode after submission), show locked state
     if (disabled) {
+        const isNumerical = question.question_type === 'numerical'
+        const mcqOption = !isNumerical && submittedAnswer ? question.options?.[['A', 'B', 'C', 'D'].indexOf(submittedAnswer)] : null
+
         return (
-            <div className="p-4 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
-                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-                    <Check className="h-4 w-4" />
-                    <span className="font-medium">Atsakymas pateiktas</span>
+            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-700 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 mb-3">
+                    <div className="bg-zinc-200/50 dark:bg-zinc-700 p-1 rounded-full">
+                        <Check className="h-4 w-4 text-zinc-600 dark:text-zinc-300" />
+                    </div>
+                    <span className="font-bold text-sm">Atsakymas pateiktas</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Rezultatai bus parodyti baigus visą rinkinį.
-                </p>
+
+                <div className="bg-white dark:bg-zinc-900/50 p-4 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                    <div className="text-foreground">
+                        {isNumerical ? (
+                            <div className="text-lg font-semibold">
+                                <MathDisplay content={submittedAnswer || "—"} />
+                            </div>
+                        ) : (
+                            <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 flex-none flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 shadow-sm">
+                                    {submittedAnswer || "?"}
+                                </div>
+                                <div className="pt-0.5 text-sm leading-relaxed">
+                                    {mcqOption ? <MathDisplay content={mcqOption} /> : "Pasirinktas variantas"}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         )
     }

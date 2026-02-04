@@ -7,7 +7,7 @@ import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
@@ -31,7 +31,8 @@ export function StudentAssignmentInterface({
     pointsEnabled = false,
     exercisePoints = 1,
     initialSubmittedAnswers = {},
-    isLastExercise = false
+    isLastExercise = false,
+    onProgressUpdate
 }: {
     assignment: any,
     classId: string,
@@ -49,17 +50,19 @@ export function StudentAssignmentInterface({
     pointsEnabled?: boolean,
     exercisePoints?: number,
     initialSubmittedAnswers?: Record<string, string>,
-    isLastExercise?: boolean
+    isLastExercise?: boolean,
+    onProgressUpdate?: () => void
 }) {
     // Priority: initialActiveQuestionIndex > previous logic
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
-    // Points mode state - track which question IDs have been submitted
     const [lockedQuestionIds, setLockedQuestionIds] = useState<Set<string>>(
         new Set(Object.keys(initialSubmittedAnswers || {}))
     )
+    const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(initialSubmittedAnswers || {})
+    const [isFinishing, setIsFinishing] = useState(false)
     const router = useRouter()
 
     const questions = assignment.questions || []
@@ -109,8 +112,10 @@ export function StudentAssignmentInterface({
             completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
             currentIndex,
             Array.from(revealedIndices)
-        )
-    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex])
+        ).then(res => {
+            if (res.success && onProgressUpdate) onProgressUpdate()
+        })
+    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex, onProgressUpdate])
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
@@ -131,6 +136,7 @@ export function StudentAssignmentInterface({
             currentIndex,
             Array.from(revealedIndices)
         )
+        if (onProgressUpdate) onProgressUpdate()
 
         // For variation mode, auto-advance logic is handled in render or effect
         if (isVariationMode && newSet.size < requiredVariations) {
@@ -154,6 +160,7 @@ export function StudentAssignmentInterface({
             currentIndex,
             Array.from(newRevealed)
         )
+        if (onProgressUpdate) onProgressUpdate()
         toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
     }
 
@@ -172,7 +179,9 @@ export function StudentAssignmentInterface({
         )
 
         if (result.success) {
+            if (onProgressUpdate) onProgressUpdate()
             toast.success("Atsakymas pateiktas!")
+            setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
             // Check if all questions are now submitted
             const updatedLockedCount = lockedQuestionIds.size + 1
             if (updatedLockedCount >= totalQuestions && onFinish) {
@@ -296,6 +305,7 @@ export function StudentAssignmentInterface({
                                                             const newRevealed = new Set(revealedIndices).add(index)
                                                             setRevealedIndices(newRevealed)
                                                             await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed))
+                                                            if (onProgressUpdate) onProgressUpdate()
                                                         }}
                                                     >
                                                         <HelpCircle className="h-3 w-3" />
@@ -313,6 +323,7 @@ export function StudentAssignmentInterface({
                                                     onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
                                                     pointsMode={pointsEnabled}
                                                     disabled={lockedQuestionIds.has(q.id)}
+                                                    submittedAnswer={submittedAnswers[q.id]}
                                                     onPointsSubmit={handlePointsSubmit}
                                                 />
                                             </div>
@@ -336,44 +347,58 @@ export function StudentAssignmentInterface({
                             </Button>
                         )}
                         <Button
-                            disabled={!canSkip && (pointsEnabled ? lockedQuestionIds.size !== totalQuestions : completedIndices.size !== totalQuestions)}
+                            disabled={isFinishing || (!canSkip && !pointsEnabled && completedIndices.size !== totalQuestions)}
                             variant="default"
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
                             onClick={async () => {
-                                // Auto-submit unanswered points questions when finishing
-                                if (pointsEnabled) {
-                                    for (const q of questions) {
-                                        if (!lockedQuestionIds.has(q.id)) {
-                                            await submitPointsAnswer(
-                                                assignment.id,
-                                                q.id,
-                                                '',
-                                                false,
-                                                q.points || 1,
-                                                totalQuestions
-                                            )
+                                if (isFinishing) return
+                                setIsFinishing(true)
+
+                                try {
+                                    // Auto-submit unanswered points questions ONLY when finishing the entire collection
+                                    if (pointsEnabled && isLastExercise) {
+                                        for (const q of questions) {
+                                            if (!lockedQuestionIds.has(q.id)) {
+                                                await submitPointsAnswer(
+                                                    assignment.id,
+                                                    q.id,
+                                                    '',
+                                                    false,
+                                                    q.points || 1,
+                                                    totalQuestions
+                                                )
+                                            }
                                         }
                                     }
-                                }
 
-                                // Save completion status
-                                await upsertAssignmentProgress(
-                                    assignment.id,
-                                    Array.from(completedIndices),
-                                    true,
-                                    currentIndex
-                                )
+                                    // Save completion status
+                                    await upsertAssignmentProgress(
+                                        assignment.id,
+                                        Array.from(completedIndices),
+                                        true,
+                                        currentIndex
+                                    )
 
-                                if (onFinish) {
-                                    onFinish()
-                                } else {
-                                    router.push(`/student/class/${classId}`)
+                                    if (onFinish) {
+                                        onFinish()
+                                    } else {
+                                        router.push(`/student/class/${classId}`)
+                                    }
+                                } catch (error) {
+                                    console.error("Failed to finish exercise:", error)
+                                    setIsFinishing(false)
                                 }
                             }}
                         >
-                            {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
-                            <CheckCircle2 className="h-4 w-4" />
+                            {isFinishing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <>
+                                    {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
+                                    <CheckCircle2 className="h-4 w-4" />
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>
@@ -451,6 +476,7 @@ export function StudentAssignmentInterface({
                                     onCorrect={handleCorrect}
                                     pointsMode={pointsEnabled}
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
+                                    submittedAnswer={submittedAnswers[questions[currentIndex].id]}
                                     onPointsSubmit={handlePointsSubmit}
                                 />
                             </div>
@@ -501,43 +527,57 @@ export function StudentAssignmentInterface({
                                     </Button>
                                 ) : (
                                     <Button
-                                        disabled={!canProceed}
+                                        disabled={isFinishing || (!canProceed && !pointsEnabled)}
                                         variant="default"
                                         className="bg-green-600 hover:bg-green-700 text-white gap-2"
                                         onClick={async () => {
-                                            // Auto-submit unanswered points questions when finishing
-                                            if (pointsEnabled) {
-                                                for (const q of questions) {
-                                                    if (!lockedQuestionIds.has(q.id)) {
-                                                        await submitPointsAnswer(
-                                                            assignment.id,
-                                                            q.id,
-                                                            '',
-                                                            false,
-                                                            q.points || 1,
-                                                            totalQuestions
-                                                        )
+                                            if (isFinishing) return
+                                            setIsFinishing(true)
+
+                                            try {
+                                                // Auto-submit unanswered points questions ONLY when finishing the entire collection
+                                                if (pointsEnabled && isLastExercise) {
+                                                    for (const q of questions) {
+                                                        if (!lockedQuestionIds.has(q.id)) {
+                                                            await submitPointsAnswer(
+                                                                assignment.id,
+                                                                q.id,
+                                                                '',
+                                                                false,
+                                                                q.points || 1,
+                                                                totalQuestions
+                                                            )
+                                                        }
                                                     }
                                                 }
-                                            }
 
-                                            // Save completion status
-                                            await upsertAssignmentProgress(
-                                                assignment.id,
-                                                Array.from(completedIndices),
-                                                true,
-                                                currentIndex
-                                            )
+                                                // Save completion status
+                                                await upsertAssignmentProgress(
+                                                    assignment.id,
+                                                    Array.from(completedIndices),
+                                                    true,
+                                                    currentIndex
+                                                )
 
-                                            if (onFinish) {
-                                                onFinish()
-                                            } else {
-                                                router.push(`/student/class/${classId}`)
+                                                if (onFinish) {
+                                                    onFinish()
+                                                } else {
+                                                    router.push(`/student/class/${classId}`)
+                                                }
+                                            } catch (error) {
+                                                console.error("Failed to finish exercise:", error)
+                                                setIsFinishing(false)
                                             }
                                         }}
                                     >
-                                        {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
-                                        <CheckCircle2 className="h-4 w-4" />
+                                        {isFinishing ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
+                                                <CheckCircle2 className="h-4 w-4" />
+                                            </>
+                                        )}
                                     </Button>
                                 )}
                             </div>

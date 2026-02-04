@@ -101,6 +101,15 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const [isWaitingForUnlock, setIsWaitingForUnlock] = useState(false)
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const { width, height } = useWindowSize()
+
+    // Function to refresh progress data from server
+    const refreshProgress = async () => {
+        const result = await getCollectionProgress(collection.id)
+        if (result.success && result.progress) {
+            setProgressDataState(result.progress)
+        }
+    }
+
     const totalAssignments = assignments.length
     const currentAssignment = assignments[currentAssignmentIndex]
 
@@ -166,6 +175,8 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
 
         if (nextAssignment) {
             if (nextAssignment.published) {
+                // Refresh progress before moving to next assignment to ensure current index/state is correct
+                await refreshProgress()
                 // Next published assignment exists
                 setCurrentAssignmentIndex(prev => prev + 1)
             } else if (isClasswork) {
@@ -501,6 +512,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
                     // Last exercise in collection - show "Finish" instead of "Next Exercise"
                     isLastExercise={!getNextAssignmentFromAllAssignments()}
+                    onProgressUpdate={refreshProgress}
                 />
             </div>
         </div>
