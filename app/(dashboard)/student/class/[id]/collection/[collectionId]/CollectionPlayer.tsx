@@ -162,30 +162,24 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
             setMaxReachedIndex(prev => Math.max(prev, currentAssignmentIndex + 1))
         }
 
-        if (currentAssignmentIndex < totalAssignments - 1) {
-            // Next published assignment exists
-            const nextIndex = currentAssignmentIndex + 1
-            setCurrentAssignmentIndex(nextIndex)
-        } else {
-            // No more published assignments - finishing the collection
-            // Auto-submit all unanswered points questions for ALL exercises in collection
-            await autoSubmitCollectionPointsAnswers(collection.id)
+        const nextAssignment = getNextAssignmentFromAllAssignments()
 
-            if (isClasswork) {
-                // Classwork: check if there's an unpublished one to wait for
-                const nextUnpublished = getNextAssignmentFromAllAssignments()
-                if (nextUnpublished && !nextUnpublished.published) {
-                    // Wait for teacher to unlock
-                    setIsWaitingForUnlock(true)
-                    setWaitingForAssignmentId(nextUnpublished.id)
-                } else {
-                    // Truly completed
-                    setIsCompleted(true)
-                }
+        if (nextAssignment) {
+            if (nextAssignment.published) {
+                // Next published assignment exists
+                setCurrentAssignmentIndex(prev => prev + 1)
+            } else if (isClasswork) {
+                // Wait for teacher to unlock
+                setIsWaitingForUnlock(true)
+                setWaitingForAssignmentId(nextAssignment.id)
             } else {
-                // Homework: collection completed
+                // Homework: if next is unpublished, treat as finished for now
                 setIsCompleted(true)
             }
+        } else {
+            // Truly no more assignments in the collection
+            await autoSubmitCollectionPointsAnswers(collection.id)
+            setIsCompleted(true)
         }
     }
 
@@ -322,7 +316,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         <div className="space-y-2">
                             <h2 className="text-2xl font-bold tracking-tight">Rinkinys baigtas!</h2>
                             <p className="text-muted-foreground">
-                                Jūs sėkmingai atlikote visas užduotis rinkinyje <span className="font-semibold text-foreground">{collection.title}</span>.
+                                Jūs atlikote visas užduotis rinkinyje <span className="font-semibold text-foreground">{collection.title}</span>.
                             </p>
                         </div>
 
