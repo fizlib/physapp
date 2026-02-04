@@ -87,25 +87,26 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                         </div>
                     </div>
                 </DialogTrigger>
-                <DialogContent className="max-w-[95vw] w-fit max-h-[95vh] flex flex-col p-4">
-                    <DialogHeader>
-                        <DialogTitle>{title}</DialogTitle>
+                <DialogContent className="max-w-[98vw] w-full sm:max-w-[90vw] max-h-[98vh] flex flex-col p-2 sm:p-4 bg-zinc-950/95 border-zinc-800">
+                    <DialogHeader className="px-4 py-2 border-b border-zinc-800">
+                        <DialogTitle className="text-zinc-100">{title}</DialogTitle>
                     </DialogHeader>
-                    <div className="flex-1 overflow-auto flex items-center justify-center mt-2">
+                    <div className="flex-1 overflow-auto flex items-center justify-center p-2 sm:p-4">
                         {diagramImageUrl ? (
-                            <div className="relative w-full h-[70vh]">
+                            <div className="relative w-full h-[85vh] min-h-[300px]">
                                 <Image
                                     src={diagramImageUrl}
                                     alt="Illustration"
                                     fill
                                     className="object-contain"
                                     sizes="95vw"
+                                    priority
                                 />
                             </div>
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                className="min-w-[300px] w-full max-w-[1200px]"
+                                className="w-full h-full max-w-[1400px] flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[85vh]"
                             />
                         )}
                     </div>
