@@ -129,7 +129,7 @@ export function TestInterface({
                                     {mcqOption ? (
                                         mcqOption.trim().startsWith('<svg') ? (
                                             <div
-                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
+                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
                                                 dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption) }}
                                             />
                                         ) : (
@@ -198,7 +198,7 @@ export function TestInterface({
                                     <div className="flex-1 w-full overflow-hidden">
                                         {opt.trim().startsWith('<svg') ? (
                                             <div
-                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
+                                                className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
                                                 dangerouslySetInnerHTML={{ __html: sanitizeSvg(opt) }}
                                             />
                                         ) : (
