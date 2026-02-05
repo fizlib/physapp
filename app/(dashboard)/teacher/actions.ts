@@ -569,10 +569,17 @@ export async function generateExerciseFromImage(formData: FormData) {
   - DO NOT include an exact copy of the problem from the image, even as the first variation.
   
   VARIATION RULES:
+  ${variationType === 'numbers' ? `
+  - Keep the EXACT same context / story / description / structure as the original problem from the image.
+  - FORMATTING CLEANUP: Explicitly REMOVE any part labels like "a)", "b)", "1.", "2.", "c)" from the text. The question should stand on its own.
+  - ONLY change the specific numerical values within the description and calculation.
+  - DO NOT invent new objects or scenarios.
+  ` : `
   - You MUST change the context / story of the problem (e.g. if the original is about a car, make the next one about a train, a runner, a rocket, etc.).
+  `}
   - ALWAYS USE LITHUANIAN LANGUAGE for all generated content. Translate carefully if the input is in another language.
   - Keep the exact same physics/math LOGIC and FORMULA types.
-  - You can change the numerical values as needed to fit the new context.
+  ${variationType === 'descriptions' ? '- You can change the numerical values as needed to fit the new context.' : ''}
   - Ensure the difficulty level remains consistent.
   - Calculate the new correct values based on your new numbers.
   ` : ''}
@@ -592,6 +599,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   If the problem has a common description/background text followed by multiple parts:
   - For the FIRST question (part a, 1, or first value): Include the FULL common description text + the specific question text for this part.
   - For the SUBSEQUENT questions (part b, c, or next values): Include ONLY the specific question text for that part (e.g. "Find the acceleration", "How long for the second worker?"). DO NOT repeat the common description text.
+  - STRIP LABELS: In all cases, strip the labels like "a)", "1.", "c)" from the final "latex_text".
   
   If you fine-grained diagram detection is needed:
   ${useImageAsIllustration ? `
