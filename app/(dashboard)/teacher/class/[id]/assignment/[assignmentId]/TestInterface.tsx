@@ -6,6 +6,7 @@ import { Check, X } from "lucide-react"
 import MathDisplay from "@/components/MathDisplay"
 import MathInput from "@/components/MathInput"
 import * as math from "mathjs"
+import { sanitizeSvg } from "@/lib/svg-utils"
 
 export function TestInterface({
     question,
@@ -129,7 +130,7 @@ export function TestInterface({
                                         mcqOption.trim().startsWith('<svg') ? (
                                             <div
                                                 className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
-                                                dangerouslySetInnerHTML={{ __html: mcqOption }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption) }}
                                             />
                                         ) : (
                                             <MathDisplay content={mcqOption} />
@@ -198,7 +199,7 @@ export function TestInterface({
                                         {opt.trim().startsWith('<svg') ? (
                                             <div
                                                 className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px] [&>svg]:h-auto [&>svg]:w-auto"
-                                                dangerouslySetInnerHTML={{ __html: opt }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(opt) }}
                                             />
                                         ) : (
                                             <MathDisplay content={opt} />
