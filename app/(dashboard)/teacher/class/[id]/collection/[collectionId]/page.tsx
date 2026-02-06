@@ -15,18 +15,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
     const supabase = await createClient()
     const { id, collectionId } = await params
 
-    const [collectionResult, availableExercisesResult, classroomResult] = await Promise.all([
+    const [collectionResult, classroomResult] = await Promise.all([
         supabase
             .from('collections')
             .select('*, assignments(*), classrooms(type)')
             .eq('id', collectionId)
             .single(),
-        supabase
-            .from('assignments')
-            .select('*')
-            .eq('classroom_id', id)
-            .is('collection_id', null)
-            .order('created_at', { ascending: false }),
         supabase
             .from('classrooms')
             .select('lesson_schedule')
@@ -35,7 +29,6 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
     ])
 
     const { data: collection } = collectionResult
-    const { data: availableExercises } = availableExercisesResult
     const { data: classroom } = classroomResult
 
     if (!collection) notFound()
@@ -71,7 +64,6 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                             <CollectionManager
                                 classroomId={id}
                                 collectionId={collectionId}
-                                availableExercises={availableExercises || []}
                             />
                             {collection.category === 'classwork' && (
                                 <CollectionBatchActions

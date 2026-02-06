@@ -1170,7 +1170,10 @@ export async function uploadCollectionSlides(formData: FormData): Promise<{ succ
     try {
         const { data: uploadData, error: uploadError } = await supabase.storage
             .from('collection_slides')
-            .upload(filePath, file)
+            .upload(filePath, file, {
+                cacheControl: '31536000',
+                upsert: false
+            })
 
         if (uploadError) {
             console.error("Storage upload error:", uploadError)
@@ -1188,54 +1191,143 @@ export async function uploadCollectionSlides(formData: FormData): Promise<{ succ
     }
 }
 
-
-export async function addExerciseToCollection(classroomId: string, collectionId: string, assignmentId: string): Promise<ActionState> {
+export async function listCollectionSlides(): Promise<{ success: boolean, files?: { name: string, url: string }[], error?: string }> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // Verify teacher owns the classroom
-    const { data: classroom } = await supabase
-        .from('classrooms')
-        .select('teacher_id')
-        .eq('id', classroomId)
-        .single()
+    try {
+        const { data, error } = await supabase.storage
+            .from('collection_slides')
+            .list('slides', {
+                limit: 100,
+                offset: 0,
+                sortBy: { column: 'name', order: 'desc' },
+            })
 
-    if (!classroom || classroom.teacher_id !== user.id) {
-        return { success: false, error: "Unauthorized to manage this classroom" }
-    }
+        if (error) {
+            console.error("Storage list error:", error)
+            return { success: false, error: "Failed to list slides" }
+        }
 
-    // Calculate order_index
-    let nextOrderIndex = 0
-    const { data: maxOrderData } = await supabase
-        .from('assignments')
-        .select('order_index')
-        .eq('collection_id', collectionId)
-        .order('order_index', { ascending: false })
-        .limit(1)
+        const filesWithUrls = data.map(file => {
+            const { data: { publicUrl } } = supabase.storage
+                .from('collection_slides')
+                .getPublicUrl(`slides/${file.name}`)
 
-    if (maxOrderData && maxOrderData.length > 0) {
-        nextOrderIndex = (maxOrderData[0].order_index || 0) + 1
-    }
-
-    const { error } = await supabase
-        .from('assignments')
-        .update({
-            collection_id: collectionId,
-            order_index: nextOrderIndex
+            return {
+                name: file.name,
+                url: publicUrl
+            }
         })
-        .eq('id', assignmentId)
-        .eq('classroom_id', classroomId)
 
-
-    if (error) {
-        console.error(error)
-        return { success: false, error: 'Failed to add exercise to collection' }
+        return { success: true, files: filesWithUrls }
+    } catch (err) {
+        console.error("List exception:", err)
+        return { success: false, error: "An error occurred while fetching slides library" }
     }
+}
 
-    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
-    return { success: true }
+
+export async function addExerciseToCollection(targetClassroomId: string, targetCollectionId: string, sourceAssignmentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    try {
+        // 1. Fetch Source Assignment and Questions
+        const { data: sourceAss, error: assError } = await supabase
+            .from('assignments')
+            .select('*, questions(*)')
+            .eq('id', sourceAssignmentId)
+            .single()
+
+        if (assError || !sourceAss) {
+            console.error("Error fetching source assignment:", assError)
+            return { success: false, error: "Source exercise not found" }
+        }
+
+        // 2. Verify teacher owns BOTH classrooms (the target and possibly the source)
+        // We definitely need to check the target classroom ownership
+        const { data: targetClassroom } = await supabase
+            .from('classrooms')
+            .select('teacher_id')
+            .eq('id', targetClassroomId)
+            .single()
+
+        if (!targetClassroom || targetClassroom.teacher_id !== user.id) {
+            return { success: false, error: "Unauthorized to manage the target classroom" }
+        }
+
+        // 3. Calculate order_index for the new assignment in the target collection
+        let nextOrderIndex = 0
+        const { data: maxOrderData } = await supabase
+            .from('assignments')
+            .select('order_index')
+            .eq('collection_id', targetCollectionId)
+            .order('order_index', { ascending: false })
+            .limit(1)
+
+        if (maxOrderData && maxOrderData.length > 0) {
+            nextOrderIndex = (maxOrderData[0].order_index || 0) + 1
+        }
+
+        // 4. Create New Assignment (Copy)
+        const { data: newAss, error: newAssError } = await supabase
+            .from('assignments')
+            .insert({
+                classroom_id: targetClassroomId,
+                collection_id: targetCollectionId,
+                title: sourceAss.title,
+                published: false, // Default to unpublished in the new home
+                order_index: nextOrderIndex,
+                show_all_questions: sourceAss.show_all_questions,
+                required_variations_count: sourceAss.required_variations_count,
+                points_enabled: sourceAss.points_enabled,
+                points: sourceAss.points
+            })
+            .select()
+            .single()
+
+        if (newAssError || !newAss) {
+            console.error("Error copying assignment:", newAssError)
+            return { success: false, error: "Failed to create copied exercise" }
+        }
+
+        // 5. Copy Questions
+        if (sourceAss.questions && sourceAss.questions.length > 0) {
+            const questionsToInsert = sourceAss.questions.map((q: any) => ({
+                assignment_id: newAss.id,
+                latex_text: q.latex_text,
+                question_type: q.question_type,
+                correct_value: q.correct_value,
+                tolerance_percent: q.tolerance_percent,
+                options: q.options,
+                correct_answer: q.correct_answer,
+                diagram_type: q.diagram_type,
+                diagram_svg: q.diagram_svg,
+                diagram_image_url: q.diagram_image_url,
+                solution_text: q.solution_text,
+                points: q.points
+            }))
+
+            const { error: newQuestError } = await supabase
+                .from('questions')
+                .insert(questionsToInsert)
+
+            if (newQuestError) {
+                console.error("Error copying questions:", newQuestError)
+            }
+        }
+
+        revalidatePath(`/teacher/class/${targetClassroomId}/collection/${targetCollectionId}`)
+        return { success: true }
+    } catch (err) {
+        console.error("Deep copy import error:", err)
+        return { success: false, error: "An unexpected error occurred during import" }
+    }
 }
 
 export async function removeExerciseFromCollection(classroomId: string, collectionId: string, assignmentId: string): Promise<ActionState> {
@@ -1384,7 +1476,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
 
 
 
-export async function deleteCollection(collectionId: string, classroomId: string): Promise<ActionState> {
+export async function deleteCollection(collectionId: string, classroomId: string, deleteExercises: boolean = false): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1401,18 +1493,41 @@ export async function deleteCollection(collectionId: string, classroomId: string
         return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
-    // 1. Unlink assignments (set collection_id to null)
-    const { error: unlinkError } = await supabase
-        .from('assignments')
-        .update({ collection_id: null })
-        .eq('collection_id', collectionId)
+    if (deleteExercises) {
+        // 1. Get all assignment IDs in this collection
+        const { data: assignments } = await supabase
+            .from('assignments')
+            .select('id')
+            .eq('collection_id', collectionId)
 
-    if (unlinkError) {
-        console.error("Unlink Error", unlinkError)
-        return { success: false, error: 'Failed to unlink exercises from collection' }
+        const assignmentIds = assignments?.map(a => a.id) || []
+
+        if (assignmentIds.length > 0) {
+            // 2. Delete Submissions
+            await supabase.from('submissions').delete().in('assignment_id', assignmentIds)
+            // 3. Delete Questions
+            await supabase.from('questions').delete().in('assignment_id', assignmentIds)
+            // 4. Delete Assignments
+            const { error: deleteAssError } = await supabase.from('assignments').delete().in('id', assignmentIds)
+            if (deleteAssError) {
+                console.error("Delete Assignments Error", deleteAssError)
+                return { success: false, error: 'Failed to delete exercises' }
+            }
+        }
+    } else {
+        // Unlink assignments (set collection_id to null)
+        const { error: unlinkError } = await supabase
+            .from('assignments')
+            .update({ collection_id: null })
+            .eq('collection_id', collectionId)
+
+        if (unlinkError) {
+            console.error("Unlink Error", unlinkError)
+            return { success: false, error: 'Failed to unlink exercises from collection' }
+        }
     }
 
-    // 2. Delete Collection
+    // Finally, delete the collection
     const { error: deleteError } = await supabase
         .from('collections')
         .delete()
@@ -1549,18 +1664,22 @@ export async function updateAssignmentOrder(
     return { success: true }
 }
 
-export async function getTeacherClassrooms(currentClassroomId: string) {
+export async function getTeacherClassrooms(excludeClassroomId?: string) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('classrooms')
         .select('id, name')
         .eq('teacher_id', user.id)
-        .neq('id', currentClassroomId)
-        .order('name')
+
+    if (excludeClassroomId) {
+        query = query.neq('id', excludeClassroomId)
+    }
+
+    const { data, error } = await query.order('name')
 
     if (error) {
         console.error('Error fetching teacher classrooms:', error)
@@ -1628,6 +1747,7 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                 classroom_id: targetClassroomId,
                 title: sourceCollection.title,
                 category: sourceCollection.category,
+                slides_url: sourceCollection.slides_url,
                 scheduled_date: null // Don't copy schedule
             })
             .select()
@@ -1697,4 +1817,24 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
         console.error("Import error:", err)
         return { success: false, error: "An unexpected error occurred during import" }
     }
+}
+
+export async function getCollectionExercises(collectionId: string) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    const { data, error } = await supabase
+        .from('assignments')
+        .select('id, title')
+        .eq('collection_id', collectionId)
+        .order('order_index', { ascending: true })
+
+    if (error) {
+        console.error('Error fetching collection exercises:', error)
+        return []
+    }
+
+    return data
 }

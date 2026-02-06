@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { deleteCollection } from '@/app/(dashboard)/teacher/actions'
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 interface DeleteCollectionButtonProps {
     collectionId: string
@@ -25,6 +27,7 @@ interface DeleteCollectionButtonProps {
 export function DeleteCollectionButton({ collectionId, classroomId, title }: DeleteCollectionButtonProps) {
     const [open, setOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteExercises, setDeleteExercises] = useState(false)
 
     const handleDelete = async (e: React.MouseEvent) => {
         // Prevent event propagation to the card link
@@ -33,7 +36,7 @@ export function DeleteCollectionButton({ collectionId, classroomId, title }: Del
 
         setIsDeleting(true)
         try {
-            const result = await deleteCollection(collectionId, classroomId)
+            const result = await deleteCollection(collectionId, classroomId, deleteExercises)
             if (!result.success) {
                 // Ideally show toast error here
                 console.error(result.error)
@@ -67,8 +70,21 @@ export function DeleteCollectionButton({ collectionId, classroomId, title }: Del
                 <AlertDialogHeader>
                     <AlertDialogTitle>Delete "{title}"?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This will remove the collection. All exercises in this collection will remain in your library but will be unlinked from this collection.
+                        Ištrinus kolekciją, ji bus pašalinta iš šios klasės.
                     </AlertDialogDescription>
+                    <div className="flex items-center space-x-2 pt-4" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                            id="delete-exercises"
+                            checked={deleteExercises}
+                            onCheckedChange={(checked) => setDeleteExercises(!!checked)}
+                        />
+                        <Label
+                            htmlFor="delete-exercises"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                            Taip pat ištrinti visas šios kolekcijos užduotis
+                        </Label>
+                    </div>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>

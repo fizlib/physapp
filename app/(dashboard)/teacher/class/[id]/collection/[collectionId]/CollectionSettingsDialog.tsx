@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Settings, Loader2, Trash2, AlertTriangle, Check, FileText, Upload, X } from "lucide-react"
-import { updateCollection, deleteCollection, uploadCollectionSlides } from "../../../../actions"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Settings, Loader2, Trash2, AlertTriangle, Check, FileText, Upload, X, Library } from "lucide-react"
+import { updateCollection, deleteCollection, uploadCollectionSlides, listCollectionSlides } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { LessonCalendar } from "@/components/teacher/LessonCalendar"
@@ -56,6 +57,10 @@ export function CollectionSettingsDialog({
     const [slidesUrl, setSlidesUrl] = useState<string | null>(currentSlidesUrl || null)
     const [uploading, setUploading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
+    const [libraryOpen, setLibraryOpen] = useState(false)
+    const [libraryFiles, setLibraryFiles] = useState<{ name: string, url: string }[]>([])
+    const [fetchingLibrary, setFetchingLibrary] = useState(false)
+    const [deleteExercises, setDeleteExercises] = useState(false)
 
     const router = useRouter()
 
@@ -107,7 +112,7 @@ export function CollectionSettingsDialog({
     const handleDelete = async () => {
         setLoading(true)
         try {
-            const result = await deleteCollection(collectionId, classroomId)
+            const result = await deleteCollection(collectionId, classroomId, deleteExercises)
             if (result.success) {
                 toast.success("Collection deleted")
                 router.push(`/teacher/class/${classroomId}?view=collections`)
@@ -119,6 +124,17 @@ export function CollectionSettingsDialog({
             toast.error("An error occurred")
             setLoading(false)
         }
+    }
+
+    const fetchLibrary = async () => {
+        setFetchingLibrary(true)
+        const res = await listCollectionSlides()
+        if (res.success && res.files) {
+            setLibraryFiles(res.files)
+        } else {
+            toast.error(res.error || "Failed to load slides library")
+        }
+        setFetchingLibrary(false)
     }
 
     const showCalendar = category === 'classwork'
@@ -261,6 +277,22 @@ export function CollectionSettingsDialog({
                                     <p className="text-xs text-muted-foreground">PDF only (max 10MB)</p>
                                 </div>
                             )}
+
+                            {!slidesUrl && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setLibraryOpen(true)
+                                        fetchLibrary()
+                                    }}
+                                    disabled={loading || uploading}
+                                >
+                                    <Library className="w-4 h-4 mr-2" />
+                                    Choose from Library
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -319,14 +351,76 @@ export function CollectionSettingsDialog({
                         <DialogHeader>
                             <DialogTitle className="text-red-600">Delete Collection?</DialogTitle>
                             <DialogDescription>
-                                Are you sure you want to delete this collection? The exercises inside will not be deleted, just unlinked from this collection.
+                                Are you sure you want to delete this collection?
                             </DialogDescription>
+                            <div className="flex items-center space-x-2 pt-4">
+                                <Checkbox
+                                    id="dialog-delete-exercises"
+                                    checked={deleteExercises}
+                                    onCheckedChange={(checked) => setDeleteExercises(!!checked)}
+                                />
+                                <Label
+                                    htmlFor="dialog-delete-exercises"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                >
+                                    Taip pat ištrinti visas šios kolekcijos užduotis
+                                </Label>
+                            </div>
                         </DialogHeader>
                         <DialogFooter>
                             <Button variant="ghost" onClick={() => setDeleteOpen(false)}>Cancel</Button>
                             <Button variant="destructive" onClick={handleDelete} disabled={loading}>
                                 {loading ? "Deleting..." : "Yes, Delete It"}
                             </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Slides Library Dialog */}
+                <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Slides Library</DialogTitle>
+                            <DialogDescription>
+                                Choose from previously uploaded slides.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="max-h-[300px] overflow-y-auto space-y-2 py-4">
+                            {fetchingLibrary ? (
+                                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                                    <Loader2 className="w-8 h-8 animate-spin mb-2" />
+                                    <p className="text-sm">Loading library...</p>
+                                </div>
+                            ) : libraryFiles.length > 0 ? (
+                                libraryFiles.map((file) => (
+                                    <div
+                                        key={file.name}
+                                        className="flex items-center justify-between p-3 rounded-md border hover:bg-muted/50 cursor-pointer transition-colors"
+                                        onClick={() => {
+                                            setSlidesUrl(file.url)
+                                            setLibraryOpen(false)
+                                            toast.success("Slides selected from library")
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <FileText className="w-4 h-4 text-primary shrink-0" />
+                                            <span className="text-sm truncate">
+                                                {file.name.split('-').slice(1).join('-') || file.name}
+                                            </span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="h-8 text-xs">
+                                            Select
+                                        </Button>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <p className="text-sm">No slides found in library.</p>
+                                </div>
+                            )}
+                        </div>
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={() => setLibraryOpen(false)}>Close</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
