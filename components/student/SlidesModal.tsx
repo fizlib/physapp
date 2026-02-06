@@ -40,10 +40,22 @@ export function SlidesModal({ url, title, isOpen, onOpenChange }: SlidesModalPro
                 </DialogHeader>
                 <div className="flex-1 w-full bg-muted/20 relative">
                     <iframe
-                        src={`${url}#toolbar=0`}
+                        src={`https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`}
                         className="w-full h-full border-none"
                         title="Theory Slides"
                     />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center -z-10 bg-muted/50 p-6 text-center">
+                        <p className="text-sm text-muted-foreground mb-4">
+                            Jei skaidrės neatsidaro, paspauskite mygtuką žemiau:
+                        </p>
+                        <Button
+                            variant="secondary"
+                            onClick={() => window.open(url, '_blank')}
+                        >
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            Atidaryti skaidres
+                        </Button>
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>
