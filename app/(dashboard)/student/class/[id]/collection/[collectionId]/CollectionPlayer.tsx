@@ -16,7 +16,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { checkIpAccess, getCollectionAssignments, getCollectionResults, autoSubmitCollectionPointsAnswers, getCollectionProgress } from "../../../../actions"
-import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react"
+import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
+import { SlidesButton } from "@/components/student/SlidesButton"
 
 interface CollectionPlayerProps {
     collection: any
@@ -488,7 +489,18 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         </DropdownMenu>
                     </div>
 
-                    <h1 className="text-xl font-bold text-primary border-b pb-4">{collection.title}</h1>
+                    <h1 className="text-xl font-bold text-primary border-b pb-4 flex items-center justify-between gap-4">
+                        <span>{collection.title}</span>
+                        {collection.slides_url && (
+                            <SlidesButton
+                                url={collection.slides_url}
+                                title={collection.title}
+                                variant="outline"
+                                className="h-9"
+                            // Override default "Skaidrės" text if needed, but "Teorija" might be better here
+                            />
+                        )}
+                    </h1>
                 </div>
 
                 {/* Current Assignment Interface */}

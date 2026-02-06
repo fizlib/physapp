@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Settings, Loader2, Trash2, AlertTriangle, Check } from "lucide-react"
-import { updateCollection, deleteCollection } from "../../../../actions"
+import { Settings, Loader2, Trash2, AlertTriangle, Check, FileText, Upload, X } from "lucide-react"
+import { updateCollection, deleteCollection, uploadCollectionSlides } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { LessonCalendar } from "@/components/teacher/LessonCalendar"
@@ -30,6 +30,7 @@ interface CollectionSettingsDialogProps {
     currentTitle: string
     currentCategory: 'homework' | 'classwork'
     currentScheduledDate?: string | null
+    currentSlidesUrl?: string | null
     lessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
 }
@@ -40,6 +41,7 @@ export function CollectionSettingsDialog({
     currentTitle,
     currentCategory,
     currentScheduledDate,
+    currentSlidesUrl,
     lessonSchedule,
     trigger
 }: CollectionSettingsDialogProps) {
@@ -51,6 +53,8 @@ export function CollectionSettingsDialog({
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
     const [selectedTime, setSelectedTime] = useState<string>("")
+    const [slidesUrl, setSlidesUrl] = useState<string | null>(currentSlidesUrl || null)
+    const [uploading, setUploading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
     const router = useRouter()
@@ -69,8 +73,9 @@ export function CollectionSettingsDialog({
                 setSelectedDate(null)
                 setSelectedTime("")
             }
+            setSlidesUrl(currentSlidesUrl || null)
         }
-    }, [open, currentTitle, currentCategory, currentScheduledDate])
+    }, [open, currentTitle, currentCategory, currentScheduledDate, currentSlidesUrl])
 
     const handleSave = async () => {
         setLoading(true)
@@ -84,7 +89,7 @@ export function CollectionSettingsDialog({
                 scheduledDate = dateWithTime.toISOString()
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -117,7 +122,7 @@ export function CollectionSettingsDialog({
     }
 
     const showCalendar = category === 'classwork'
-    const hasChanges = title !== currentTitle || category !== currentCategory
+    const hasChanges = title !== currentTitle || category !== currentCategory || slidesUrl !== (currentSlidesUrl || null)
         || (category === 'classwork' &&
             ((selectedDate?.toISOString() !== (currentScheduledDate ? new Date(currentScheduledDate).toISOString() : undefined))
                 || (selectedTime !== (currentScheduledDate ? new Date(currentScheduledDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
@@ -191,7 +196,75 @@ export function CollectionSettingsDialog({
                         </div>
                     </div>
 
-                    {/* Calendar for Classwork scheduling */}
+                    <div className="space-y-3">
+                        <Label>Theory Slides (PDF)</Label>
+                        <div className="space-y-2">
+                            {slidesUrl ? (
+                                <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                        <FileText className="w-4 h-4 text-primary shrink-0" />
+                                        <span className="text-sm truncate">
+                                            {slidesUrl.split('/').pop()?.split('-').slice(1).join('-') || "Theory Slides"}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 text-xs"
+                                            onClick={() => window.open(slidesUrl, '_blank')}
+                                        >
+                                            View
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 p-0 text-red-500"
+                                            onClick={() => setSlidesUrl(null)}
+                                            disabled={loading || uploading}
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer relative">
+                                    <input
+                                        type="file"
+                                        accept=".pdf"
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                        disabled={loading || uploading}
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0]
+                                            if (!file) return
+
+                                            setUploading(true)
+                                            const formData = new FormData()
+                                            formData.append('file', file)
+
+                                            const res = await uploadCollectionSlides(formData)
+                                            if (res.success && res.url) {
+                                                setSlidesUrl(res.url)
+                                                toast.success("Slides uploaded")
+                                            } else {
+                                                toast.error(res.error || "Failed to upload slides")
+                                            }
+                                            setUploading(false)
+                                        }}
+                                    />
+                                    {uploading ? (
+                                        <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mb-2" />
+                                    ) : (
+                                        <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                                    )}
+                                    <p className="text-sm font-medium">Click to upload theory slides</p>
+                                    <p className="text-xs text-muted-foreground">PDF only (max 10MB)</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-border" />
                     {showCalendar && (
                         <div className="space-y-3 pt-2 border-t">
                             <LessonCalendar

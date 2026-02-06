@@ -7,6 +7,7 @@ import Link from "next/link"
 import { ArrowLeft, BookOpen, Clock, Activity, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
+import { SlidesButton } from "@/components/student/SlidesButton"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -131,13 +132,15 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                         </h3>
                                         <div className="grid gap-4 md:grid-cols-2">
                                             {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
-                                                const progress = getCollectionProgress(collection)
                                                 const hasBypass = activeBypasses?.some((b: any) => b.collection_id === collection.id)
                                                 const isRestricted = isIpRestricted && !hasBypass
 
-                                                const cardContent = (
-                                                    <Card className={`transition-colors bg-secondary/10 ${isRestricted ? 'opacity-75' : 'cursor-pointer hover:border-primary/50'}`}>
-                                                        <CardContent className="p-6 space-y-4">
+                                                return (
+                                                    <Card key={collection.id} className={`relative transition-colors bg-secondary/10 ${isRestricted ? 'opacity-75' : 'hover:border-primary/50'}`}>
+                                                        {!isRestricted && (
+                                                            <Link href={`/student/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                        )}
+                                                        <CardContent className="p-6 space-y-4 relative z-10 pointer-events-none">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="space-y-1.5 flex-1 pr-4">
                                                                     <div className="flex items-center gap-2">
@@ -153,6 +156,19 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Darbas klasėje</span>
                                                             </div>
 
+                                                            <div className="flex items-center justify-between gap-4 pointer-events-auto">
+                                                                <div className="flex-1">
+                                                                    {collection.slides_url && (
+                                                                        <SlidesButton
+                                                                            url={collection.slides_url}
+                                                                            title={collection.title}
+                                                                            variant="secondary"
+                                                                            className="h-8 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
                                                             {/* IP Restriction message for classwork */}
                                                             {isRestricted && (
                                                                 <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
@@ -162,16 +178,6 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                             )}
                                                         </CardContent>
                                                     </Card>
-                                                )
-
-                                                if (isRestricted) {
-                                                    return <div key={collection.id}>{cardContent}</div>
-                                                }
-
-                                                return (
-                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
-                                                        {cardContent}
-                                                    </Link>
                                                 )
                                             })}
 
@@ -190,41 +196,51 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                             {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => {
                                                 const progress = getCollectionProgress(collection)
                                                 return (
-                                                    <Link key={collection.id} href={`/student/class/${id}/collection/${collection.id}`}>
-                                                        <Card className="cursor-pointer hover:border-primary/50 transition-colors bg-secondary/10">
-                                                            <CardContent className="p-6 space-y-4">
-                                                                <div className="flex justify-between items-start">
-                                                                    <div className="space-y-1.5 flex-1 pr-4">
-                                                                        <h3 className="font-semibold leading-none">{collection.title}</h3>
-                                                                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                                                            <span>{collection.assignments?.length || 0} Užduotys</span>
-                                                                            <span>•</span>
-                                                                            <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
-                                                                        </div>
+                                                    <Card key={collection.id} className="relative hover:border-primary/50 transition-colors bg-secondary/10">
+                                                        <Link href={`/student/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                        <CardContent className="p-6 space-y-4 relative z-10 pointer-events-none">
+                                                            <div className="flex justify-between items-start">
+                                                                <div className="space-y-1.5 flex-1 pr-4">
+                                                                    <h3 className="font-semibold leading-none">{collection.title}</h3>
+                                                                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                                                        <span>{collection.assignments?.length || 0} Užduotys</span>
+                                                                        <span>•</span>
+                                                                        <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
                                                                     </div>
-                                                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Namų darbai</span>
                                                                 </div>
+                                                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Namų darbai</span>
+                                                            </div>
 
-                                                                {/* Progress Section */}
-                                                                <div className="space-y-2">
-                                                                    {progress > 0 && progress < 100 && (
-                                                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                                                            <span>{Math.round(progress)}% Atlikta</span>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {progress === 100 ? (
-                                                                        <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
-                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                            <span className="text-xs font-medium">Atlikta</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <Progress value={progress} className="h-1.5" />
-                                                                    )}
+                                                            {collection.slides_url && (
+                                                                <div className="pt-1 pointer-events-auto">
+                                                                    <SlidesButton
+                                                                        url={collection.slides_url}
+                                                                        title={collection.title}
+                                                                        variant="secondary"
+                                                                        className="h-8 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none"
+                                                                    />
                                                                 </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    </Link>
+                                                            )}
+
+                                                            {/* Progress Section */}
+                                                            <div className="space-y-2 pointer-events-auto">
+                                                                {progress > 0 && progress < 100 && (
+                                                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                                                        <span>{Math.round(progress)}% Atlikta</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {progress === 100 ? (
+                                                                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-md">
+                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                        <span className="text-xs font-medium">Atlikta</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <Progress value={progress} className="h-1.5" />
+                                                                )}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
                                                 )
                                             })}
                                         </div>

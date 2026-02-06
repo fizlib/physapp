@@ -85,6 +85,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 currentTitle={collection.title}
                                 currentCategory={collection.category}
                                 currentScheduledDate={collection.scheduled_date}
+                                currentSlidesUrl={collection.slides_url}
                                 lessonSchedule={classroom?.lesson_schedule}
                             />
                             <Button variant="outline" size="sm" asChild>

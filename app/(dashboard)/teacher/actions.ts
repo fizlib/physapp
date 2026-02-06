@@ -1103,7 +1103,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1123,13 +1123,19 @@ export async function updateCollection(classroomId: string, collectionId: string
         return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
+    const updateData: any = {
+        title: title,
+        category: category,
+        scheduled_date: scheduledDate || null
+    }
+
+    if (slidesUrl !== undefined) {
+        updateData.slides_url = slidesUrl
+    }
+
     const { error } = await supabase
         .from('collections')
-        .update({
-            title: title,
-            category: category,
-            scheduled_date: scheduledDate || null
-        })
+        .update(updateData)
         .eq('id', collectionId)
         .eq('classroom_id', classroomId)
 
@@ -1141,6 +1147,45 @@ export async function updateCollection(classroomId: string, collectionId: string
     revalidatePath(`/teacher/class/${classroomId}`)
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
     return { success: true }
+}
+
+export async function uploadCollectionSlides(formData: FormData): Promise<{ success: boolean, url?: string, error?: string }> {
+    const supabase = await createClient()
+
+    // 1. Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const file = formData.get('file') as File
+    if (!file) {
+        return { success: false, error: "No file provided" }
+    }
+
+    console.log("Uploading collection slides to Supabase Storage...")
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`
+    const filePath = `slides/${fileName}`
+
+    // Use a try-catch for storage interaction
+    try {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('collection_slides')
+            .upload(filePath, file)
+
+        if (uploadError) {
+            console.error("Storage upload error:", uploadError)
+            return { success: false, error: "Failed to upload slides" }
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('collection_slides')
+            .getPublicUrl(filePath)
+
+        return { success: true, url: publicUrl }
+    } catch (err) {
+        console.error("Upload exception:", err)
+        return { success: false, error: "An error occurred during upload" }
+    }
 }
 
 
