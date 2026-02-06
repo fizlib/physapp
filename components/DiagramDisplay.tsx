@@ -44,7 +44,7 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                className="w-full pointer-events-none"
+                                className="w-full pointer-events-none md:[&>svg]:max-h-[300px] flex items-center justify-center"
                             />
                         )}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
