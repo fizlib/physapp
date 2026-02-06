@@ -21,8 +21,8 @@ export function SlidesModal({ url, title, isOpen, onOpenChange }: SlidesModalPro
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden border-none bg-background/95 backdrop-blur-md">
-                <DialogHeader className="p-4 border-b flex flex-row items-center justify-between space-y-0">
+            <DialogContent className="w-full max-w-full sm:max-w-4xl h-[100dvh] sm:h-[90vh] flex flex-col p-0 overflow-hidden border-none bg-background/95 backdrop-blur-md">
+                <DialogHeader className="p-4 pt-8 sm:pt-4 border-b flex flex-row items-center justify-between space-y-0 relative">
                     <DialogTitle className="text-xl font-bold truncate pr-8">
                         {title} - Teorija
                     </DialogTitle>
