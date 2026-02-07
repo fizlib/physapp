@@ -146,6 +146,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [generationType, setGenerationType] = useState<'exact' | 'similar'>('exact')
     const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice'>('auto')
+    const [customInstructions, setCustomInstructions] = useState('')
     const [answersInSvg, setAnswersInSvg] = useState(false)
     const [passRequirement, setPassRequirement] = useState(2)
     const [generateSolution, setGenerateSolution] = useState(true)
@@ -228,6 +229,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                 formData.append('generationType', generationType)
             }
             formData.append('exerciseType', aiExerciseType)
+            formData.append('customInstructions', customInstructions)
             formData.append('answersInSvg', answersInSvg.toString())
             formData.append('generateSolution', generateSolution.toString())
             formData.append('useImageAsIllustration', useImageAsIllustration.toString())
@@ -641,6 +643,20 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                             </div>
                                         )}
                                     </div>
+                                </div>
+
+                                <div className="space-y-2 pt-2 border-t border-dashed">
+                                    <Label htmlFor="custom-instructions" className="text-sm font-semibold">Custom Instructions (Optional)</Label>
+                                    <textarea
+                                        id="custom-instructions"
+                                        placeholder="e.g. 'Make it harder', 'Focus on kinetic energy', 'Use Lithuanian names'"
+                                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        value={customInstructions}
+                                        onChange={(e) => setCustomInstructions(e.target.value)}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        These instructions will be sent to the AI alongside the image.
+                                    </p>
                                 </div>
                             </div>
 

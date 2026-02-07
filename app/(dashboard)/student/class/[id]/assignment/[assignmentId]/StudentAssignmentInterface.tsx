@@ -53,8 +53,15 @@ export function StudentAssignmentInterface({
     isLastExercise?: boolean,
     onProgressUpdate?: () => void
 }) {
-    // Priority: initialActiveQuestionIndex > previous logic
+    const questions = assignment.questions || []
+    const totalQuestions = questions.length
+    const requiredVariations = assignment.required_variations_count;
+    const isVariationMode = requiredVariations && requiredVariations > 0;
+
+    // Initialize currentIndex deterministically to avoid hydration mismatch
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
+    const [hasCheckedVariationSwitch, setHasCheckedVariationSwitch] = useState(false)
+
     // track which questions have been answered correctly
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
@@ -65,47 +72,56 @@ export function StudentAssignmentInterface({
     const [isFinishing, setIsFinishing] = useState(false)
     const router = useRouter()
 
-    const questions = assignment.questions || []
-    const totalQuestions = questions.length
-    // Variation Mode Logic
-    const requiredVariations = assignment.required_variations_count;
-    const isVariationMode = requiredVariations && requiredVariations > 0;
-
     // If variation mode, "showAll" is overridden to false
     const showAll = !isVariationMode && assignment.show_all_questions
 
-    // Initialize currentIndex for variation mode
-    useState(() => {
-        if (isVariationMode && initialActiveQuestionIndex === undefined) {
-            // Pick the first unsolved index
-            // If all solved (or enough solved), pick any (won't matter as we show finish screen)
-            const solvedCount = initialCompletedIndices.length;
-            if (solvedCount < requiredVariations) {
+    // Client-side effect to switch variation if current is done (avoids hydration mismatch)
+    useEffect(() => {
+        if (hasCheckedVariationSwitch) return
+        setHasCheckedVariationSwitch(true)
+
+        if (isVariationMode) {
+            const isDone = initialCompletedIndices.includes(currentIndex) ||
+                initialRevealedIndices.includes(currentIndex);
+
+            if (initialActiveQuestionIndex === undefined || isDone) {
                 const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i) && !initialRevealedIndices.includes(i));
                 if (unsolved.length > 0) {
-                    // Pick random to ensure "different variation" feel
-                    const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
-                    setCurrentIndex(randIndex);
+                    const newIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
+                    if (newIndex !== currentIndex) {
+                        setCurrentIndex(newIndex);
+                    }
+                } else {
+                    // All variations have been tried (completed or revealed)
+                    // Reset revealed indices to give student a fresh start
+                    setRevealedIndices(new Set())
+                    // Pick any non-completed variation
+                    const notCompleted = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i));
+                    if (notCompleted.length > 0) {
+                        const newIndex = notCompleted[Math.floor(Math.random() * notCompleted.length)];
+                        setCurrentIndex(newIndex);
+                        // Save the reset to DB
+                        upsertAssignmentProgress(
+                            assignment.id,
+                            initialCompletedIndices,
+                            false,
+                            newIndex,
+                            [] // Empty revealed indices
+                        )
+                    }
                 }
             }
         }
-    })
+    }, [hasCheckedVariationSwitch, isVariationMode, initialActiveQuestionIndex, initialCompletedIndices, initialRevealedIndices, questions, currentIndex, assignment.id])
 
-    // Effect to save active question index when it changes
-    // We debounce slightly to avoid rapid updates if user clicks fast, or just save immediately?
-    // Saving immediately is safer for "reload" resilience.
     // Effect to save active question index when it changes
     useEffect(() => {
-        // Skip first render if we just initialized? 
-        // Actually, if we initialized with a value, we don't need to save it again immediately unless it changed.
-        // But `initialActiveQuestionIndex` is the DB value. 
-        // If `currentIndex` differs from `initialActiveQuestionIndex`, we save.
-        // Or simpler: whenever `currentIndex` changes, save it.
+        // Skip if we haven't done our initial variation check yet
+        if (!hasCheckedVariationSwitch) return
 
-        // We need to avoid saving on mount if it hasn't changed from DB.
+        // Skip if it hasn't changed from DB value
         if (currentIndex === initialActiveQuestionIndex) return
 
-        // Also debounce could be nice, but for now direct save.
         upsertAssignmentProgress(
             assignment.id,
             Array.from(completedIndices),
@@ -115,13 +131,14 @@ export function StudentAssignmentInterface({
         ).then(res => {
             if (res.success && onProgressUpdate) onProgressUpdate()
         })
-    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex, onProgressUpdate])
+    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex, onProgressUpdate, hasCheckedVariationSwitch])
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
     const hasPersistentDiagram = (firstQuestion?.diagram_type && firstQuestion.diagram_type !== 'none') || !!firstQuestion?.diagram_image_url
     // Show persistent diagram if we are NOT on the first question AND the first question has a diagram AND we are NOT showing all questions
-    const showPersistentDiagram = !showAll && currentIndex > 0 && hasPersistentDiagram
+    // In variation mode, we never want a persistent diagram as each variation is a separate problem.
+    const showPersistentDiagram = !isVariationMode && !showAll && currentIndex > 0 && hasPersistentDiagram
 
     const handleCorrect = async () => {
         const newSet = new Set(completedIndices).add(currentIndex)
@@ -145,7 +162,7 @@ export function StudentAssignmentInterface({
     }
 
     const handleRevealSolution = async () => {
-        if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai variacijai ir turėsite spręsti kitą.")) {
+        if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai užduočiai ir turėsite spręsti kitą.")) {
             return
         }
 
@@ -234,24 +251,14 @@ export function StudentAssignmentInterface({
 
             {/* Persistent Diagram Section (Paginated specific) */}
             {showPersistentDiagram && (
-                <Card className="bg-muted/30 border-dashed">
-                    <CardHeader className="py-3 px-4">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            Scenarijaus nuoroda
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                        <DiagramDisplay
-                            diagramType={firstQuestion.diagram_type}
-                            diagramLatex={firstQuestion.diagram_latex}
-                            diagramSvg={firstQuestion.diagram_svg}
-                            diagramImageUrl={firstQuestion.diagram_image_url}
-                        />
-                        <div className="mt-4 text-sm text-muted-foreground">
-                            <MathDisplay content={firstQuestion.latex_text || ""} />
-                        </div>
-                    </CardContent>
-                </Card>
+                <div className="mb-8">
+                    <DiagramDisplay
+                        diagramType={firstQuestion.diagram_type}
+                        diagramLatex={firstQuestion.diagram_latex}
+                        diagramSvg={firstQuestion.diagram_svg}
+                        diagramImageUrl={firstQuestion.diagram_image_url}
+                    />
+                </div>
             )}
 
             {showAll ? (
@@ -284,14 +291,14 @@ export function StudentAssignmentInterface({
                                                 diagramImageUrl={q.diagram_image_url}
                                             />
 
-                                            {revealedIndices.has(index) && (
+                                            {revealedIndices.has(index) && q.solution_text && (
                                                 <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
                                                     <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
                                                         <BookOpen className="h-4 w-4" />
                                                         Išsamus sprendimas
                                                     </div>
                                                     <div className="text-zinc-800 text-sm leading-relaxed border-t border-blue-100 pt-3">
-                                                        <MathDisplay content={q.solution_text || "Sprendimo instrukcijos nėra."} />
+                                                        <MathDisplay content={q.solution_text} />
                                                     </div>
                                                 </div>
                                             )}
@@ -316,7 +323,7 @@ export function StudentAssignmentInterface({
                                                 </div>
                                             )}
 
-                                            <div className={`pt-2 ${revealedIndices.has(index) ? "opacity-50 pointer-events-none grayscale-[0.5]" : ""}`}>
+                                            <div className={`pt-2 ${revealedIndices.has(index) ? "pointer-events-none" : ""}`}>
                                                 <TestInterface
                                                     key={q.id || index}
                                                     question={q}
@@ -327,6 +334,7 @@ export function StudentAssignmentInterface({
                                                     disabled={lockedQuestionIds.has(q.id)}
                                                     submittedAnswer={submittedAnswers[q.id]}
                                                     onPointsSubmit={handlePointsSubmit}
+                                                    isRevealed={revealedIndices.has(index)}
                                                 />
                                             </div>
                                         </div>
@@ -410,9 +418,11 @@ export function StudentAssignmentInterface({
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                                <CardTitle className="text-xl">
-                                    {isVariationMode ? `Variacija ${completedIndices.size + 1} iš ${requiredVariations}` : `Klausimas ${currentIndex + 1}`}
-                                </CardTitle>
+                                {!isVariationMode && (
+                                    <CardTitle className="text-xl">
+                                        {`Klausimas ${currentIndex + 1}`}
+                                    </CardTitle>
+                                )}
                                 {pointsEnabled && (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-200">
                                         <Award className="h-3 w-3" />
@@ -422,7 +432,7 @@ export function StudentAssignmentInterface({
                             </div>
                             <CardDescription>
                                 {isVariationMode
-                                    ? `Atlikite ${requiredVariations} variacijas, kad išlaikytumėte. (${completedIndices.size} išspręsta)`
+                                    ? `Atlikite ${requiredVariations} užduotis, kad pereitumėte į kitą lygį. (${completedIndices.size} išspręsta)`
                                     : (totalQuestions > 1 ? `Žingsnis ${currentIndex + 1} iš ${totalQuestions}` : 'Išspręskite žemiau esančią problemą')
                                 }
                             </CardDescription>
@@ -434,26 +444,22 @@ export function StudentAssignmentInterface({
                         </div>
                         {!showPersistentDiagram && (
                             <DiagramDisplay
-                                diagramType={questions[currentIndex].diagram_type || firstQuestion?.diagram_type}
-                                diagramLatex={questions[currentIndex].diagram_latex || firstQuestion?.diagram_latex}
-                                diagramSvg={questions[currentIndex].diagram_svg || firstQuestion?.diagram_svg}
-                                diagramImageUrl={questions[currentIndex].diagram_image_url || firstQuestion?.diagram_image_url}
+                                diagramType={questions[currentIndex].diagram_type || (!isVariationMode ? firstQuestion?.diagram_type : undefined)}
+                                diagramLatex={questions[currentIndex].diagram_latex || (!isVariationMode ? firstQuestion?.diagram_latex : undefined)}
+                                diagramSvg={questions[currentIndex].diagram_svg || (!isVariationMode ? firstQuestion?.diagram_svg : undefined)}
+                                diagramImageUrl={questions[currentIndex].diagram_image_url || (!isVariationMode ? firstQuestion?.diagram_image_url : undefined)}
                             />
                         )}
 
                         <div className="pt-6 border-t space-y-6">
-                            {revealedIndices.has(currentIndex) && (
+                            {revealedIndices.has(currentIndex) && questions[currentIndex].solution_text && (
                                 <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
                                     <div className="flex items-center gap-2 text-blue-700 font-semibold">
                                         <BookOpen className="h-5 w-5" />
                                         Išsamus sprendimas
                                     </div>
                                     <div className="text-zinc-800 leading-relaxed border-t border-blue-100 pt-3">
-                                        <MathDisplay content={questions[currentIndex].solution_text || "Sprendimo instrukcijos šiai variacijai nėra."} />
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-100/50 p-2 rounded">
-                                        <AlertCircle className="h-3.5 w-3.5" />
-                                        Sprendimas parodytas. Atsakymo pateikimas šiai variacijai išjungtas.
+                                        <MathDisplay content={questions[currentIndex].solution_text} />
                                     </div>
                                 </div>
                             )}
@@ -472,7 +478,7 @@ export function StudentAssignmentInterface({
                                 </div>
                             )}
 
-                            <div className={revealedIndices.has(currentIndex) ? "opacity-50 pointer-events-none grayscale-[0.5]" : ""}>
+                            <div className={revealedIndices.has(currentIndex) ? "pointer-events-none" : ""}>
                                 <TestInterface
                                     key={questions[currentIndex].id || currentIndex}
                                     question={questions[currentIndex]}
@@ -483,6 +489,7 @@ export function StudentAssignmentInterface({
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
                                     onPointsSubmit={handlePointsSubmit}
+                                    isRevealed={revealedIndices.has(currentIndex)}
                                 />
                             </div>
 
@@ -527,7 +534,7 @@ export function StudentAssignmentInterface({
                                         disabled={!canProceed}
                                         className="gap-2"
                                     >
-                                        {isVariationMode ? "Kita variacija" : "Kitas klausimas"}
+                                        {isVariationMode ? "Kita užduotis" : "Kitas klausimas"}
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 ) : (

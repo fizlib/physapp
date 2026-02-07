@@ -154,10 +154,10 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         options: q.type === 'multiple_choice' ? q.options : null,
         // @ts-ignore
         correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
-        // Only save diagram for the first question
-        diagram_type: index === 0 ? (q.diagram_type || null) : null,
-        diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
-        diagram_image_url: index === 0 ? (q.diagram_image_url || null) : null,
+        // Save diagram for all questions/variations
+        diagram_type: q.diagram_type || null,
+        diagram_svg: q.diagram_svg || null,
+        diagram_image_url: q.diagram_image_url || null,
         solution_text: q.solution_text || null,
         points: q.points || 1
     }))
@@ -484,6 +484,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const answersInSvg = formData.get('answersInSvg') === 'true'
     const generateSolution = formData.get('generateSolution') === 'true'
     const useImageAsIllustration = formData.get('useImageAsIllustration') === 'true'
+    const customInstructions = formData.get('customInstructions') as string || ''
 
     const file = formData.get('image') as File
     if (!file) {
@@ -544,6 +545,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   - If the image is a numerical problem, you MUST create 4 plausible multiple-choice options (A, B, C, D) based on common mistakes or likely outcomes.
   ${answersInSvg ? `
   - ANSWERS AS ILLUSTRATIONS: Each of the 4 multiple-choice options MUST be a clean, self-contained SVG illustration recreate the physical situation, graph, or scheme for that option.
+  - FOR VECTORS: Use a grid, snap points to grid, and DRAW ARROWS above vector labels.
   - DO NOT provide text labels in Lithuanian as the primary option text; instead, the SVG itself MUST show the information (e.g., if option is 5m, the SVG shows a vector or object with "5m" label).
   - Each option in the "options" array MUST be the full <svg>... </svg> code string.
   ` : ''}
@@ -590,7 +592,6 @@ export async function generateExerciseFromImage(formData: FormData) {
   - IMPORTANT: For multiple_choice options, you MUST wrap any LaTeX content in single dollar signs, e.g., "$l = 12\\text{ m}$".
 
   NUMERICAL ANSWER UNITS (CRITICAL FOR NUMERICAL QUESTIONS):
-  - The question text MUST explicitly state what SI units the answer should be given in (e.g., "Raskite greitį (m/s)", "Apskaičiuokite atstumą metrais").
   - The correct_value MUST always be in SI standard units (meters, seconds, kilograms, m/s, m/s², N, J, W, Pa, etc.).
   - You may use non-SI units (km/h, cm, g, etc.) in the exercise description/story, but the final answer and correct_value must be converted to SI.
   - Example: If the problem uses km/h for speed, convert the correct_value to m/s and ask for the answer in m/s.
@@ -611,6 +612,11 @@ export async function generateExerciseFromImage(formData: FormData) {
     - Include text labels, axis labels, and any annotations from the original
     - For graphs: draw the coordinate system, gridlines, axis arrows, tick marks, and plot the curves/lines accurately
     - For schemes: recreate the components (resistors, forces, objects) with proper labels
+    - FOR VECTORS:
+      - ALWAYS include a light gray background grid for precision
+      - Snap all vector start and end points to integer grid intersections
+      - VECTOR LABELS: You MUST explicitly draw a small arrow path above any vector label (e.g., above 'a', draw a small arrow ->). Do not assume the font has it.
+      - LABEL POSITIONING: Position labels (with their arrows) near the midpoint or end of the vector, but ALWAYS with a sufficient offset (at least 15-20 units) to avoid overlapping the vector line or arrowhead.
   `}
   
   Return a JSON object with this EXACT structure (do not wrap in markdown):
@@ -630,6 +636,13 @@ export async function generateExerciseFromImage(formData: FormData) {
         }
     ]
   }
+
+  ${customInstructions ? `
+  CUSTOM USER INSTRUCTIONS (PRIORITY):
+  The user has provided these additional requirements for the generation.
+  Follow them strictly unless they contradict the required JSON structure or safety rules:
+  "${customInstructions}"
+  ` : ''}
   `
 
     const imagePart: Part = {
@@ -737,8 +750,10 @@ export async function generateExerciseFromImage(formData: FormData) {
                 }
 
                 // Map Gemini 'solution' field to our 'solution_text'
-                if (q.solution) {
+                if (generateSolution && q.solution) {
                     q.solution_text = q.solution
+                } else {
+                    q.solution_text = null
                 }
 
                 // Randomize multiple choice options
@@ -853,10 +868,10 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         options: q.type === 'multiple_choice' ? q.options : null,
         // @ts-ignore
         correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
-        // Only save diagram for the first question
-        diagram_type: index === 0 ? (q.diagram_type || null) : null,
-        diagram_svg: index === 0 ? (q.diagram_svg || null) : null,
-        diagram_image_url: index === 0 ? (q.diagram_image_url || null) : null,
+        // Save diagram for all questions/variations
+        diagram_type: q.diagram_type || null,
+        diagram_svg: q.diagram_svg || null,
+        diagram_image_url: q.diagram_image_url || null,
         solution_text: q.solution_text || null,
         points: q.points || 1
     }))

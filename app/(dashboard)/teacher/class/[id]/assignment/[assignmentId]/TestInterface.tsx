@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Check, X } from "lucide-react"
 import MathDisplay from "@/components/MathDisplay"
@@ -17,7 +17,8 @@ export function TestInterface({
     pointsMode = false,
     disabled = false,
     submittedAnswer,
-    onPointsSubmit
+    onPointsSubmit,
+    isRevealed = false
 }: {
     question: any,
     questionId?: string,
@@ -27,15 +28,28 @@ export function TestInterface({
     pointsMode?: boolean,
     disabled?: boolean,
     submittedAnswer?: string,
-    onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void
+    onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void,
+    isRevealed?: boolean
 }) {
     const [latexInput, setLatexInput] = useState("")
     const [asciiInput, setAsciiInput] = useState("")
     const [mcqInput, setMcqInput] = useState<string | null>(null)
     const [result, setResult] = useState<'correct' | 'incorrect' | null>(null)
     const [feedback, setFeedback] = useState("")
+    const [lastRevealedId, setLastRevealedId] = useState<string | null>(null)
+
+    // Clear inputs and populate with correct answer if revealed
+    useEffect(() => {
+        if (isRevealed && question.question_type === 'numerical') {
+            const val = String(question.correct_value)
+            setLatexInput(val)
+            setAsciiInput(val)
+        }
+    }, [isRevealed, question.correct_value, question.question_type])
 
     const checkAnswer = () => {
+        if (isRevealed) return;
+
         if (question.question_type === 'numerical') {
             let val: number;
             try {
@@ -174,7 +188,7 @@ export function TestInterface({
                                 }}
                             />
                         </div>
-                        <Button type="button" onClick={checkAnswer}>{pointsMode ? 'Pateikti' : 'Tikrinti'}</Button>
+                        <Button type="button" onClick={checkAnswer} disabled={isRevealed}>{pointsMode ? 'Pateikti' : 'Tikrinti'}</Button>
                     </div>
                 </div>
             ) : (
@@ -182,17 +196,20 @@ export function TestInterface({
                     <div className="grid gap-2">
                         {question.options?.map((opt: string, i: number) => {
                             const letter = ['A', 'B', 'C', 'D'][i]
+                            const isCorrectAnswer = letter === question.correct_answer?.trim().toUpperCase()
+                            const showSuccess = isRevealed && isCorrectAnswer
+
                             return (
                                 <div
                                     key={i}
-                                    className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted transition-colors ${mcqInput === letter ? 'ring-2 ring-primary border-transparent' : ''}`}
+                                    className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted transition-colors ${mcqInput === letter ? 'ring-2 ring-primary border-transparent' : ''} ${showSuccess ? 'border-green-500 bg-green-100' : ''}`}
                                     onClick={() => {
                                         setMcqInput(letter)
                                         setResult(null)
                                         setFeedback("")
                                     }}
                                 >
-                                    <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${mcqInput === letter ? 'bg-primary text-primary-foreground' : 'bg-muted-foreground/20'}`}>
+                                    <div className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${mcqInput === letter ? 'bg-primary text-primary-foreground' : (showSuccess ? 'bg-green-500 text-white' : 'bg-muted-foreground/20')}`}>
                                         {letter}
                                     </div>
                                     <div className="flex-1 w-full overflow-hidden">
@@ -205,15 +222,17 @@ export function TestInterface({
                                             <MathDisplay content={opt} />
                                         )}
                                     </div>
+                                    {showSuccess && <Check className="h-4 w-4 text-green-600" />}
                                 </div>
                             )
                         })}
                     </div>
-                    <Button className="mt-1" onClick={checkAnswer} disabled={!mcqInput}>
+                    <Button className="mt-1" onClick={checkAnswer} disabled={!mcqInput || isRevealed}>
                         {pointsMode ? 'Pateikti' : 'Tikrinti atsakymą'}
                     </Button>
                 </div>
             )}
+
 
             {feedback && (
                 <div className={`p-4 rounded-lg flex items-start gap-3 ${result === 'correct' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
@@ -224,7 +243,6 @@ export function TestInterface({
                     )}
                     <div>
                         <p className="font-medium">{result === 'correct' ? "Teisingai!" : "Neteisingai"}</p>
-                        <p className="text-sm opacity-90">{feedback}</p>
                     </div>
                 </div>
             )}

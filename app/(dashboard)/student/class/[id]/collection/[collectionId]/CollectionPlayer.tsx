@@ -142,6 +142,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     // Get progress for current assignment
     const currentProgress = progressMap.get(currentAssignment?.id)
     const currentCompletedIndices = currentProgress?.completed_question_indices || []
+    const currentRevealedIndices = currentProgress?.revealed_question_indices || []
     const currentIsCompleted = currentProgress?.is_completed || false
     const currentActiveIndex = currentProgress?.active_question_index
 
@@ -514,6 +515,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                     canSkip={isClasswork}
                     compact={true}
                     initialCompletedIndices={currentCompletedIndices}
+                    initialRevealedIndices={currentRevealedIndices}
                     initialIsCompleted={currentIsCompleted}
                     initialActiveQuestionIndex={currentActiveIndex}
                     hideRevealSolution={collection.category === 'classwork'}

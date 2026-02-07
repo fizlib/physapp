@@ -153,9 +153,9 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const [points, setPoints] = useState(1)
     const isClasswork = collectionCategory === 'classwork'
 
-    const [illustrationFile, setIllustrationFile] = useState<File | null>(null)
-    const [illustrationPreview, setIllustrationPreview] = useState<string | null>(null)
-    const illustrationInputRef = useRef<HTMLInputElement>(null)
+    const [illustrationFiles, setIllustrationFiles] = useState<Record<number, File | null>>({})
+    const [illustrationPreviews, setIllustrationPreviews] = useState<Record<number, string | null>>({})
+    const illustrationInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
 
     // Populate data when dialog opens
     useEffect(() => {
@@ -183,14 +183,15 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
             setPointsEnabled(initialData.points_enabled || false)
             setPoints(initialData.points || 1)
 
-            // Set initial illustration preview if it exists
-            const firstQuestion = initialData.questions?.[0]
-            if (firstQuestion?.diagram_image_url) {
-                setIllustrationPreview(firstQuestion.diagram_image_url)
-            } else {
-                setIllustrationPreview(null)
-            }
-            setIllustrationFile(null)
+            // Set initial illustration previews for all questions
+            const previews: Record<number, string | null> = {}
+            initialData.questions?.forEach((q: any, i: number) => {
+                if (q.diagram_image_url) {
+                    previews[i] = q.diagram_image_url
+                }
+            })
+            setIllustrationPreviews(previews)
+            setIllustrationFiles({})
         }
     }, [initialData, open])
 
@@ -250,40 +251,35 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const handleSave = async () => {
         setLoading(true)
         try {
-            let currentIllustrationUrl = data.questions[0]?.diagram_image_url
-
-            // Handle new illustration upload
-            if (illustrationFile) {
-                const formData = new FormData()
-                try {
-                    const compressedBlob = await compressImage(illustrationFile)
-                    formData.append('image', compressedBlob, 'illustration.jpg')
-                } catch (err) {
-                    console.error("Compression error:", err)
-                    formData.append('image', illustrationFile)
-                }
-
-                const uploadResult = await uploadIllustration(formData)
-                if (uploadResult.success && uploadResult.url) {
-                    currentIllustrationUrl = uploadResult.url
-                } else {
-                    toast.error(uploadResult.error || "Failed to upload illustration")
-                    setLoading(false)
-                    return
-                }
-            } else if (!illustrationPreview) {
-                // Illustration was removed
-                currentIllustrationUrl = null
-            }
-
-            // Update all questions with the new illustration URL (if we want it on all, or just first)
-            // The logic in actions.ts currently only saves diagram for the first question
+            // 5. Update Questions with new illustrations
             const updatedQuestions = [...data.questions]
-            if (updatedQuestions[0]) {
-                updatedQuestions[0].diagram_image_url = currentIllustrationUrl
-                // If it's an image, we usually clear SVG to avoid conflict
-                if (currentIllustrationUrl) {
-                    updatedQuestions[0].diagram_svg = null
+
+            // Handle image uploads for each question
+            for (let i = 0; i < updatedQuestions.length; i++) {
+                const file = illustrationFiles[i]
+                if (file) {
+                    const formData = new FormData()
+                    try {
+                        const compressedBlob = await compressImage(file)
+                        formData.append('image', compressedBlob, 'illustration.jpg')
+                    } catch (err) {
+                        console.error(`Compression error for question ${i}:`, err)
+                        formData.append('image', file)
+                    }
+
+                    const uploadResult = await uploadIllustration(formData)
+                    if (uploadResult.success && uploadResult.url) {
+                        updatedQuestions[i].diagram_image_url = uploadResult.url
+                        // Clear SVG if we have an image
+                        updatedQuestions[i].diagram_svg = null
+                    } else {
+                        toast.error(uploadResult.error || `Failed to upload illustration for question ${i + 1}`)
+                        setLoading(false)
+                        return
+                    }
+                } else if (illustrationPreviews[i] === null) {
+                    // Illustration was explicitly removed for this question
+                    updatedQuestions[i].diagram_image_url = null
                 }
             }
 
@@ -525,97 +521,87 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
 
                                     {/* Diagram Section */}
                                     <div className="space-y-3 border-t pt-4">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="flex items-center gap-2">
-                                                <span className="text-lg">📊</span>
-                                                Iliustracija
-                                            </Label>
-                                            {index === 0 && (
+                                        <div className="space-y-4">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                ref={el => { illustrationInputRefs.current[index] = el }}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0]
+                                                    if (file) {
+                                                        setIllustrationFiles(prev => ({ ...prev, [index]: file }))
+                                                        const reader = new FileReader()
+                                                        reader.onloadend = () => {
+                                                            setIllustrationPreviews(prev => ({ ...prev, [index]: reader.result as string }))
+                                                        }
+                                                        reader.readAsDataURL(file)
+                                                    }
+                                                }}
+                                            />
+                                            <div className="flex items-center justify-between">
+                                                <Label className="flex items-center gap-2">
+                                                    <span className="text-lg">📊</span>
+                                                    Iliustracija
+                                                </Label>
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => illustrationInputRef.current?.click()}
+                                                    onClick={() => illustrationInputRefs.current[index]?.click()}
                                                 >
-                                                    {illustrationPreview ? 'Pakeisti' : 'Pridėti'}
+                                                    {illustrationPreviews[index] ? 'Pakeisti' : 'Pridėti'}
                                                 </Button>
+                                            </div>
+
+                                            {illustrationPreviews[index] && (
+                                                <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                                    <img
+                                                        src={illustrationPreviews[index]!}
+                                                        alt="Illustration Preview"
+                                                        className="max-w-full max-h-[300px] object-contain"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setIllustrationFiles(prev => ({ ...prev, [index]: null }))
+                                                                setIllustrationPreviews(prev => ({ ...prev, [index]: null }))
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {q.diagram_svg && !illustrationPreviews[index] && (
+                                                <div className="space-y-2">
+                                                    <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
+                                                        <div
+                                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                            className="w-full max-w-[300px]"
+                                                        />
+                                                    </div>
+                                                    <Label className="text-sm text-muted-foreground">
+                                                        Edit SVG Code
+                                                    </Label>
+                                                    <textarea
+                                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                        value={q.diagram_svg || ''}
+                                                        onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {!illustrationPreviews[index] && !q.diagram_svg && (
+                                                <p className="text-xs text-muted-foreground italic">
+                                                    Ši užduotis neturi iliustracijos.
+                                                </p>
                                             )}
                                         </div>
-
-                                        {index === 0 && (
-                                            <div className="space-y-4">
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    className="hidden"
-                                                    ref={illustrationInputRef}
-                                                    onChange={(e) => {
-                                                        const file = e.target.files?.[0]
-                                                        if (file) {
-                                                            setIllustrationFile(file)
-                                                            const reader = new FileReader()
-                                                            reader.onloadend = () => {
-                                                                setIllustrationPreview(reader.result as string)
-                                                            }
-                                                            reader.readAsDataURL(file)
-                                                        }
-                                                    }}
-                                                />
-
-                                                {illustrationPreview && (
-                                                    <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
-                                                        <img
-                                                            src={illustrationPreview}
-                                                            alt="Illustration Preview"
-                                                            className="max-w-full max-h-[300px] object-contain"
-                                                        />
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                            <Button
-                                                                type="button"
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                onClick={() => {
-                                                                    setIllustrationFile(null)
-                                                                    setIllustrationPreview(null)
-                                                                }}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {q.diagram_svg && !illustrationPreview && (
-                                                    <div className="space-y-2">
-                                                        <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
-                                                            <div
-                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
-                                                                className="w-full max-w-[300px]"
-                                                            />
-                                                        </div>
-                                                        <Label className="text-sm text-muted-foreground">
-                                                            Edit SVG Code
-                                                        </Label>
-                                                        <textarea
-                                                            className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                            value={q.diagram_svg || ''}
-                                                            onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
-                                                        />
-                                                    </div>
-                                                )}
-
-                                                {!illustrationPreview && !q.diagram_svg && (
-                                                    <p className="text-xs text-muted-foreground italic">
-                                                        Ši užduotis neturi iliustracijos.
-                                                    </p>
-                                                )}
-                                            </div>
-                                        )}
-                                        {index > 0 && (
-                                            <p className="text-xs text-muted-foreground italic">
-                                                Iliustracija valdoma per pirmąjį klausimą.
-                                            </p>
-                                        )}
                                     </div>
                                 </CardContent>
                             </Card>

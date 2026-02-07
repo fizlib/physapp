@@ -32,7 +32,7 @@ export async function upsertAssignmentProgress(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex })
+    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex, revealedIndices })
     if (!validated.success) return { success: false, error: "Invalid data" }
 
     // IP Enforcement Check
