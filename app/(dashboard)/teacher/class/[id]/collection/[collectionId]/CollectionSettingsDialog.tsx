@@ -64,6 +64,7 @@ export function CollectionSettingsDialog({
     const [libraryFiles, setLibraryFiles] = useState<{ name: string, url: string }[]>([])
     const [fetchingLibrary, setFetchingLibrary] = useState(false)
     const [deleteExercises, setDeleteExercises] = useState(false)
+    const [useScheduling, setUseScheduling] = useState(!!currentScheduledDate)
 
     const router = useRouter()
 
@@ -96,6 +97,7 @@ export function CollectionSettingsDialog({
                 setSelectedTime("")
                 setSelectedEndTime("")
             }
+            setUseScheduling(!!currentScheduledDate)
             setSlidesUrl(currentSlidesUrl || null)
         }
     }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl])
@@ -106,7 +108,7 @@ export function CollectionSettingsDialog({
             // Build scheduled date if classwork with schedule selected
             let scheduledDate: string | undefined
             let scheduledEndDate: string | undefined
-            if (category === 'classwork' && selectedDate && selectedTime) {
+            if (category === 'classwork' && useScheduling && selectedDate && selectedTime) {
                 const [hours, minutes] = selectedTime.split(':').map(Number)
                 const dateWithTime = new Date(selectedDate)
                 dateWithTime.setHours(hours, minutes, 0, 0)
@@ -165,7 +167,8 @@ export function CollectionSettingsDialog({
 
     const showCalendar = category === 'classwork'
     const hasChanges = title !== currentTitle || category !== currentCategory || slidesUrl !== (currentSlidesUrl || null)
-        || (category === 'classwork' &&
+        || useScheduling !== (!!currentScheduledDate)
+        || (category === 'classwork' && useScheduling &&
             ((selectedDate?.toISOString() !== (currentScheduledDate ? new Date(currentScheduledDate).toISOString() : undefined))
                 || (selectedTime !== (currentScheduledDate ? new Date(currentScheduledDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
                 || (selectedEndTime !== (currentScheduledEndAt ? new Date(currentScheduledEndAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
@@ -324,42 +327,57 @@ export function CollectionSettingsDialog({
                     </div>
 
                     <div className="h-px bg-border" />
-                    {showCalendar && (
-                        <div className="space-y-3 pt-2 border-t">
-                            <LessonCalendar
-                                lessonSchedule={lessonSchedule}
-                                initialDate={selectedDate}
-                                initialTime={selectedTime}
-                                onSelect={(date, time) => {
-                                    setSelectedDate(date)
-                                    setSelectedTime(time)
-                                    if (time) {
-                                        const [h, m] = time.split(':').map(Number)
-                                        const d = new Date()
-                                        d.setHours(h, m, 0, 0)
-                                        d.setMinutes(d.getMinutes() + 45)
-                                        const eh = d.getHours().toString().padStart(2, '0')
-                                        const em = d.getMinutes().toString().padStart(2, '0')
-                                        setSelectedEndTime(`${eh}:${em}`)
-                                    }
-                                }}
-                            />
+                    {category === 'classwork' && (
+                        <div className="space-y-4 pt-2 border-t text-sm">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="enable-scheduling"
+                                    checked={useScheduling}
+                                    onCheckedChange={(checked) => setUseScheduling(!!checked)}
+                                />
+                                <Label htmlFor="enable-scheduling" className="font-medium cursor-pointer">
+                                    Nustatyti pamokos laiką
+                                </Label>
+                            </div>
 
-                            {selectedDate && selectedTime && (
-                                <div className="space-y-3 pt-4 border-t">
-                                    <Label htmlFor="lesson-end-time" className="text-sm font-medium">Lesson Ends At</Label>
-                                    <div className="flex items-center gap-3">
-                                        <Input
-                                            id="lesson-end-time"
-                                            type="time"
-                                            value={selectedEndTime}
-                                            onChange={(e) => setSelectedEndTime(e.target.value)}
-                                            className="w-32"
-                                        />
-                                        <span className="text-xs text-muted-foreground">
-                                            Students will be locked out after this time.
-                                        </span>
-                                    </div>
+                            {useScheduling && (
+                                <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <LessonCalendar
+                                        lessonSchedule={lessonSchedule}
+                                        initialDate={selectedDate}
+                                        initialTime={selectedTime}
+                                        onSelect={(date, time) => {
+                                            setSelectedDate(date)
+                                            setSelectedTime(time)
+                                            if (time) {
+                                                const [h, m] = time.split(':').map(Number)
+                                                const d = new Date()
+                                                d.setHours(h, m, 0, 0)
+                                                d.setMinutes(d.getMinutes() + 45)
+                                                const eh = d.getHours().toString().padStart(2, '0')
+                                                const em = d.getMinutes().toString().padStart(2, '0')
+                                                setSelectedEndTime(`${eh}:${em}`)
+                                            }
+                                        }}
+                                    />
+
+                                    {selectedDate && selectedTime && (
+                                        <div className="space-y-3 pt-4 border-t">
+                                            <Label htmlFor="lesson-end-time" className="text-sm font-medium">Lesson Ends At</Label>
+                                            <div className="flex items-center gap-3">
+                                                <Input
+                                                    id="lesson-end-time"
+                                                    type="time"
+                                                    value={selectedEndTime}
+                                                    onChange={(e) => setSelectedEndTime(e.target.value)}
+                                                    className="w-32"
+                                                />
+                                                <span className="text-xs text-muted-foreground">
+                                                    Students will be locked out after this time.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
