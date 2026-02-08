@@ -99,6 +99,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const [maxReachedIndex, setMaxReachedIndex] = useState(initialMaxReached) // For homework sequential unlock
     const [isCompleted, setIsCompleted] = useState(allDone)
     const [restrictionData, setRestrictionData] = useState<{ isRestricted: boolean, studentIp?: string }>({ isRestricted: false })
+    const [isTimeUp, setIsTimeUp] = useState(false)
     const [isWaitingForUnlock, setIsWaitingForUnlock] = useState(false)
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const { width, height } = useWindowSize()
@@ -161,11 +162,18 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     }
 
     const handleAssignmentFinish = async () => {
-        // Double check IP before moving to next assignment
+        // Double check IP and Time before moving to next assignment
         const result = await checkIpAccess(classroomId, collection.category, collection.id)
         if (result.isRestricted) {
             setRestrictionData(result)
             return
+        }
+
+        if (collection.category === 'classwork' && collection.scheduled_end_at) {
+            if (new Date() > new Date(collection.scheduled_end_at)) {
+                setIsTimeUp(true)
+                return
+            }
         }
 
         // For homework: update maxReachedIndex when completing an exercise
@@ -198,20 +206,32 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
 
     const [isReviewing, setIsReviewing] = useState(allDone)
 
-    // Periodic IP check effect
+    // Periodic check effect (IP and Time)
     useEffect(() => {
         if (isCompleted || collection.category !== 'classwork') return
 
         const check = async () => {
+            // IP Check
             const result = await checkIpAccess(classroomId, collection.category, collection.id)
             if (result.isRestricted) {
                 setRestrictionData(result)
             }
+
+            // Time Check
+            if (collection.scheduled_end_at) {
+                const now = new Date()
+                const end = new Date(collection.scheduled_end_at)
+                if (now > end) {
+                    setIsTimeUp(true)
+                }
+            }
         }
 
         const interval = setInterval(check, 30000)
+        // Also check immediately
+        check()
         return () => clearInterval(interval)
-    }, [classroomId, collection.category, isCompleted])
+    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id])
 
     // Polling effect for waiting for next exercise to be published
     useEffect(() => {
@@ -266,6 +286,30 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         <p className="text-muted-foreground">
                             Jūsų tinklo ryšys pasikeitė. Šis darbas klasėje yra skirtas tik mokyklos tinklui.
                             Šiuo metu esate prisijungę iš <span className="font-mono text-red-500">{restrictionData.studentIp}</span>.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={`/student/class/${classroomId}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į klasę
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    if (isTimeUp) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="mx-auto w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
+                        <Lock className="h-10 w-10 text-amber-600" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Pamokos laikas baigėsi</h1>
+                        <p className="text-muted-foreground">
+                            Jūsų pateikti atsakymai išsaugoti.
                         </p>
                     </div>
                     <Button asChild variant="outline" className="w-full">

@@ -31,6 +31,7 @@ interface CollectionSettingsDialogProps {
     currentTitle: string
     currentCategory: 'homework' | 'classwork'
     currentScheduledDate?: string | null
+    currentScheduledEndAt?: string | null
     currentSlidesUrl?: string | null
     lessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
@@ -42,6 +43,7 @@ export function CollectionSettingsDialog({
     currentTitle,
     currentCategory,
     currentScheduledDate,
+    currentScheduledEndAt,
     currentSlidesUrl,
     lessonSchedule,
     trigger
@@ -54,6 +56,7 @@ export function CollectionSettingsDialog({
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
     const [selectedTime, setSelectedTime] = useState<string>("")
+    const [selectedEndTime, setSelectedEndTime] = useState<string>("")
     const [slidesUrl, setSlidesUrl] = useState<string | null>(currentSlidesUrl || null)
     const [uploading, setUploading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
@@ -74,27 +77,50 @@ export function CollectionSettingsDialog({
                 const hours = date.getHours().toString().padStart(2, '0')
                 const minutes = date.getMinutes().toString().padStart(2, '0')
                 setSelectedTime(`${hours}:${minutes}`)
+
+                if (currentScheduledEndAt) {
+                    const endDate = new Date(currentScheduledEndAt)
+                    const endHours = endDate.getHours().toString().padStart(2, '0')
+                    const endMinutes = endDate.getMinutes().toString().padStart(2, '0')
+                    setSelectedEndTime(`${endHours}:${endMinutes}`)
+                } else {
+                    // Default to +45 mins
+                    const defaultEnd = new Date(date)
+                    defaultEnd.setMinutes(defaultEnd.getMinutes() + 45)
+                    const endHours = defaultEnd.getHours().toString().padStart(2, '0')
+                    const endMinutes = defaultEnd.getMinutes().toString().padStart(2, '0')
+                    setSelectedEndTime(`${endHours}:${endMinutes}`)
+                }
             } else {
                 setSelectedDate(null)
                 setSelectedTime("")
+                setSelectedEndTime("")
             }
             setSlidesUrl(currentSlidesUrl || null)
         }
-    }, [open, currentTitle, currentCategory, currentScheduledDate, currentSlidesUrl])
+    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl])
 
     const handleSave = async () => {
         setLoading(true)
         try {
             // Build scheduled date if classwork with schedule selected
             let scheduledDate: string | undefined
+            let scheduledEndDate: string | undefined
             if (category === 'classwork' && selectedDate && selectedTime) {
                 const [hours, minutes] = selectedTime.split(':').map(Number)
                 const dateWithTime = new Date(selectedDate)
                 dateWithTime.setHours(hours, minutes, 0, 0)
                 scheduledDate = dateWithTime.toISOString()
+
+                if (selectedEndTime) {
+                    const [endHours, endMinutes] = selectedEndTime.split(':').map(Number)
+                    const endDateWithTime = new Date(selectedDate)
+                    endDateWithTime.setHours(endHours, endMinutes, 0, 0)
+                    scheduledEndDate = endDateWithTime.toISOString()
+                }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -142,6 +168,7 @@ export function CollectionSettingsDialog({
         || (category === 'classwork' &&
             ((selectedDate?.toISOString() !== (currentScheduledDate ? new Date(currentScheduledDate).toISOString() : undefined))
                 || (selectedTime !== (currentScheduledDate ? new Date(currentScheduledDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
+                || (selectedEndTime !== (currentScheduledEndAt ? new Date(currentScheduledEndAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
             ))
 
 
@@ -306,8 +333,35 @@ export function CollectionSettingsDialog({
                                 onSelect={(date, time) => {
                                     setSelectedDate(date)
                                     setSelectedTime(time)
+                                    if (time) {
+                                        const [h, m] = time.split(':').map(Number)
+                                        const d = new Date()
+                                        d.setHours(h, m, 0, 0)
+                                        d.setMinutes(d.getMinutes() + 45)
+                                        const eh = d.getHours().toString().padStart(2, '0')
+                                        const em = d.getMinutes().toString().padStart(2, '0')
+                                        setSelectedEndTime(`${eh}:${em}`)
+                                    }
                                 }}
                             />
+
+                            {selectedDate && selectedTime && (
+                                <div className="space-y-3 pt-4 border-t">
+                                    <Label htmlFor="lesson-end-time" className="text-sm font-medium">Lesson Ends At</Label>
+                                    <div className="flex items-center gap-3">
+                                        <Input
+                                            id="lesson-end-time"
+                                            type="time"
+                                            value={selectedEndTime}
+                                            onChange={(e) => setSelectedEndTime(e.target.value)}
+                                            className="w-32"
+                                        />
+                                        <span className="text-xs text-muted-foreground">
+                                            Students will be locked out after this time.
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

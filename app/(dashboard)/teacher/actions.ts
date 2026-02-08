@@ -1118,7 +1118,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1141,7 +1141,8 @@ export async function updateCollection(classroomId: string, collectionId: string
     const updateData: any = {
         title: title,
         category: category,
-        scheduled_date: scheduledDate || null
+        scheduled_date: scheduledDate || null,
+        scheduled_end_at: scheduledEndDate || null
     }
 
     if (slidesUrl !== undefined) {
