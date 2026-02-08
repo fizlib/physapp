@@ -106,13 +106,21 @@ export function LessonCalendar({ lessonSchedule, onSelect, initialDate, initialT
     const handleDateSelect = (date: Date, isLessonDay: boolean) => {
         if (isPastDate(date)) return
 
-        // Auto-select time if only one option or reset
+        // Auto-select time if only one option or keep current
         const dayOfWeek = date.getDay()
         const times = lessonSchedule?.filter(s => s.day === dayOfWeek).map(s => s.time) || []
 
-        let newTime = ""
+        let newTime = selectedTime
         if (times.length === 1) {
             newTime = times[0]
+        } else if (times.length > 1) {
+            // Keep if current time is one of the presets, else reset to force choice
+            if (!times.includes(selectedTime)) {
+                newTime = ""
+            }
+        } else if (!newTime) {
+            // No presets and no time selected yet, default to 09:00
+            newTime = "09:00"
         }
 
         updateSelection(date, newTime)
@@ -130,16 +138,6 @@ export function LessonCalendar({ lessonSchedule, onSelect, initialDate, initialT
         setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
     }
 
-    if (!lessonSchedule || lessonSchedule.length === 0) {
-        return (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm text-yellow-800">
-                <p className="font-medium">No lesson schedule set</p>
-                <p className="text-xs mt-1">
-                    Add lesson days and times in Classroom Settings to enable calendar scheduling.
-                </p>
-            </div>
-        )
-    }
 
     return (
         <div className={`space-y-3 ${className}`}>
@@ -148,7 +146,9 @@ export function LessonCalendar({ lessonSchedule, onSelect, initialDate, initialT
                 <Label>Schedule Lesson Date</Label>
             </div>
             <p className="text-xs text-muted-foreground">
-                Highlighted dates are your preset lesson days. Select when this classwork should happen.
+                {lessonSchedule && lessonSchedule.length > 0
+                    ? "Highlighted dates are your preset lesson days, but you can select any date and set a custom time."
+                    : "Select a date and set the time for this classwork."}
             </p>
 
             {/* Calendar Header */}
@@ -214,33 +214,51 @@ export function LessonCalendar({ lessonSchedule, onSelect, initialDate, initialT
 
             {/* Time Selection */}
             {selectedDate && (
-                <div className="space-y-2 pt-2 border-t">
-                    <Label className="text-sm">
+                <div className="space-y-4 pt-2 border-t">
+                    <Label className="text-sm font-medium">
                         {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                     </Label>
-                    {availableTimesForSelectedDate.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                            {availableTimesForSelectedDate.map(time => (
-                                <button
-                                    key={time}
-                                    type="button"
-                                    onClick={() => handleTimeSelect(time)}
-                                    className={`
-                                        px-3 py-1.5 text-sm rounded-md border transition-all
-                                        ${selectedTime === time
-                                            ? 'bg-primary text-primary-foreground border-primary'
-                                            : 'bg-background hover:bg-muted border-border'}
-                                    `}
-                                >
-                                    {time}
-                                </button>
-                            ))}
+
+                    <div className="flex flex-col gap-4">
+                        {availableTimesForSelectedDate.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                    Preset Times
+                                </Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableTimesForSelectedDate.map(time => (
+                                        <button
+                                            key={time}
+                                            type="button"
+                                            onClick={() => handleTimeSelect(time)}
+                                            className={`
+                                                px-3 py-1.5 text-xs rounded-md border transition-all
+                                                ${selectedTime === time
+                                                    ? 'bg-primary text-primary-foreground border-primary'
+                                                    : 'bg-background hover:bg-muted border-border'}
+                                            `}
+                                        >
+                                            {time}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                {availableTimesForSelectedDate.length > 0 ? "Or Custom Time" : "Set Time"}
+                            </Label>
+                            <div>
+                                <input
+                                    type="time"
+                                    value={selectedTime}
+                                    onChange={(e) => handleTimeSelect(e.target.value)}
+                                    className="text-sm border rounded px-2 py-1 bg-background w-32 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                            </div>
                         </div>
-                    ) : (
-                        <p className="text-xs text-muted-foreground italic">
-                            No preset lesson time for this day. Choose a different date or add this day to your classroom schedule.
-                        </p>
-                    )}
+                    </div>
                 </div>
             )}
 
