@@ -1724,7 +1724,7 @@ export async function getClassroomCollections(classroomId: string) {
     return data
 }
 
-export async function importCollection(targetClassroomId: string, sourceCollectionId: string): Promise<ActionState> {
+export async function importCollection(targetClassroomId: string, sourceCollectionId: string, publish: boolean = true): Promise<ActionState> {
     const supabase = await createClient()
 
     // 1. Verify Auth
@@ -1783,7 +1783,7 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                         classroom_id: targetClassroomId,
                         collection_id: newCollection.id,
                         title: sourceAss.title,
-                        published: false, // Default to unpublished
+                        published: publish,
                         order_index: sourceAss.order_index,
                         show_all_questions: sourceAss.show_all_questions,
                         required_variations_count: sourceAss.required_variations_count,

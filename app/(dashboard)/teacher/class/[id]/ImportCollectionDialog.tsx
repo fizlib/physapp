@@ -11,6 +11,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Download } from "lucide-react"
 import { getTeacherClassrooms, getClassroomCollections, importCollection } from "../../actions"
 import { toast } from "sonner"
@@ -30,6 +31,7 @@ export function ImportCollectionDialog({ classroomId }: ImportCollectionDialogPr
 
     const [collections, setCollections] = useState<{ id: string, title: string, category: string }[]>([])
     const [selectedCollectionId, setSelectedCollectionId] = useState<string>("")
+    const [importAsPublished, setImportAsPublished] = useState<boolean>(true)
 
     useEffect(() => {
         if (open) {
@@ -82,7 +84,7 @@ export function ImportCollectionDialog({ classroomId }: ImportCollectionDialogPr
 
         setLoading(true)
         try {
-            const result = await importCollection(classroomId, selectedCollectionId)
+            const result = await importCollection(classroomId, selectedCollectionId, importAsPublished)
             if (result.success) {
                 toast.success("Collection imported successfully!")
                 setOpen(false)
@@ -102,6 +104,7 @@ export function ImportCollectionDialog({ classroomId }: ImportCollectionDialogPr
         setSelectedSourceClassId("")
         setSelectedCollectionId("")
         setCollections([])
+        setImportAsPublished(true)
     }
 
     return (
@@ -170,6 +173,22 @@ export function ImportCollectionDialog({ classroomId }: ImportCollectionDialogPr
                                     ))}
                                 </select>
                             )}
+                        </div>
+                    )}
+
+                    {selectedCollectionId && (
+                        <div className="flex items-center space-x-2 pt-2">
+                            <Checkbox
+                                id="import-published"
+                                checked={importAsPublished}
+                                onCheckedChange={(checked) => setImportAsPublished(checked as boolean)}
+                            />
+                            <Label
+                                htmlFor="import-published"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                Import all exercises as published
+                            </Label>
                         </div>
                     )}
 
