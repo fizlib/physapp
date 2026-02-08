@@ -22,7 +22,7 @@ interface CollectionBatchActionsProps {
 export function CollectionBatchActions({ assignments, classroomId }: CollectionBatchActionsProps) {
     const [loading, setLoading] = useState(false)
 
-    const handleBatchUpdate = async (type: 'publish_graded' | 'unpublish_graded' | 'enable_points' | 'disable_points') => {
+    const handleBatchUpdate = async (type: 'publish_all' | 'unpublish_all' | 'publish_graded' | 'unpublish_graded' | 'enable_points' | 'disable_points') => {
         setLoading(true)
         try {
             let targetIds: string[] = []
@@ -30,6 +30,16 @@ export function CollectionBatchActions({ assignments, classroomId }: CollectionB
             let message = ""
 
             switch (type) {
+                case 'publish_all':
+                    targetIds = assignments.map(a => a.id)
+                    updates = { published: true }
+                    message = "Published all exercises"
+                    break
+                case 'unpublish_all':
+                    targetIds = assignments.map(a => a.id)
+                    updates = { published: false }
+                    message = "Unpublished all exercises"
+                    break
                 case 'publish_graded':
                     targetIds = assignments.filter(a => a.points_enabled).map(a => a.id)
                     updates = { published: true }
@@ -79,6 +89,16 @@ export function CollectionBatchActions({ assignments, classroomId }: CollectionB
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Visibility</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleBatchUpdate('publish_all')}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Publish all
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBatchUpdate('unpublish_all')}>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Unpublish all
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Graded Exercises</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => handleBatchUpdate('publish_graded')}>
                     <Eye className="mr-2 h-4 w-4" />
