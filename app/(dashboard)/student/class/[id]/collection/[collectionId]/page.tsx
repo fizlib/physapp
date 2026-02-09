@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
+import { getSiteSetting } from "@/app/(dashboard)/admin/settings/actions"
 import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -150,9 +151,13 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         }
     }
 
+    // Fetch polling setting
+    const pollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
+    const testModePollingEnabled = pollingEnabledStr !== 'false' // Default to true
+
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-            <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} />
+            <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} testModePollingEnabled={testModePollingEnabled} />
         </Suspense>
     )
 }

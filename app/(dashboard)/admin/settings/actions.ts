@@ -9,14 +9,14 @@ export async function getSiteSetting(key: string) {
         .from('site_settings')
         .select('value')
         .eq('key', key)
-        .single()
+        .maybeSingle() // Use maybeSingle to return null if key doesn't exist
 
     if (error) {
         console.error(`Error fetching setting ${key}:`, error)
         return null
     }
 
-    return data?.value
+    return data?.value ?? null
 }
 
 export async function updateSiteSetting(key: string, value: string) {

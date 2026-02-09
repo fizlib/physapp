@@ -238,6 +238,31 @@ export async function getCollectionProgress(collectionId: string): Promise<{
     return { success: true, progress: progress || [] }
 }
 
+// Check collection test mode status (for polling when waiting for test to start)
+export async function getCollectionTestStatus(collectionId: string): Promise<{
+    success: boolean
+    testModeEndsAt?: string | null
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('collections')
+        .select('test_mode_ends_at')
+        .eq('id', collectionId)
+        .single()
+
+    if (error) {
+        console.error("Error fetching collection test status:", error)
+        return { success: false, error: "Failed to fetch test status" }
+    }
+
+    return {
+        success: true,
+        testModeEndsAt: data?.test_mode_ends_at || null
+    }
+}
+
 // New action for point-based exercises - one try per question part
 export async function submitPointsAnswer(
     assignmentId: string,

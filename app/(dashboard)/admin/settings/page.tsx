@@ -9,6 +9,10 @@ export default async function AdminSettingsPage() {
     const registrationEnabledStr = await getSiteSetting('registration_enabled')
     const registrationEnabled = registrationEnabledStr === 'true' // Default to true if not set or string 'true'
 
+    const testModePollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
+    // Default to true if not set
+    const testModePollingEnabled = testModePollingEnabledStr !== 'false'
+
     return (
         <div className="p-8 max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-8">
@@ -26,7 +30,10 @@ export default async function AdminSettingsPage() {
             </div>
 
             <div className="grid gap-6">
-                <SettingsForm initialRegistrationEnabled={registrationEnabled} />
+                <SettingsForm
+                    initialRegistrationEnabled={registrationEnabled}
+                    initialTestModePollingEnabled={testModePollingEnabled}
+                />
                 <GeminiKeysManager initialKeys={await getGeminiKeys()} />
             </div>
         </div>
