@@ -9,11 +9,19 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload } from "lucide-react"
-import { updateAssignmentWithQuestion, uploadIllustration } from "../../../../actions"
+import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload, Sparkles } from "lucide-react"
+import { updateAssignmentWithQuestion, uploadIllustration, generateVariationsFromExercise } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -149,6 +157,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         points: 1
     })
 
+    const [customCount, setCustomCount] = useState<number>(1)
+
     const [pointsEnabled, setPointsEnabled] = useState(false)
     const [points, setPoints] = useState(1)
     const isClasswork = collectionCategory === 'classwork'
@@ -246,6 +256,30 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         const newQuestions = [...data.questions]
             ;[newQuestions[index], newQuestions[index + 1]] = [newQuestions[index + 1], newQuestions[index]]
         setData({ ...data, questions: newQuestions })
+    }
+
+    const [generatingIndex, setGeneratingIndex] = useState<number | null>(null)
+
+    const handleGenerateVariations = async (index: number, count: number, type: 'numbers' | 'similar') => {
+        setGeneratingIndex(index)
+        const baseQuestion = data.questions[index]
+
+        try {
+            const result = await generateVariationsFromExercise(baseQuestion, count, type, true)
+            if (result.success && result.data) {
+                const newQuestions = [...data.questions]
+                newQuestions.splice(index + 1, 0, ...result.data)
+                setData({ ...data, questions: newQuestions })
+                toast.success(`Generated ${result.data.length} variations!`)
+            } else {
+                toast.error(result.error || "Failed to generate variations")
+            }
+        } catch (err) {
+            console.error(err)
+            toast.error("An error occurred during generation")
+        } finally {
+            setGeneratingIndex(null)
+        }
     }
 
     const handleSave = async () => {
@@ -420,6 +454,72 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                                     <span className="text-xs text-muted-foreground">pts</span>
                                                 </div>
                                             )}
+
+                                            {/* Variation Generator */}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-primary hover:text-primary/90"
+                                                        disabled={generatingIndex === index}
+                                                        title="Sukurti variacijas"
+                                                    >
+                                                        {generatingIndex === index ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Sparkles className="h-4 w-4" />
+                                                        )}
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent className="w-56" align="end">
+                                                    <DropdownMenuLabel>Generate Variations</DropdownMenuLabel>
+                                                    <DropdownMenuSeparator />
+                                                    <div className="p-2 space-y-2">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground font-bold">New variations (numbers only)</Label>
+                                                        <div className="flex gap-2">
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                max={10}
+                                                                value={customCount}
+                                                                onChange={(e) => setCustomCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                                                                className="h-8 w-16"
+                                                            />
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="flex-1 h-8"
+                                                                onClick={() => handleGenerateVariations(index, customCount, 'numbers')}
+                                                            >
+                                                                Generate
+                                                            </Button>
+                                                        </div>
+                                                        <div className="flex gap-1.5 overflow-x-auto pb-1">
+                                                            {[1, 2, 3, 5].map((num) => (
+                                                                <Button
+                                                                    key={num}
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-6 px-2 text-[10px] min-w-[28px]"
+                                                                    onClick={() => handleGenerateVariations(index, num, 'numbers')}
+                                                                >
+                                                                    {num}
+                                                                </Button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className="flex items-center gap-2 cursor-pointer"
+                                                        onClick={() => handleGenerateVariations(index, 1, 'similar')}
+                                                    >
+                                                        <Sparkles className="h-4 w-4 text-primary" />
+                                                        <span>Make similar problem</span>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

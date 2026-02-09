@@ -1806,3 +1806,75 @@ export async function getCollectionExercises(collectionId: string) {
 
     return data
 }
+
+export async function generateVariationsFromExercise(
+    baseQuestion: any,
+    count: number,
+    variationType: 'numbers' | 'similar',
+    generateSolution: boolean
+): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const prompt = `
+    Analyze the following physics/math problem provided in JSON format.
+    Create ${count} NEW VARIATIONS based on this reference JSON.
+    
+    REFERENCE QUESTION:
+    ${JSON.stringify(baseQuestion)}
+    
+    VARIATION RULES:
+    ${variationType === 'numbers'
+            ? '- Keep EXACT SAME context/story/structure, ONLY change numbers and relevant calculation results.'
+            : '- Change context/story (e.g., car -> train), keep same logic and difficulty level.'}
+    - Difficulty must remain consistent with the original.
+    - CRITICAL: All generated output text (latex_text, options, solution) MUST be in the Lithuanian language.
+    - LATEX FORMATTING: Use LaTeX for ALL math, units, and symbols. For multiple_choice options, wrap LaTeX in single dollar signs.
+    - NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
+    - If diagram_svg exists, keep the same diagram structure but update labels or values if they changed in the text.
+    ${generateSolution ? '- SOLUTION MANUAL MODE: Generate step-by-step solution in Lithuanian for each variation.' : ''}
+
+    Return JSON as an ARRAY of objects (questions):
+    [
+        {
+            "type": "numerical" | "multiple_choice",
+            "latex_text": "text",
+            "correct_value": number | null,
+            "tolerance": number | null,
+            "options": ["A", "B", "C", "D"] | null,
+            "correct_answer": "A" | "B" | "C" | "D" | null,
+            "diagram_type": "graph" | "scheme" | null,
+            "diagram_svg": "<svg>...</svg>" | null,
+            "solution": "LaTeX steps" | null
+        }
+    ]
+    `;
+
+    try {
+        console.log(`Calling Gemini for ${count} variations...`)
+        const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt])
+        const response = await result.response
+        const text = response.text()
+
+        let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+        jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+        })
+
+        let variations = JSON.parse(jsonStr)
+        if (!Array.isArray(variations)) {
+            variations = [variations]
+        }
+
+        const processedVariations = variations.map((v: any) => {
+            const processed = processExerciseData({ questions: [v] }, generateSolution, baseQuestion.diagram_image_url)
+            return processed.questions[0]
+        })
+
+        return { success: true, data: processedVariations }
+    } catch (error: any) {
+        console.error("Gemini Variation Error:", error)
+        return { success: false, error: error.message || "Failed to generate variations" }
+    }
+}

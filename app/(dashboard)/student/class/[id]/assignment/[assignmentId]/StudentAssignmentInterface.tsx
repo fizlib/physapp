@@ -457,7 +457,7 @@ export function StudentAssignmentInterface({
                             </div>
                             <CardDescription>
                                 {isVariationMode
-                                    ? `Atlikite ${requiredVariations} užduotis, kad pereitumėte į kitą lygį. (${completedIndices.size} išspręsta)`
+                                    ? (!pointsEnabled && `Atlikite ${requiredVariations} užduotis, kad pereitumėte į kitą lygį. (${completedIndices.size} išspręsta)`)
                                     : (totalQuestions > 1 ? `Žingsnis ${currentIndex + 1} iš ${totalQuestions}` : 'Išspręskite žemiau esančią problemą')
                                 }
                             </CardDescription>
@@ -527,7 +527,7 @@ export function StudentAssignmentInterface({
                                     </div>
                                     <div className="space-y-0.5">
                                         <span className="text-sm font-bold block">Taškais vertinama užduotis</span>
-                                        <span className="text-xs text-amber-600/80">Turite vieną bandymą už {exercisePoints} {exercisePoints === 1 ? 'tašką' : 'taškus'}. Spręskite atidžiai!</span>
+                                        <span className="text-xs text-amber-600/80">Turite vieną bandymą.</span>
                                     </div>
                                 </div>
                             )}
