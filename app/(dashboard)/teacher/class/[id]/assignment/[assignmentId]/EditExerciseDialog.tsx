@@ -47,6 +47,7 @@ interface ExerciseData {
     show_all_questions: boolean
     points_enabled?: boolean
     points?: number
+    exercise_type?: 'variations' | 'multipart'
 }
 
 const compressImage = async (file: File): Promise<Blob> => {
@@ -154,7 +155,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         questions: [{ ...DEFAULT_QUESTION }],
         show_all_questions: false,
         points_enabled: false,
-        points: 1
+        points: 1,
+        exercise_type: 'multipart'
     })
 
     const [customCount, setCustomCount] = useState<number>(1)
@@ -188,7 +190,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 // category: initialData.category || 'homework',
                 title: initialData.title || '',
                 questions: mappedQuestions,
-                show_all_questions: initialData.show_all_questions || false
+                show_all_questions: initialData.show_all_questions || false,
+                exercise_type: initialData.required_variations_count === 1 ? 'variations' : 'multipart'
             })
             setPointsEnabled(initialData.points_enabled || false)
             setPoints(initialData.points || 1)
@@ -317,14 +320,17 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 }
             }
 
+            const isVariations = data.exercise_type === 'variations' && updatedQuestions.length > 1
+
             const saveData = {
                 ...data,
                 questions: updatedQuestions,
                 points_enabled: isClasswork ? pointsEnabled : false,
                 // Total points is sum of all question points
                 points: pointsEnabled ? updatedQuestions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined,
-                // If there are multiple questions, treat as variation exercise (student completes 1)
-                required_variations_count: updatedQuestions.length > 1 ? 1 : null
+                // If variations mode, student completes 1. If multi-part, they complete all (null).
+                required_variations_count: isVariations ? 1 : null,
+                show_all_questions: !isVariations && (data.show_all_questions ?? true)
             }
             const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
             if (result.success) {
@@ -367,14 +373,54 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                             />
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="edit-show-all"
-                                checked={data.show_all_questions}
-                                onCheckedChange={(checked) => setData({ ...data, show_all_questions: checked as boolean })}
-                            />
-                            <Label htmlFor="edit-show-all">Show all questions on one page</Label>
-                        </div>
+                        {data.questions.length > 1 && (
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold">Užduoties struktūra</Label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setData({ ...data, exercise_type: 'multipart' })}
+                                        className={`flex flex-col items-start p-3 border rounded-lg text-left transition-colors ${data.exercise_type === 'multipart' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${data.exercise_type === 'multipart' ? 'border-primary' : 'border-muted-foreground'}`}>
+                                                {data.exercise_type === 'multipart' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                            </div>
+                                            <span className="font-medium text-sm">Sudėtinė užduotis</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground ml-6">
+                                            Mokinys mato ir sprendžia visas klausimų dalis.
+                                        </p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setData({ ...data, exercise_type: 'variations' })}
+                                        className={`flex flex-col items-start p-3 border rounded-lg text-left transition-colors ${data.exercise_type === 'variations' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${data.exercise_type === 'variations' ? 'border-primary' : 'border-muted-foreground'}`}>
+                                                {data.exercise_type === 'variations' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                            </div>
+                                            <span className="font-medium text-sm">Variacijos</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground ml-6">
+                                            Sukurkite kelis panašius klausimus, mokinys gaus vieną atsitiktinį.
+                                        </p>
+                                    </button>
+                                </div>
+
+                                {data.exercise_type === 'multipart' && (
+                                    <div className="flex items-center space-x-2 pl-2">
+                                        <Checkbox
+                                            id="edit-show-all"
+                                            checked={data.show_all_questions}
+                                            onCheckedChange={(checked) => setData({ ...data, show_all_questions: checked as boolean })}
+                                        />
+                                        <Label htmlFor="edit-show-all" className="text-xs font-normal">Rodyti visas dalis viename puslapyje</Label>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Category functionality removed */}
 
