@@ -660,7 +660,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
 
   ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
-  - If relevant, generate clean, inline SVG code.
+  - Generate diagram_svg ONLY if the input image contains a diagram, graph, or schema. If the input image is text-only, set diagram_type and diagram_svg to null.
   - For VECTORS: Include gray grid, snap points, DRAW ARROWS above labels, position labels with offset.
   `}
   
