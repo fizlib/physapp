@@ -155,6 +155,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [illustrationPreview, setIllustrationPreview] = useState<string | null>(null)
     const [pointsEnabled, setPointsEnabled] = useState(false)
     const [points, setPoints] = useState(1)
+    const [generationMethod, setGenerationMethod] = useState<'batch' | 'parallel'>('batch')
     const fileInputRef = useRef<HTMLInputElement>(null)
     const illustrationInputRef = useRef<HTMLInputElement>(null)
 
@@ -225,6 +226,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             if (variationMode) {
                 formData.append('variationCount', variationCount.toString())
                 formData.append('variationType', variationType)
+                formData.append('generationMethod', generationMethod)
             } else {
                 formData.append('generationType', generationType)
             }
@@ -502,6 +504,40 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                     />
                                                     <Label htmlFor="var-type-descriptions" className="text-sm font-normal cursor-pointer">
                                                         Different descriptions <span className="text-xs text-muted-foreground ml-1">(New contexts/stories)</span>
+                                                    </Label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="col-span-2 space-y-2 pt-2">
+                                            <Label className="text-xs font-semibold block mb-2">Generation Method</Label>
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="gen-method-batch"
+                                                        name="generationMethod"
+                                                        value="batch"
+                                                        checked={generationMethod === 'batch'}
+                                                        onChange={() => setGenerationMethod('batch')}
+                                                        className="accent-primary h-4 w-4"
+                                                    />
+                                                    <Label htmlFor="gen-method-batch" className="text-sm font-normal cursor-pointer">
+                                                        Fast (Single Query)
+                                                    </Label>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="gen-method-parallel"
+                                                        name="generationMethod"
+                                                        value="parallel"
+                                                        checked={generationMethod === 'parallel'}
+                                                        onChange={() => setGenerationMethod('parallel')}
+                                                        className="accent-primary h-4 w-4"
+                                                    />
+                                                    <Label htmlFor="gen-method-parallel" className="text-sm font-normal cursor-pointer">
+                                                        High Quality (Parallel)
                                                     </Label>
                                                 </div>
                                             </div>

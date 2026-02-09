@@ -637,6 +637,8 @@ export async function generateExerciseFromImage(formData: FormData) {
     const base64Image = Buffer.from(arrayBuffer).toString('base64')
     const imagePart: Part = { inlineData: { data: base64Image, mimeType: file.type } }
 
+    const generationMethod = formData.get('generationMethod') as 'batch' | 'parallel' || 'batch'
+
     const genericRules = `
   Analyze this physics/math problem image.
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
@@ -682,53 +684,69 @@ export async function generateExerciseFromImage(formData: FormData) {
     `;
 
     try {
-        // Stage 1: Generate Base Exercise
-        const basePrompt = `
-      ${genericRules}
-      GENERATION MODE: Create the BASE exercise as seen in the image.
-      ${!isVariationMode && generationType === 'similar' ? 'Actually, make it a SIMILAR problem (different numbers/context) but based ON the image.' : ''}
-      ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
-    `;
-
-        let baseData = await callGeminiForExercise(basePrompt, imagePart)
-        baseData = processExerciseData(baseData, generateSolution, diagramImageUrl)
-
-        if (!isVariationMode) {
-            return { success: true, data: baseData }
-        }
-
-        // Stage 2: Generate Variations in Parallel
-        const variationPromises = []
-        for (let i = 0; i < variationCount - 1; i++) {
-            const varPrompt = `
+        if (generationMethod === 'batch' || !isVariationMode) {
+            const prompt = `
         ${genericRules}
-        GENERATION MODE: Create a NEW VARIATION based on this reference JSON:
-        ${JSON.stringify(baseData)}
+        GENERATION MODE: BATCH
+        Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
         
+        ${isVariationMode ? `
         VARIATION RULES:
         ${variationType === 'numbers' ? '- Keep EXACT SAME context/story/structure, ONLY change numbers.' : '- Change context/story (e.g., car -> train), keep same logic.'}
         - Difficulty must remain consistent.
-        - DO NOT include the base exercise as a variation.
-        - Ensure MCQ options are relevant to the NEW variation.
+        - Ensure MCQ options are relevant to each variation.
+        ` : (generationType === 'similar' ? 'Make it a SIMILAR problem (different numbers/context) but based ON the image.' : 'Create the BASE exercise as seen in the image.')}
+        
         ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
       `;
-            variationPromises.push(callGeminiForExercise(varPrompt, imagePart))
-        }
 
-        const variations = await Promise.all(variationPromises)
-        const processedVariations = variations.map(v => processExerciseData(v, generateSolution, diagramImageUrl))
+            let data = await callGeminiForExercise(prompt, imagePart)
+            data = processExerciseData(data, generateSolution, diagramImageUrl)
+            return { success: true, data }
+        } else {
+            // Stage 1: Generate Base Exercise
+            const basePrompt = `
+        ${genericRules}
+        GENERATION MODE: Create the BASE exercise as seen in the image.
+        ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
+      `;
 
-        // Combine all questions
-        const allQuestions = [...baseData.questions]
-        processedVariations.forEach(v => {
-            if (v.questions) allQuestions.push(...v.questions)
-        })
+            let baseData = await callGeminiForExercise(basePrompt, imagePart)
+            baseData = processExerciseData(baseData, generateSolution, diagramImageUrl)
 
-        return {
-            success: true,
-            data: {
-                ...baseData,
-                questions: allQuestions
+            // Stage 2: Generate Variations in Parallel
+            const variationPromises = []
+            for (let i = 0; i < variationCount - 1; i++) {
+                const varPrompt = `
+          ${genericRules}
+          GENERATION MODE: Create a NEW VARIATION based on this reference JSON:
+          ${JSON.stringify(baseData)}
+          
+          VARIATION RULES:
+          ${variationType === 'numbers' ? '- Keep EXACT SAME context/story/structure, ONLY change numbers.' : '- Change context/story (e.g., car -> train), keep same logic.'}
+          - Difficulty must remain consistent.
+          - DO NOT include the base exercise as a variation.
+          - Ensure MCQ options are relevant to the NEW variation.
+          ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
+        `;
+                variationPromises.push(callGeminiForExercise(varPrompt, imagePart))
+            }
+
+            const variations = await Promise.all(variationPromises)
+            const processedVariations = variations.map(v => processExerciseData(v, generateSolution, diagramImageUrl))
+
+            // Combine all questions
+            const allQuestions = [...baseData.questions]
+            processedVariations.forEach(v => {
+                if (v.questions) allQuestions.push(...v.questions)
+            })
+
+            return {
+                success: true,
+                data: {
+                    ...baseData,
+                    questions: allQuestions
+                }
             }
         }
 
