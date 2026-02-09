@@ -1,6 +1,6 @@
 'use client'
 
-import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress, adminGetUserCollections, adminSetIpBypass, adminGetActiveBypass } from "./actions"
+import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress, adminGetUserCollections, adminSetIpBypass, adminGetActiveBypass, adminResetPassword } from "./actions"
 import { CopyButton } from "@/components/ui/copy-button"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -66,6 +66,9 @@ export function UserList({
     const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false)
     const [activeLink, setActiveLink] = useState<string>("")
     const [forcePasswordReset, setForcePasswordReset] = useState(false)
+    const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false)
+    const [generatedResetPassword, setGeneratedResetPassword] = useState<string | null>(null)
+    const [isResettingPassword, setIsResettingPassword] = useState(false)
 
     // Bulk selection state
     const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
@@ -294,6 +297,25 @@ export function UserList({
         }
     }
 
+    const handleResetPassword = async () => {
+        if (!selectedUser) return
+
+        setIsResettingPassword(true)
+        try {
+            const result = await adminResetPassword(selectedUser.id)
+            if (result.success && result.password) {
+                setGeneratedResetPassword(result.password)
+                toast.success('Password reset successfully')
+            } else {
+                toast.error('Failed to reset password: ' + result.error)
+            }
+        } catch (error) {
+            toast.error('An error occurred')
+        } finally {
+            setIsResettingPassword(false)
+        }
+    }
+
     const toggleUserSelection = (userId: string, checked: boolean, index: number, isShiftKey: boolean) => {
         if (isShiftKey && lastSelectedIndex !== null) {
             const start = Math.min(lastSelectedIndex, index)
@@ -476,6 +498,17 @@ export function UserList({
                                         >
                                             <Loader2 className="mr-2 h-4 w-4 hidden" /> {/* Hidden loader to maintain import usage/consistent type if needed, or just use RefreshCcw */}
                                             Reset Progress
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
+                                            onClick={() => {
+                                                setGeneratedResetPassword(null)
+                                                setIsResetPasswordDialogOpen(true)
+                                            }}
+                                        >
+                                            <Plus className="h-4 w-4 mr-1 rotate-45" /> {/* Use as a refresh-like icon or just Key if imported */}
+                                            Generate New Password
                                         </Button>
                                     </div>
                                 </div>
@@ -672,6 +705,65 @@ export function UserList({
                                 type="button"
                                 variant="secondary"
                                 onClick={() => setIsLinkDialogOpen(false)}
+                            >
+                                Close
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={isResetPasswordDialogOpen} onOpenChange={(open) => {
+                    setIsResetPasswordDialogOpen(open)
+                    if (!open) setGeneratedResetPassword(null)
+                }}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Reset User Password</DialogTitle>
+                            <DialogDescription>
+                                This will generate a new random password for {selectedUser?.email}.
+                                The user will be required to change this password on their next login.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {!generatedResetPassword ? (
+                            <div className="py-4 flex justify-center">
+                                <Button
+                                    onClick={handleResetPassword}
+                                    disabled={isResettingPassword}
+                                >
+                                    {isResettingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Generate Password
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="new-password">New Password</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="new-password"
+                                            value={generatedResetPassword}
+                                            readOnly
+                                            className="bg-muted"
+                                        />
+                                        <CopyButton
+                                            value={generatedResetPassword}
+                                            successMessage="Password copied"
+                                            variant="outline"
+                                            size="icon"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Copy this password and give it to the user. This is the only time it will be shown.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        <DialogFooter className="sm:justify-start">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => setIsResetPasswordDialogOpen(false)}
                             >
                                 Close
                             </Button>

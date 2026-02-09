@@ -502,10 +502,53 @@ export async function adminGetUserById(userId: string): Promise<{ user: AdminUse
         }
 
         return { user: adminUser, error: null }
-
     } catch (error) {
         console.error('Unexpected error in adminGetUserById:', error)
         return { user: null, error: 'Internal server error' }
+    }
+}
+
+export async function adminResetPassword(userId: string) {
+    try {
+        await checkAdmin()
+
+        const supabaseAdmin = createAdminClient()
+
+        // 1. Generate a random password
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+        let newPassword = ''
+        for (let i = 0; i < 10; i++) {
+            newPassword += chars.charAt(Math.floor(Math.random() * chars.length))
+        }
+
+        // 2. Update auth user password
+        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+            userId,
+            { password: newPassword }
+        )
+
+        if (authError) {
+            console.error('Error resetting password in auth:', authError)
+            return { success: false, error: authError.message }
+        }
+
+        // 3. Set must_change_password = true in profile
+        const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .update({ must_change_password: true })
+            .eq('id', userId)
+
+        if (profileError) {
+            console.error('Error updating profile for must_change_password:', profileError)
+            return { success: false, error: 'Failed to set password change requirement' }
+        }
+
+        revalidatePath('/admin')
+        return { success: true, password: newPassword, error: null }
+
+    } catch (error) {
+        console.error('Unexpected error in adminResetPassword:', error)
+        return { success: false, error: 'Internal server error' }
     }
 }
 
