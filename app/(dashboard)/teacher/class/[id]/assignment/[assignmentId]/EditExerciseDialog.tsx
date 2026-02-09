@@ -48,6 +48,7 @@ interface ExerciseData {
     points_enabled?: boolean
     points?: number
     exercise_type?: 'variations' | 'multipart'
+    required_variations_count?: number | null
 }
 
 const compressImage = async (file: File): Promise<Blob> => {
@@ -156,7 +157,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         show_all_questions: false,
         points_enabled: false,
         points: 1,
-        exercise_type: 'multipart'
+        exercise_type: 'multipart',
+        required_variations_count: 1
     })
 
     const [customCount, setCustomCount] = useState<number>(1)
@@ -191,7 +193,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 title: initialData.title || '',
                 questions: mappedQuestions,
                 show_all_questions: initialData.show_all_questions || false,
-                exercise_type: initialData.required_variations_count === 1 ? 'variations' : 'multipart'
+                exercise_type: initialData.required_variations_count && initialData.required_variations_count > 0 ? 'variations' : 'multipart',
+                required_variations_count: initialData.required_variations_count || 1
             })
             setPointsEnabled(initialData.points_enabled || false)
             setPoints(initialData.points || 1)
@@ -328,8 +331,8 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 points_enabled: isClasswork ? pointsEnabled : false,
                 // Total points is sum of all question points
                 points: pointsEnabled ? updatedQuestions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined,
-                // If variations mode, student completes 1. If multi-part, they complete all (null).
-                required_variations_count: isVariations ? 1 : null,
+                // If variations mode, use the user-defined count. If multi-part, they complete all (null).
+                required_variations_count: isVariations ? (data.required_variations_count || 1) : null,
                 show_all_questions: !isVariations && (data.show_all_questions ?? true)
             }
             const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
@@ -408,6 +411,24 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                         </p>
                                     </button>
                                 </div>
+
+                                {data.exercise_type === 'variations' && (
+                                    <div className="flex flex-col space-y-2 pl-2 animate-in fade-in slide-in-from-left-4">
+                                        <div className="flex items-center gap-3">
+                                            <Label htmlFor="req-count" className="text-sm">Reikalingas variacijų skaičius:</Label>
+                                            <Input
+                                                id="req-count"
+                                                type="number"
+                                                min={1}
+                                                max={data.questions.length}
+                                                value={data.required_variations_count || 1}
+                                                onChange={(e) => setData({ ...data, required_variations_count: Math.max(1, Math.min(data.questions.length, parseInt(e.target.value) || 1)) })}
+                                                className="w-20 h-8"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">Kiek skirtingų variacijų mokinys turi išspręsti teisingai, kad užduotis būtų užskaityta.</p>
+                                    </div>
+                                )}
 
                                 {data.exercise_type === 'multipart' && (
                                     <div className="flex items-center space-x-2 pl-2">

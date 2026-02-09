@@ -9,6 +9,7 @@ import { CreateExerciseDialog } from "../../CreateExerciseDialog"
 import { SortableExerciseList } from "./SortableExerciseList"
 import { CollectionBatchActions } from "./CollectionBatchActions"
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
+import { StartTestButton } from "./StartTestButton"
 
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
@@ -35,6 +36,9 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
 
     // Sort assignments by order_index (or created_at if index helps)
     const assignments = collection.assignments?.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) || []
+
+    // Check if any assignment has points enabled
+    const hasPointedExercises = assignments.some((a: any) => a.points_enabled)
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -66,10 +70,17 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 collectionId={collectionId}
                             />
                             {collection.category === 'classwork' && (
-                                <CollectionBatchActions
-                                    assignments={assignments}
-                                    classroomId={id}
-                                />
+                                <>
+                                    <StartTestButton
+                                        collectionId={collectionId}
+                                        classroomId={id}
+                                        hasPointedExercises={hasPointedExercises}
+                                    />
+                                    <CollectionBatchActions
+                                        assignments={assignments}
+                                        classroomId={id}
+                                    />
+                                </>
                             )}
                             <CollectionSettingsDialog
                                 classroomId={id}

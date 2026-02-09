@@ -222,7 +222,9 @@ export function StudentAssignmentInterface({
             // Check if all questions are now submitted
             const updatedLockedCount = lockedQuestionIds.size + 1
             const targetCount = isVariationMode ? requiredVariations : totalQuestions
-            if (updatedLockedCount >= targetCount && onFinish) {
+            // Auto-advance to next exercise only if this is NOT the last exercise
+            // For the last exercise, student should manually click finish to see final results
+            if (updatedLockedCount >= targetCount && onFinish && !isLastExercise) {
                 onFinish()
             }
         } else if (result.alreadySubmitted) {
@@ -235,8 +237,10 @@ export function StudentAssignmentInterface({
     // In points mode, a locked question (submitted answer) counts as "completed" for navigation
     const isCurrentQuestionLocked = pointsEnabled && questions[currentIndex]?.id && lockedQuestionIds.has(questions[currentIndex].id)
     const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex) || isCurrentQuestionLocked
+    // For variations, use lockedQuestionIds in points mode, completedIndices otherwise
+    const effectiveCompletedCount = pointsEnabled ? lockedQuestionIds.size : completedIndices.size
     const isLastQuestion = isVariationMode
-        ? completedIndices.size >= requiredVariations - 1 // Logic: if we are at size == target-1, solving this makes it last
+        ? effectiveCompletedCount >= requiredVariations - 1 // Logic: if we are at size == target-1, solving this makes it last
         : currentIndex === totalQuestions - 1
 
     const handleNext = () => {
@@ -247,8 +251,8 @@ export function StudentAssignmentInterface({
 
     // Progress calculation
     const progress = isVariationMode
-        ? (completedIndices.size / requiredVariations) * 100
-        : (completedIndices.size / totalQuestions) * 100
+        ? (effectiveCompletedCount / requiredVariations) * 100
+        : (effectiveCompletedCount / totalQuestions) * 100
 
     return (
         <div className="space-y-8 max-w-3xl mx-auto">
@@ -543,20 +547,30 @@ export function StudentAssignmentInterface({
                                         Ankstesnė užduotis
                                     </Button>
                                 )}
-                                {!isLastQuestion || (isVariationMode && completedIndices.size < requiredVariations) ? (
+                                {!isLastQuestion || (isVariationMode && effectiveCompletedCount < requiredVariations) ? (
                                     <Button
                                         onClick={() => {
                                             if (isVariationMode) {
-                                                // Pick next random unsolved (not solved and not revealed)
-                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !completedIndices.has(i) && !revealedIndices.has(i));
+                                                // Pick next random unsolved (not solved/locked and not revealed)
+                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => {
+                                                    const qId = questions[i]?.id
+                                                    const isCompleted = completedIndices.has(i)
+                                                    const isLocked = pointsEnabled && qId && lockedQuestionIds.has(qId)
+                                                    const isRevealed = revealedIndices.has(i)
+                                                    return !isCompleted && !isLocked && !isRevealed
+                                                });
                                                 if (unsolved.length > 0) {
                                                     const randIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
                                                     setCurrentIndex(randIndex);
+                                                } else if (effectiveCompletedCount >= requiredVariations && onFinish) {
+                                                    // No more unsolved but we've met the requirement - finish
+                                                    onFinish()
                                                 }
                                             } else {
                                                 handleNext();
                                             }
                                         }}
+
                                         disabled={!canProceed}
                                         className="gap-2"
                                     >

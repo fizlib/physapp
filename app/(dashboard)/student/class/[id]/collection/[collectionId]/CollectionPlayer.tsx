@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award } from "lucide-react"
+import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award, Timer } from "lucide-react"
 import Link from "next/link"
 import { StudentAssignmentInterface } from "../../assignment/[assignmentId]/StudentAssignmentInterface"
 import { Card, CardContent } from "@/components/ui/card"
@@ -104,6 +104,26 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const { width, height } = useWindowSize()
 
+    // Test mode timer state
+    const [testModeRemainingSeconds, setTestModeRemainingSeconds] = useState<number | null>(() => {
+        if (collection.test_mode_ends_at) {
+            const endTime = new Date(collection.test_mode_ends_at).getTime()
+            const now = Date.now()
+            const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
+            return remaining > 0 ? remaining : null
+        }
+        return null
+    })
+    const isTestModeActive = testModeRemainingSeconds !== null && testModeRemainingSeconds > 0
+
+    // Track if test mode has expired (time ran out) - shows results overlay but allows browsing
+    const [testModeExpired, setTestModeExpired] = useState(() => {
+        if (collection.test_mode_ends_at) {
+            return new Date() > new Date(collection.test_mode_ends_at)
+        }
+        return false
+    })
+
     // Function to refresh progress data from server
     const refreshProgress = async () => {
         const result = await getCollectionProgress(collection.id)
@@ -129,6 +149,9 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         }>
     } | null>(null)
 
+    // State to control showing test results overlay (dismissable)
+    const [showTestResults, setShowTestResults] = useState(false)
+
     // Fetch points results when completed
     useEffect(() => {
         if (isCompleted && isClasswork) {
@@ -139,6 +162,18 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
             })
         }
     }, [isCompleted, isClasswork, collection.id])
+
+    // Fetch results on mount if test mode has expired (for showing points in locked exercise view)
+    useEffect(() => {
+        if (testModeExpired && !pointsResults) {
+            getCollectionResults(collection.id).then(res => {
+                if (res.success && res.results) {
+                    setPointsResults(res.results)
+                    // Don't auto-show results overlay on page revisit - only show when timer runs out in real-time
+                }
+            })
+        }
+    }, [testModeExpired, pointsResults, collection.id])
 
     // Get progress for current assignment
     const currentProgress = progressMap.get(currentAssignment?.id)
@@ -273,6 +308,56 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         const interval = setInterval(checkPublished, 3000)
         return () => clearInterval(interval)
     }, [isWaitingForUnlock, waitingForAssignmentId, collection.id])
+
+    // Test mode countdown effect
+    useEffect(() => {
+        if (!collection.test_mode_ends_at || isCompleted || testModeExpired) return
+
+        const endTime = new Date(collection.test_mode_ends_at).getTime()
+
+        const tick = async () => {
+            const now = Date.now()
+            const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
+
+            if (remaining <= 0) {
+                // Time is up - auto-submit all answers and show results
+                setTestModeRemainingSeconds(null)
+                await autoSubmitCollectionPointsAnswers(collection.id)
+                // Set both testModeExpired and isCompleted to redirect to finish screen with points
+                setTestModeExpired(true)
+                setIsCompleted(true)
+                // Fetch results to display on the finish screen
+                const res = await getCollectionResults(collection.id)
+                if (res.success && res.results) {
+                    setPointsResults(res.results)
+                }
+                return
+            }
+
+            setTestModeRemainingSeconds(remaining)
+        }
+
+        // Tick immediately
+        tick()
+
+        // Then tick every second
+        const interval = setInterval(tick, 1000)
+        return () => clearInterval(interval)
+    }, [collection.test_mode_ends_at, collection.id, isCompleted, testModeExpired])
+
+    // When test mode starts, redirect to first pointed exercise (only once)
+    const [hasRedirectedToPointed, setHasRedirectedToPointed] = useState(false)
+    useEffect(() => {
+        if (!isTestModeActive || hasRedirectedToPointed) return
+
+        // Find first assignment with points_enabled
+        const firstPointedIndex = assignments.findIndex((a: any) => a.points_enabled)
+        if (firstPointedIndex >= 0 && currentAssignmentIndex !== firstPointedIndex) {
+            setCurrentAssignmentIndex(firstPointedIndex)
+        }
+        setHasRedirectedToPointed(true)
+    }, [isTestModeActive, assignments, currentAssignmentIndex, hasRedirectedToPointed])
+
 
     if (restrictionData.isRestricted) {
         return (
@@ -415,6 +500,61 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         )
     }
 
+
+
+    if (showTestResults && pointsResults) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background p-8">
+                <Card className="max-w-md w-full border-2 border-amber-200 bg-card/50 backdrop-blur-sm">
+                    <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-6">
+                        <div className="rounded-full bg-amber-100 p-6">
+                            <Timer className="h-12 w-12 text-amber-600" />
+                        </div>
+                        <div className="space-y-2">
+                            <h2 className="text-2xl font-bold tracking-tight">Testo laikas baigėsi</h2>
+                            <p className="text-muted-foreground">
+                                Jūsų atsakymai buvo automatiškai pateikti.
+                            </p>
+                        </div>
+
+                        {/* Points Summary */}
+                        {pointsResults.totalPoints > 0 && (
+                            <div className="w-full space-y-4 pt-4 border-t">
+                                <div className="flex items-center justify-center gap-3">
+                                    <Award className="h-6 w-6 text-amber-500" />
+                                    <span className="text-xl font-bold">
+                                        {pointsResults.earnedPoints} / {pointsResults.totalPoints} taškai
+                                    </span>
+                                </div>
+
+                                <div className="space-y-2 text-left">
+                                    {pointsResults.exercises.filter(e => e.pointsEnabled).map((ex, idx) => (
+                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                            <span className="flex items-center gap-2">
+                                                {ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                Užduotis {idx + 1}
+                                            </span>
+                                            <span className="font-medium">
+                                                {ex.earnedPoints ?? 0} / {ex.points} taškai
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <Button onClick={() => router.push(`/student/class/${classroomId}`)} size="lg" className="w-full">
+                            Grįžti į klasę
+                        </Button>
+                        <Button onClick={() => setShowTestResults(false)} variant="outline" size="lg" className="w-full">
+                            Peržiūrėti rinkinį
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
     // Waiting for teacher to unlock next exercise
     if (isWaitingForUnlock) {
         return (
@@ -476,10 +616,14 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                                             const isPublished = assignment.published
                                             const publishedIndex = assignments.findIndex((a: any) => a.id === assignment.id)
                                             const isCurrent = assignment.id === currentAssignment?.id
-                                            // For classwork: locked if not published
+                                            // For classwork: locked if not published OR (pointed exercise when test expired AND no submissions)
                                             // For homework: locked if not published OR beyond maxReachedIndex
+                                            // Check if student has submitted answers for this exercise
+                                            const assignmentProgress = progressMap.get(assignment.id)
+                                            const hasSubmissions = assignmentProgress?.submitted_answers && Object.keys(assignmentProgress.submitted_answers).length > 0
+                                            const isPointedAndTestExpiredNoSubmissions = testModeExpired && assignment.points_enabled && !hasSubmissions
                                             const isLocked = isClasswork
-                                                ? !isPublished
+                                                ? (!isPublished || isPointedAndTestExpiredNoSubmissions)
                                                 : (!isPublished || publishedIndex > maxReachedIndex)
                                             return (
                                                 <DropdownMenuItem
@@ -536,42 +680,92 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
 
                     <h1 className="text-xl font-bold text-primary border-b pb-4 flex items-center justify-between gap-4">
                         <span>{collection.title}</span>
-                        {collection.slides_url && (
-                            <SlidesButton
-                                url={collection.slides_url}
-                                title={collection.title}
-                                variant="outline"
-                                className="h-9"
-                            // Override default "Skaidrės" text if needed, but "Teorija" might be better here
-                            />
-                        )}
+                        <div className="flex items-center gap-3">
+                            {/* Test Mode Timer */}
+                            {isTestModeActive && testModeRemainingSeconds !== null && (
+                                <div className="flex items-center gap-2 bg-amber-100 text-amber-800 px-3 py-1.5 rounded-full text-sm font-semibold animate-pulse">
+                                    <Timer className="h-4 w-4" />
+                                    <span suppressHydrationWarning>
+                                        {Math.floor(testModeRemainingSeconds / 60).toString().padStart(2, '0')}:
+                                        {(testModeRemainingSeconds % 60).toString().padStart(2, '0')}
+                                    </span>
+                                </div>
+
+                            )}
+                            {collection.slides_url && (
+                                <SlidesButton
+                                    url={collection.slides_url}
+                                    title={collection.title}
+                                    variant="outline"
+                                    className="h-9"
+                                />
+                            )}
+                        </div>
                     </h1>
                 </div>
 
                 {/* Current Assignment Interface */}
                 {/* We use key to force re-mount when assignment changes */}
-                <StudentAssignmentInterface
-                    key={currentAssignment.id}
-                    assignment={currentAssignment}
-                    classId={classroomId}
-                    onFinish={handleAssignmentFinish}
-                    onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
-                    canSkip={isClasswork}
-                    compact={true}
-                    initialCompletedIndices={currentCompletedIndices}
-                    initialRevealedIndices={currentRevealedIndices}
-                    initialIsCompleted={currentIsCompleted}
-                    initialActiveQuestionIndex={currentActiveIndex}
-                    hideRevealSolution={collection.category === 'classwork'}
-                    exerciseNumber={allAssignmentsState.length > 0 ? (allAssignmentsState.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1) : (currentAssignmentIndex + 1)}
-                    // Points mode props
-                    pointsEnabled={currentAssignment.points_enabled || false}
-                    exercisePoints={currentAssignment.points || 1}
-                    initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
-                    // Last exercise in collection - show "Finish" instead of "Next Exercise"
-                    isLastExercise={!getNextAssignmentFromAllAssignments()}
-                    onProgressUpdate={refreshProgress}
-                />
+                {/* Block access to pointed exercises after test mode expires ONLY if student has no submissions */}
+                {(() => {
+                    const currentHasSubmissions = currentProgress?.submitted_answers && Object.keys(currentProgress.submitted_answers).length > 0
+                    const shouldBlockPointed = testModeExpired && currentAssignment.points_enabled && !currentHasSubmissions
+                    return shouldBlockPointed
+                })() ? (
+                    <Card className="max-w-md mx-auto border-2 border-amber-200 bg-card/50">
+                        <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+                            <div className="rounded-full bg-amber-100 p-6">
+                                <Lock className="h-10 w-10 text-amber-600" />
+                            </div>
+                            <div className="space-y-2">
+                                <h2 className="text-xl font-bold">Užduotis užrakinta</h2>
+                                <p className="text-muted-foreground text-sm">
+                                    Ši užduotis buvo prieinama testo metu. Testo laikas baigėsi.
+                                </p>
+                            </div>
+                            {/* Show earned points if available */}
+                            {pointsResults && currentAssignment && (() => {
+                                const exerciseResult = pointsResults.exercises.find(e => e.id === currentAssignment.id)
+                                if (exerciseResult) {
+                                    return (
+                                        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${exerciseResult.isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {exerciseResult.isCorrect ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                                            <span className="font-medium">{exerciseResult.earnedPoints ?? 0} / {exerciseResult.points} taškai</span>
+                                        </div>
+                                    )
+                                }
+                                return null
+                            })()}
+                            <Button onClick={handlePrevious} variant="outline" className="mt-4">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Grįžti atgal
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <StudentAssignmentInterface
+                        key={currentAssignment.id}
+                        assignment={currentAssignment}
+                        classId={classroomId}
+                        onFinish={handleAssignmentFinish}
+                        onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
+                        canSkip={isClasswork}
+                        compact={true}
+                        initialCompletedIndices={currentCompletedIndices}
+                        initialRevealedIndices={currentRevealedIndices}
+                        initialIsCompleted={currentIsCompleted}
+                        initialActiveQuestionIndex={currentActiveIndex}
+                        hideRevealSolution={collection.category === 'classwork'}
+                        exerciseNumber={allAssignmentsState.length > 0 ? (allAssignmentsState.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1) : (currentAssignmentIndex + 1)}
+                        // Points mode props
+                        pointsEnabled={currentAssignment.points_enabled || false}
+                        exercisePoints={currentAssignment.points || 1}
+                        initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
+                        // Last exercise in collection - show "Finish" instead of "Next Exercise"
+                        isLastExercise={!getNextAssignmentFromAllAssignments()}
+                        onProgressUpdate={refreshProgress}
+                    />
+                )}
             </div>
         </div>
     )

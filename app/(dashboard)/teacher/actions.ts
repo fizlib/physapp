@@ -1897,3 +1897,110 @@ export async function generateVariationsFromExercise(
         return { success: false, error: error.message || "Failed to generate variations" }
     }
 }
+
+// Start timed test mode for a collection
+export async function startTestCollection(
+    collectionId: string,
+    classroomId: string,
+    durationMinutes: number
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Calculate end time
+    const testEndTime = new Date()
+    testEndTime.setMinutes(testEndTime.getMinutes() + durationMinutes)
+
+    // Update collection with test_mode_ends_at
+    const { error: collectionError } = await supabase
+        .from('collections')
+        .update({ test_mode_ends_at: testEndTime.toISOString() })
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+
+    if (collectionError) {
+        console.error("Collection update error:", collectionError)
+        return { success: false, error: "Failed to start test mode" }
+    }
+
+    // Publish all assignments in collection that have points_enabled = true
+    const { error: assignmentError } = await supabase
+        .from('assignments')
+        .update({ published: true })
+        .eq('collection_id', collectionId)
+        .eq('points_enabled', true)
+
+    if (assignmentError) {
+        console.error("Assignment publish error:", assignmentError)
+        return { success: false, error: "Failed to publish pointed exercises" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    revalidatePath(`/student/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
+// End test mode for a collection (called when time expires or manually)
+export async function endTestCollection(
+    collectionId: string,
+    classroomId: string
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Clear test_mode_ends_at
+    const { error: collectionError } = await supabase
+        .from('collections')
+        .update({ test_mode_ends_at: null })
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+
+    if (collectionError) {
+        console.error("Collection update error:", collectionError)
+        return { success: false, error: "Failed to end test mode" }
+    }
+
+    // Unpublish all assignments in collection that have points_enabled = true
+    const { error: assignmentError } = await supabase
+        .from('assignments')
+        .update({ published: false })
+        .eq('collection_id', collectionId)
+        .eq('points_enabled', true)
+
+    if (assignmentError) {
+        console.error("Assignment unpublish error:", assignmentError)
+        return { success: false, error: "Failed to unpublish pointed exercises" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    revalidatePath(`/student/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
