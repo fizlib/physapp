@@ -322,7 +322,9 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                 questions: updatedQuestions,
                 points_enabled: isClasswork ? pointsEnabled : false,
                 // Total points is sum of all question points
-                points: pointsEnabled ? updatedQuestions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined
+                points: pointsEnabled ? updatedQuestions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined,
+                // If there are multiple questions, treat as variation exercise (student completes 1)
+                required_variations_count: updatedQuestions.length > 1 ? 1 : null
             }
             const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
             if (result.success) {

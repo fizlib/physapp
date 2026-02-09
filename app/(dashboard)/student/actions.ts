@@ -446,10 +446,10 @@ export async function getCollectionResults(collectionId: string): Promise<{
         const requiredCount = a.required_variations_count || 0
         const isVariation = requiredCount > 0
 
-        let exercisePoints = a.points || 1
+        let exercisePoints = isPointsExercise ? (a.points || 1) : 0
 
         // If variation exercise, points should be (points of first variation * requiredCount)
-        if (isVariation && a.questions?.[0]) {
+        if (isPointsExercise && isVariation && a.questions?.[0]) {
             const pointsPerVariation = a.questions[0].points || 1
             exercisePoints = pointsPerVariation * requiredCount
         }
@@ -551,6 +551,7 @@ export async function getStudentDashboardStats(): Promise<{
             const requiredCount = a.required_variations_count || 0
             const isVariation = requiredCount > 0
 
+            // Use exercise-level points if set, otherwise calculate from question points
             let max = a.points || 0
 
             if (isVariation && a.questions?.[0]) {

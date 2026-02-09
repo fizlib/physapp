@@ -118,7 +118,8 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
             category: data.category,
             show_all_questions: data.show_all_questions || false,
             points_enabled: data.points_enabled || false,
-            points: data.points_enabled ? (data.points || 1) : null
+            points: data.points_enabled ? (data.points || 1) : null,
+            required_variations_count: data.required_variations_count || null
         })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
