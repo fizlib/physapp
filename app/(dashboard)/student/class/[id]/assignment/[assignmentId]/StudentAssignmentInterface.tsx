@@ -66,7 +66,7 @@ export function StudentAssignmentInterface({
     const [completedIndices, setCompletedIndices] = useState<Set<number>>(new Set(initialCompletedIndices))
     const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set(initialRevealedIndices))
     const [lockedQuestionIds, setLockedQuestionIds] = useState<Set<string>>(
-        new Set(Object.keys(initialSubmittedAnswers || {}))
+        new Set(pointsEnabled ? Object.keys(initialSubmittedAnswers || {}) : [])
     )
     const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(initialSubmittedAnswers || {})
     const [isFinishing, setIsFinishing] = useState(false)
@@ -106,7 +106,8 @@ export function StudentAssignmentInterface({
                             initialCompletedIndices,
                             false,
                             newIndex,
-                            [] // Empty revealed indices
+                            [], // Empty revealed indices
+                            {} // Empty answers on reset
                         )
                     }
                 }
@@ -127,7 +128,8 @@ export function StudentAssignmentInterface({
             Array.from(completedIndices),
             completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
             currentIndex,
-            Array.from(revealedIndices)
+            Array.from(revealedIndices),
+            submittedAnswers
         ).then(res => {
             if (res.success && onProgressUpdate) onProgressUpdate()
         })
@@ -151,7 +153,8 @@ export function StudentAssignmentInterface({
             // Finish if we met the requirement
             isVariationMode ? newSet.size >= requiredVariations : false,
             currentIndex,
-            Array.from(revealedIndices)
+            Array.from(revealedIndices),
+            submittedAnswers
         )
         if (onProgressUpdate) onProgressUpdate()
 
@@ -175,10 +178,26 @@ export function StudentAssignmentInterface({
             Array.from(completedIndices),
             false, // Revelation never completes the assignment
             currentIndex,
-            Array.from(newRevealed)
+            Array.from(newRevealed),
+            submittedAnswers
         )
         if (onProgressUpdate) onProgressUpdate()
         toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
+    }
+
+    const handleAnswerCheck = async (questionId: string, answer: string) => {
+        const newAnswers = { ...submittedAnswers, [questionId]: answer }
+        setSubmittedAnswers(newAnswers)
+
+        await upsertAssignmentProgress(
+            assignment.id,
+            Array.from(completedIndices),
+            completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
+            currentIndex,
+            Array.from(revealedIndices),
+            newAnswers
+        )
+        if (onProgressUpdate) onProgressUpdate()
     }
 
     // Points mode submission handler - one try per question
@@ -313,7 +332,7 @@ export function StudentAssignmentInterface({
                                                             if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
                                                             const newRevealed = new Set(revealedIndices).add(index)
                                                             setRevealedIndices(newRevealed)
-                                                            await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed))
+                                                            await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed), submittedAnswers)
                                                             if (onProgressUpdate) onProgressUpdate()
                                                         }}
                                                     >
@@ -334,6 +353,7 @@ export function StudentAssignmentInterface({
                                                     disabled={lockedQuestionIds.has(q.id)}
                                                     submittedAnswer={submittedAnswers[q.id]}
                                                     onPointsSubmit={handlePointsSubmit}
+                                                    onCheck={(ans) => handleAnswerCheck(q.id, ans)}
                                                     isRevealed={revealedIndices.has(index)}
                                                 />
                                             </div>
@@ -387,7 +407,9 @@ export function StudentAssignmentInterface({
                                         assignment.id,
                                         Array.from(completedIndices),
                                         true,
-                                        currentIndex
+                                        currentIndex,
+                                        Array.from(revealedIndices),
+                                        submittedAnswers
                                     )
 
                                     if (onFinish) {
@@ -489,6 +511,7 @@ export function StudentAssignmentInterface({
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
                                     onPointsSubmit={handlePointsSubmit}
+                                    onCheck={(ans) => handleAnswerCheck(questions[currentIndex].id, ans)}
                                     isRevealed={revealedIndices.has(currentIndex)}
                                 />
                             </div>
@@ -568,7 +591,9 @@ export function StudentAssignmentInterface({
                                                     assignment.id,
                                                     Array.from(completedIndices),
                                                     true,
-                                                    currentIndex
+                                                    currentIndex,
+                                                    Array.from(revealedIndices),
+                                                    submittedAnswers
                                                 )
 
                                                 if (onFinish) {

@@ -18,6 +18,7 @@ export function TestInterface({
     disabled = false,
     submittedAnswer,
     onPointsSubmit,
+    onCheck,
     isRevealed = false
 }: {
     question: any,
@@ -29,6 +30,7 @@ export function TestInterface({
     disabled?: boolean,
     submittedAnswer?: string,
     onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void,
+    onCheck?: (answer: string) => void,
     isRevealed?: boolean
 }) {
     const [latexInput, setLatexInput] = useState("")
@@ -46,6 +48,18 @@ export function TestInterface({
             setAsciiInput(val)
         }
     }, [isRevealed, question.correct_value, question.question_type])
+
+    // Initialize inputs from submittedAnswer if provided and NOT revealed
+    useEffect(() => {
+        if (submittedAnswer && !isRevealed) {
+            if (question.question_type === 'numerical') {
+                setLatexInput(submittedAnswer)
+                setAsciiInput(submittedAnswer)
+            } else {
+                setMcqInput(submittedAnswer)
+            }
+        }
+    }, [submittedAnswer, question.question_type, isRevealed])
 
     const checkAnswer = () => {
         if (isRevealed) return;
@@ -79,6 +93,9 @@ export function TestInterface({
                 return
             }
 
+            // Normal mode: notify parent for saving
+            onCheck?.(String(val))
+
             // Normal mode: show feedback
             if (isCorrect) {
                 setResult('correct')
@@ -102,6 +119,9 @@ export function TestInterface({
                 onPointsSubmit?.(questionId, questionPoints, mcqInput, isCorrect)
                 return
             }
+
+            // Normal mode: notify parent for saving
+            onCheck?.(mcqInput)
 
             // Normal mode: show feedback
             if (isCorrect) {
@@ -197,12 +217,14 @@ export function TestInterface({
                         {question.options?.map((opt: string, i: number) => {
                             const letter = ['A', 'B', 'C', 'D'][i]
                             const isCorrectAnswer = letter === question.correct_answer?.trim().toUpperCase()
-                            const showSuccess = isRevealed && isCorrectAnswer
+                            const isSelected = mcqInput === letter
+                            const showSuccess = (isRevealed || (result === 'correct' && isSelected)) && isCorrectAnswer
+                            const showIncorrect = result === 'incorrect' && isSelected
 
                             return (
                                 <div
                                     key={i}
-                                    className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted transition-colors ${mcqInput === letter ? 'ring-2 ring-primary border-transparent' : ''} ${showSuccess ? 'border-green-500 bg-green-100' : ''}`}
+                                    className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer hover:bg-muted transition-colors ${isSelected ? (showSuccess ? 'ring-2 ring-green-500 border-transparent' : (showIncorrect ? 'ring-2 ring-red-500 border-transparent' : 'ring-2 ring-primary border-transparent')) : ''} ${showSuccess ? 'border-green-500 bg-green-100 dark:bg-green-900/20' : ''}`}
                                     onClick={() => {
                                         setMcqInput(letter)
                                         setResult(null)

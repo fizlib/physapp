@@ -11,7 +11,8 @@ const UpsertProgressSchema = z.object({
     completedIndices: z.array(z.number()),
     isCompleted: z.boolean(),
     activeQuestionIndex: z.number().optional(),
-    revealedIndices: z.array(z.number()).optional()
+    revealedIndices: z.array(z.number()).optional(),
+    submittedAnswers: z.record(z.string(), z.string()).optional()
 })
 
 export type ActionState = {
@@ -25,14 +26,15 @@ export async function upsertAssignmentProgress(
     completedIndices: number[],
     isCompleted: boolean,
     activeQuestionIndex?: number,
-    revealedIndices?: number[]
+    revealedIndices?: number[],
+    submittedAnswers?: Record<string, string>
 ): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex, revealedIndices })
+    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex, revealedIndices, submittedAnswers })
     if (!validated.success) return { success: false, error: "Invalid data" }
 
     // IP Enforcement Check
@@ -93,6 +95,7 @@ export async function upsertAssignmentProgress(
             is_completed: isCompleted,
             active_question_index: activeQuestionIndex,
             revealed_question_indices: revealedIndices || [],
+            submitted_answers: submittedAnswers || {},
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'
