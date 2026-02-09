@@ -70,17 +70,10 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 collectionId={collectionId}
                             />
                             {collection.category === 'classwork' && (
-                                <>
-                                    <StartTestButton
-                                        collectionId={collectionId}
-                                        classroomId={id}
-                                        hasPointedExercises={hasPointedExercises}
-                                    />
-                                    <CollectionBatchActions
-                                        assignments={assignments}
-                                        classroomId={id}
-                                    />
-                                </>
+                                <CollectionBatchActions
+                                    assignments={assignments}
+                                    classroomId={id}
+                                />
                             )}
                             <CollectionSettingsDialog
                                 classroomId={id}
@@ -100,6 +93,15 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                             </Button>
                         </div>
                     </div>
+                    {collection.category === 'classwork' && (
+                        <div className="flex justify-center pt-2">
+                            <StartTestButton
+                                collectionId={collectionId}
+                                classroomId={id}
+                                hasPointedExercises={hasPointedExercises}
+                            />
+                        </div>
+                    )}
                 </div>
 
                 {/* Exercises List */}
