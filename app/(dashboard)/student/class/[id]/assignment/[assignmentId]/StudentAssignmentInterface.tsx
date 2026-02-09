@@ -211,7 +211,8 @@ export function StudentAssignmentInterface({
             answer,
             isCorrect,
             questionPoints,
-            totalQuestions
+            totalQuestions,
+            isVariationMode ? requiredVariations : undefined
         )
 
         if (result.success) {
@@ -220,7 +221,8 @@ export function StudentAssignmentInterface({
             setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
             // Check if all questions are now submitted
             const updatedLockedCount = lockedQuestionIds.size + 1
-            if (updatedLockedCount >= totalQuestions && onFinish) {
+            const targetCount = isVariationMode ? requiredVariations : totalQuestions
+            if (updatedLockedCount >= targetCount && onFinish) {
                 onFinish()
             }
         } else if (result.alreadySubmitted) {
@@ -396,7 +398,8 @@ export function StudentAssignmentInterface({
                                                     '',
                                                     false,
                                                     q.points || 1,
-                                                    totalQuestions
+                                                    totalQuestions,
+                                                    isVariationMode ? requiredVariations : undefined
                                                 )
                                             }
                                         }
@@ -580,7 +583,8 @@ export function StudentAssignmentInterface({
                                                                 '',
                                                                 false,
                                                                 q.points || 1,
-                                                                totalQuestions
+                                                                totalQuestions,
+                                                                isVariationMode ? requiredVariations : undefined
                                                             )
                                                         }
                                                     }

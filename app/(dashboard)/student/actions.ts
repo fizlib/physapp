@@ -245,7 +245,8 @@ export async function submitPointsAnswer(
     submittedAnswer: string,
     isCorrect: boolean,
     pointsPerPart: number,
-    totalQuestions: number
+    totalQuestions: number,
+    requiredVariationsCount?: number
 ): Promise<ActionState & { alreadySubmitted?: boolean }> {
     const supabase = await createClient()
 
@@ -281,7 +282,10 @@ export async function submitPointsAnswer(
     const submittedCount = Object.keys(submittedAnswers).length
 
     // Mark as completed only when all questions are submitted
-    const isFullyCompleted = submittedCount >= totalQuestions
+    // If variation mode, check against required variations count
+    const isFullyCompleted = (requiredVariationsCount && requiredVariationsCount > 0)
+        ? submittedCount >= requiredVariationsCount
+        : submittedCount >= totalQuestions
 
     const { error } = await supabase
         .from('assignment_progress')
@@ -415,7 +419,8 @@ export async function getCollectionResults(collectionId: string): Promise<{
             title,
             points_enabled,
             points,
-            questions (correct_value, correct_answer)
+            required_variations_count,
+            questions (id, points, correct_value, correct_answer)
         `)
         .eq('collection_id', collectionId)
         .order('order_index', { ascending: true })
@@ -438,7 +443,16 @@ export async function getCollectionResults(collectionId: string): Promise<{
     const exercises = assignments.map((a: any) => {
         const progress = progressMap.get(a.id)
         const isPointsExercise = a.points_enabled
-        const exercisePoints = a.points || 1
+        const requiredCount = a.required_variations_count || 0
+        const isVariation = requiredCount > 0
+
+        let exercisePoints = a.points || 1
+
+        // If variation exercise, points should be (points of first variation * requiredCount)
+        if (isVariation && a.questions?.[0]) {
+            const pointsPerVariation = a.questions[0].points || 1
+            exercisePoints = pointsPerVariation * requiredCount
+        }
 
         if (isPointsExercise) {
             totalPoints += exercisePoints
@@ -501,7 +515,14 @@ export async function getStudentDashboardStats(): Promise<{
     // 2. Fetch all published assignments with points for these classrooms
     const { data: assignments } = await supabase
         .from('assignments')
-        .select('id, classroom_id, points, points_enabled')
+        .select(`
+            id, 
+            classroom_id, 
+            points, 
+            points_enabled,
+            required_variations_count,
+            questions (points)
+        `)
         .in('classroom_id', schoolClassIds)
         .eq('published', true)
         .eq('points_enabled', true)
@@ -524,10 +545,19 @@ export async function getStudentDashboardStats(): Promise<{
         stats[cid] = { totalPoints: 0, earnedPoints: 0 }
     })
 
-    assignments.forEach(a => {
+    assignments.forEach((a: any) => {
         const cid = a.classroom_id
         if (stats[cid]) {
-            const max = a.points || 0
+            const requiredCount = a.required_variations_count || 0
+            const isVariation = requiredCount > 0
+
+            let max = a.points || 0
+
+            if (isVariation && a.questions?.[0]) {
+                const pointsPerVariation = a.questions[0].points || 1
+                max = pointsPerVariation * requiredCount
+            }
+
             const earned = progressMap.get(a.id) || 0
             stats[cid].totalPoints += max
             stats[cid].earnedPoints += earned

@@ -473,6 +473,131 @@ export async function uploadIllustration(formData: FormData): Promise<{ success:
     return { success: true, url: publicUrl }
 }
 
+const sanitizeOptionSvg = (opt: string) => {
+    if (opt && opt.trim().startsWith('<svg')) {
+        let svg = opt.trim()
+        svg = svg.replace(/&lt;/g, '<')
+        svg = svg.replace(/&gt;/g, '>')
+        svg = svg.replace(/&amp;/g, '&')
+        svg = svg.replace(/&quot;/g, '"')
+        svg = svg.replace(/&#39;/g, "'")
+        svg = svg.replace(/&#x27;/g, "'")
+        svg = svg.replace(/&#x2F;/g, '/')
+        svg = svg.replace(/\\n/g, '\n')
+        svg = svg.replace(/\\r/g, '')
+        // Strip hardcoded width/height to make it responsive
+        svg = svg.replace(/<svg([^>]*)width="[^"]*"/i, '<svg$1')
+        svg = svg.replace(/<svg([^>]*)height="[^"]*"/i, '<svg$1')
+        return svg.trim()
+    }
+    return opt
+}
+
+function processExerciseData(data: any, generateSolution: boolean, diagramImageUrl: string | null) {
+    if (!data.questions) return data
+
+    data.questions = data.questions.map((q: any) => {
+        // Sanitize options if they contain SVG
+        if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options)) {
+            q.options = q.options.map((opt: string) => sanitizeOptionSvg(opt))
+        }
+
+        // Sanitize SVG content
+        if (q.diagram_svg && typeof q.diagram_svg === 'string') {
+            let svg = q.diagram_svg
+            svg = svg.replace(/&lt;/g, '<')
+            svg = svg.replace(/&gt;/g, '>')
+            svg = svg.replace(/&amp;/g, '&')
+            svg = svg.replace(/&quot;/g, '"')
+            svg = svg.replace(/&#39;/g, "'")
+            svg = svg.replace(/&#x27;/g, "'")
+            svg = svg.replace(/&#x2F;/g, '/')
+            svg = svg.replace(/\\n/g, '\n')
+            svg = svg.replace(/\\r/g, '')
+            svg = svg.trim()
+            q.diagram_svg = svg
+        }
+
+        if (q.type === 'multiple_choice' && q.correct_answer) {
+            let ans = q.correct_answer.trim().toUpperCase()
+            ans = ans.replace(/\*/g, '').replace(/_/g, '')
+
+            if (!['A', 'B', 'C', 'D'].includes(ans)) {
+                if (q.options && Array.isArray(q.options)) {
+                    const matchIndex = q.options.findIndex((opt: string) => opt.toLowerCase().trim() === ans.toLowerCase())
+                    if (matchIndex !== -1) {
+                        ans = ['A', 'B', 'C', 'D'][matchIndex]
+                    }
+                }
+            }
+
+            if (!['A', 'B', 'C', 'D'].includes(ans)) {
+                const match = ans.match(/\b([A-D])\b/)
+                if (match) {
+                    ans = match[1]
+                }
+            }
+            q.correct_answer = ans
+        }
+
+        // Map Gemini 'solution' field to our 'solution_text'
+        if (generateSolution && q.solution) {
+            q.solution_text = q.solution
+        } else if (!q.solution_text) {
+            q.solution_text = null
+        }
+
+        // Randomize multiple choice options
+        if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options) && q.options.length > 0) {
+            const options = [...q.options]
+            const correctLetter = q.correct_answer || 'A'
+            const correctIndex = ['A', 'B', 'C', 'D'].indexOf(correctLetter)
+
+            if (correctIndex !== -1 && correctIndex < options.length) {
+                const correctValue = options[correctIndex]
+                for (let i = options.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [options[i], options[j]] = [options[j], options[i]];
+                }
+                const newCorrectIndex = options.indexOf(correctValue)
+                if (newCorrectIndex !== -1) {
+                    q.options = options
+                    q.correct_answer = ['A', 'B', 'C', 'D'][newCorrectIndex]
+                }
+            } else {
+                for (let i = options.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [options[i], options[j]] = [options[j], options[i]];
+                }
+                q.options = options
+            }
+        }
+
+        if (diagramImageUrl) {
+            q.diagram_image_url = diagramImageUrl
+        }
+
+        return q
+    })
+
+    return data
+}
+
+async function callGeminiForExercise(prompt: string, imagePart: Part): Promise<any> {
+    console.log("Calling Gemini API...")
+    const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt, imagePart])
+    const response = await result.response
+    const text = response.text()
+    console.log("Gemini Raw Response length:", text.length)
+
+    let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+    jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+    })
+
+    return JSON.parse(jsonStr)
+}
+
 export async function generateExerciseFromImage(formData: FormData) {
     console.log("Starting generateExerciseFromImage...")
 
@@ -491,312 +616,121 @@ export async function generateExerciseFromImage(formData: FormData) {
         console.error("No image file provided")
         return { error: "No image file provided" }
     }
-    console.log("File received:", file.name, file.size, file.type)
 
     let diagramImageUrl = null
     const illustrationFile = formData.get('illustration') as File
     const fileToUpload = illustrationFile || (useImageAsIllustration ? file : null)
 
     if (useImageAsIllustration && fileToUpload) {
-        console.log("Uploading image to Supabase Storage...")
         const supabase = await createClient()
         const fileExt = fileToUpload.name.split('.').pop()
         const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`
         const filePath = `illustrations/${fileName}`
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('illustrations')
-            .upload(filePath, fileToUpload)
-
-        if (uploadError) {
-            console.error("Storage upload error:", uploadError)
-            return { success: false, error: "Failed to upload illustration" }
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('illustrations')
-            .getPublicUrl(filePath)
-
+        const { error: uploadError } = await supabase.storage.from('illustrations').upload(filePath, fileToUpload)
+        if (uploadError) return { success: false, error: "Failed to upload illustration" }
+        const { data: { publicUrl } } = supabase.storage.from('illustrations').getPublicUrl(filePath)
         diagramImageUrl = publicUrl
-        console.log("Image uploaded successfully:", diagramImageUrl)
     }
 
     const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    const base64Image = buffer.toString('base64')
-    console.log("Image length (base64):", base64Image.length)
+    const base64Image = Buffer.from(arrayBuffer).toString('base64')
+    const imagePart: Part = { inlineData: { data: base64Image, mimeType: file.type } }
 
-    const prompt = `
+    const genericRules = `
   Analyze this physics/math problem image.
   Identify if there are multiple parts to the problem (e.g., 1., 2., 3. or a), b), c)).
-
-  CRITICAL: All generated output text (title, question_text, options, solution) MUST be in the Lithuanian language, regardless of the language found in the image.
-
-  Generate a list of questions, one for each part found${isVariationMode ? ` (multiplied by ${variationCount} variations)` : ''}. If there is only one problem, generate a list with one item${isVariationMode ? ` (which means ${variationCount} items total due to variations)` : ''}.
-
-  EXERCISE TYPE RULES (CRITICAL):
+  CRITICAL: All generated output text (title, question_text, options, solution) MUST be in the Lithuanian language.
+  
+  EXERCISE TYPE RULES:
   ${exerciseType === 'numerical' ? `
   - FORCED TYPE: Numerical calculation.
-  - You MUST generate "numerical" type questions only.
-  - If the image contains a multiple-choice question, IGNORE the options and transform it into a direct calculation/numerical question.
+  - If the image contains a multiple-choice question, IGNORE the options and transform it into a direct calculation.
   ` : exerciseType === 'multiple_choice' ? `
   - FORCED TYPE: Multiple choice.
-  - You MUST generate "multiple_choice" type questions only.
-  - If the image is a numerical problem, you MUST create 4 plausible multiple-choice options (A, B, C, D) based on common mistakes or likely outcomes.
-  ${answersInSvg ? `
-  - ANSWERS AS ILLUSTRATIONS: Each of the 4 multiple-choice options MUST be a clean, self-contained SVG illustration recreate the physical situation, graph, or scheme for that option.
-  - FOR VECTORS: Use a grid, snap points to grid, and DRAW ARROWS above vector labels.
-  - DO NOT provide text labels in Lithuanian as the primary option text; instead, the SVG itself MUST show the information (e.g., if option is 5m, the SVG shows a vector or object with "5m" label).
-  - Each option in the "options" array MUST be the full <svg>... </svg> code string.
-  ` : ''}
-  ` : `
-  - TYPE DETECTION: Auto-detect.
-  - Determine if the question is naturally "numerical" or "multiple_choice" based on the image content.
-  `}
+  - If the image is a numerical problem, create 4 plausible multiple-choice options (A, B, C, D).
+  ${answersInSvg ? '- ANSWERS AS ILLUSTRATIONS: Each option MUST be a full <svg> string.' : ''}
+  ` : '- TYPE DETECTION: Auto-detect (numerical or multiple_choice).'}
 
-  ${generateSolution ? `
-  SOLUTION MANUAL MODE:
-  For each question variation, you MUST also generate a concise, step-by-step solution in the Lithuanian language.
-  - The solution should explain the physics principles used.
-  - Show the substituted values into the formula.
-  - Provide the final calculation steps.
-  - Use newlines or bullet points to separate distinct steps.
-  - Keep it professional and educational.
-  ` : ''}
+  ${generateSolution ? 'SOLUTION MANUAL MODE: Generate step-by-step solution in Lithuanian.' : ''}
 
-  ${(isVariationMode || (generationType === 'similar' && !isVariationMode)) ? `
-  GENERATION MODE: ${isVariationMode ? `VARIATIONS (${variationType === 'descriptions' ? 'DIFFERENT DESCRIPTIONS' : 'ONLY NUMBERS'})` : 'SIMILAR EXERCISE (DIFFERENT DESCRIPTION/NUMBERS)'}
-  You are requested to generate ${isVariationMode ? variationCount : 1} DISTINCT variation(s) of the problem shown in the image.
-  - The variations must be NEW problems based on the one in the image.
-  - DO NOT include an exact copy of the problem from the image, even as the first variation.
-  
-  VARIATION RULES:
-  ${variationType === 'numbers' ? `
-  - Keep the EXACT same context / story / description / structure as the original problem from the image.
-  - FORMATTING CLEANUP: Explicitly REMOVE any part labels like "a)", "b)", "1.", "2.", "c)" from the text. The question should stand on its own.
-  - ONLY change the specific numerical values within the description and calculation.
-  - DO NOT invent new objects or scenarios.
-  ` : `
-  - You MUST change the context / story of the problem (e.g. if the original is about a car, make the next one about a train, a runner, a rocket, etc.).
-  `}
-  - ALWAYS USE LITHUANIAN LANGUAGE for all generated content. Translate carefully if the input is in another language.
-  - Keep the exact same physics/math LOGIC and FORMULA types.
-  ${variationType === 'descriptions' ? '- You can change the numerical values as needed to fit the new context.' : ''}
-  - Ensure the difficulty level remains consistent.
-  - Calculate the new correct values based on your new numbers.
-  ` : ''}
-  For each question:
-  - Identify if it is a "numerical" problem (calculating a number) or a "multiple_choice" problem.
-  - IMPORTANT: Check if the specific part involves any diagrams, graphs, or schemes.
-  - LATEX FORMATTING: Use LaTeX for ALL math formulas, units, and symbols. 
-  - IMPORTANT: For multiple_choice options, you MUST wrap any LaTeX content in single dollar signs, e.g., "$l = 12\\text{ m}$".
+  LATEX FORMATTING: Use LaTeX for ALL math, units, and symbols. For multiple_choice options, wrap LaTeX in single dollar signs.
+  NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
 
-  NUMERICAL ANSWER UNITS (CRITICAL FOR NUMERICAL QUESTIONS):
-  - The correct_value MUST always be in SI standard units (meters, seconds, kilograms, m/s, m/s², N, J, W, Pa, etc.).
-  - You may use non-SI units (km/h, cm, g, etc.) in the exercise description/story, but the final answer and correct_value must be converted to SI.
-  - Example: If the problem uses km/h for speed, convert the correct_value to m/s and ask for the answer in m/s.
-  
-  CRITICAL INSTRUCTION FOR MULTI-PART PROBLEMS (Explicit numbered parts OR Implicit split parts):
-  If the problem has a common description/background text followed by multiple parts:
-  - For the FIRST question (part a, 1, or first value): Include the FULL common description text + the specific question text for this part.
-  - For the SUBSEQUENT questions (part b, c, or next values): Include ONLY the specific question text for that part (e.g. "Find the acceleration", "How long for the second worker?"). DO NOT repeat the common description text.
-  - STRIP LABELS: In all cases, strip the labels like "a)", "1.", "c)" from the final "latex_text".
-  
-  If you fine-grained diagram detection is needed:
-  ${useImageAsIllustration ? `
-  - DO NOT generate diagram_svg or diagram_type. The teacher has provided an image illustration already.
-  ` : `
-  - If you find a diagram relevant to a question, you MUST generate clean, inline SVG code that recreates it as accurately as possible. The SVG should:
-    - Be self-contained with proper viewBox attribute
-    - Use appropriate colors (black for lines, gray for grid, labeled axes)
-    - Include text labels, axis labels, and any annotations from the original
-    - For graphs: draw the coordinate system, gridlines, axis arrows, tick marks, and plot the curves/lines accurately
-    - For schemes: recreate the components (resistors, forces, objects) with proper labels
-    - FOR VECTORS:
-      - ALWAYS include a light gray background grid for precision
-      - Snap all vector start and end points to integer grid intersections
-      - VECTOR LABELS: You MUST explicitly draw a small arrow path above any vector label (e.g., above 'a', draw a small arrow ->). Do not assume the font has it.
-      - LABEL POSITIONING: Position labels (with their arrows) near the midpoint or end of the vector, but ALWAYS with a sufficient offset (at least 15-20 units) to avoid overlapping the vector line or arrowhead.
+  ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
+  - If relevant, generate clean, inline SVG code.
+  - For VECTORS: Include gray grid, snap points, DRAW ARROWS above labels, position labels with offset.
   `}
   
-  Return a JSON object with this EXACT structure (do not wrap in markdown):
+  Return JSON:
   {
-    "title": "A short descriptive title for the entire exercise",
+    "title": "Short title",
     "questions": [
         {
             "type": "numerical" | "multiple_choice",
-            "latex_text": "The question text.",
-            "correct_value": number (if numerical, else null),
-            "tolerance": number (suggest a tolerance %, e.g., 5, else null),
-            "options": ["Option A contents", "Option B contents", "Option C contents", "Option D contents"] (if multiple_choice, else null... include strictly 4 options. If Answers as Illustrations mode is ON, these MUST be full <svg> strings),
-            "correct_answer": "A" | "B" | "C" | "D" (if multiple_choice, else null... MUST be a single upper-case letter corresponding to the correct option index 0=A, 1=B, etc.),
-            "diagram_type": "graph" | "scheme" | null (null if no diagram found),
-            "diagram_svg": "<svg>...</svg> inline SVG code" | null (null if no diagram found),
-            "solution": "Concise step-by-step solution in LaTeX format" | null (Only if SOLUTION MANUAL MODE is active)
+            "latex_text": "text",
+            "correct_value": number | null,
+            "tolerance": number | null,
+            "options": ["A", "B", "C", "D"] | null,
+            "correct_answer": "A" | "B" | "C" | "D" | null,
+            "diagram_type": "graph" | "scheme" | null,
+            "diagram_svg": "<svg>...</svg>" | null,
+            "solution": "LaTeX steps" | null
         }
     ]
   }
-
-  ${customInstructions ? `
-  CUSTOM USER INSTRUCTIONS (PRIORITY):
-  The user has provided these additional requirements for the generation.
-  Follow them strictly unless they contradict the required JSON structure or safety rules:
-  "${customInstructions}"
-  ` : ''}
-  `
-
-    const imagePart: Part = {
-        inlineData: {
-            data: base64Image,
-            mimeType: file.type
-        }
-    }
+    `;
 
     try {
-        console.log("Calling Gemini API with key pool...")
-        const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt, imagePart])
-        console.log("Gemini API call complete. Resolving response...")
-        const response = await result.response
-        const text = response.text()
-        console.log("Gemini Raw Response:", text)
+        // Stage 1: Generate Base Exercise
+        const basePrompt = `
+      ${genericRules}
+      GENERATION MODE: Create the BASE exercise as seen in the image.
+      ${!isVariationMode && generationType === 'similar' ? 'Actually, make it a SIMILAR problem (different numbers/context) but based ON the image.' : ''}
+      ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
+    `;
 
-        // Clean up markdown code blocks if present
-        let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
+        let baseData = await callGeminiForExercise(basePrompt, imagePart)
+        baseData = processExerciseData(baseData, generateSolution, diagramImageUrl)
 
-        // Fix common JSON issues from Gemini output
-        // Replace literal newlines inside strings with escaped newlines
-        // This regex finds strings and replaces unescaped newlines within them
-        jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-            // Replace actual newlines with escaped ones inside the string
-            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+        if (!isVariationMode) {
+            return { success: true, data: baseData }
+        }
+
+        // Stage 2: Generate Variations in Parallel
+        const variationPromises = []
+        for (let i = 0; i < variationCount - 1; i++) {
+            const varPrompt = `
+        ${genericRules}
+        GENERATION MODE: Create a NEW VARIATION based on this reference JSON:
+        ${JSON.stringify(baseData)}
+        
+        VARIATION RULES:
+        ${variationType === 'numbers' ? '- Keep EXACT SAME context/story/structure, ONLY change numbers.' : '- Change context/story (e.g., car -> train), keep same logic.'}
+        - Difficulty must remain consistent.
+        - DO NOT include the base exercise as a variation.
+        - Ensure MCQ options are relevant to the NEW variation.
+        ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
+      `;
+            variationPromises.push(callGeminiForExercise(varPrompt, imagePart))
+        }
+
+        const variations = await Promise.all(variationPromises)
+        const processedVariations = variations.map(v => processExerciseData(v, generateSolution, diagramImageUrl))
+
+        // Combine all questions
+        const allQuestions = [...baseData.questions]
+        processedVariations.forEach(v => {
+            if (v.questions) allQuestions.push(...v.questions)
         })
 
-        const data = JSON.parse(jsonStr)
-        console.log("Parsed Data:", data)
-
-        const sanitizeOptionSvg = (opt: string) => {
-            if (opt && opt.trim().startsWith('<svg')) {
-                let svg = opt.trim()
-                svg = svg.replace(/&lt;/g, '<')
-                svg = svg.replace(/&gt;/g, '>')
-                svg = svg.replace(/&amp;/g, '&')
-                svg = svg.replace(/&quot;/g, '"')
-                svg = svg.replace(/&#39;/g, "'")
-                svg = svg.replace(/&#x27;/g, "'")
-                svg = svg.replace(/&#x2F;/g, '/')
-                svg = svg.replace(/\\n/g, '\n')
-                svg = svg.replace(/\\r/g, '')
-                // Strip hardcoded width/height to make it responsive
-                svg = svg.replace(/<svg([^>]*)width="[^"]*"/i, '<svg$1')
-                svg = svg.replace(/<svg([^>]*)height="[^"]*"/i, '<svg$1')
-                return svg.trim()
+        return {
+            success: true,
+            data: {
+                ...baseData,
+                questions: allQuestions
             }
-            return opt
         }
 
-        // Sanitize data
-        if (data.questions) {
-            data.questions = data.questions.map((q: any, index: number) => {
-                // Sanitize options if they contain SVG
-                if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options)) {
-                    q.options = q.options.map((opt: string) => sanitizeOptionSvg(opt))
-                }
-
-                // Sanitize SVG content - unescape any escaped characters
-                if (q.diagram_svg && typeof q.diagram_svg === 'string') {
-                    // Unescape common HTML entities that might be in the SVG
-                    let svg = q.diagram_svg
-                    svg = svg.replace(/&lt;/g, '<')
-                    svg = svg.replace(/&gt;/g, '>')
-                    svg = svg.replace(/&amp;/g, '&')
-                    svg = svg.replace(/&quot;/g, '"')
-                    svg = svg.replace(/&#39;/g, "'")
-                    svg = svg.replace(/&#x27;/g, "'")
-                    svg = svg.replace(/&#x2F;/g, '/')
-                    // Remove any escaped newlines that might break rendering
-                    svg = svg.replace(/\\n/g, '\n')
-                    svg = svg.replace(/\\r/g, '')
-                    // Ensure the SVG is trimmed
-                    svg = svg.trim()
-                    q.diagram_svg = svg
-                }
-
-                if (q.type === 'multiple_choice' && q.correct_answer) {
-                    let ans = q.correct_answer.trim().toUpperCase()
-                    // Handle markdown bold/italic
-                    ans = ans.replace(/\*/g, '').replace(/_/g, '')
-
-                    // If the answer is not A, B, C, D, try to find it in options
-                    if (!['A', 'B', 'C', 'D'].includes(ans)) {
-                        // Check if the answer text matches one of the options
-                        if (q.options && Array.isArray(q.options)) {
-                            const matchIndex = q.options.findIndex((opt: string) => opt.toLowerCase().trim() === ans.toLowerCase())
-                            if (matchIndex !== -1) {
-                                ans = ['A', 'B', 'C', 'D'][matchIndex]
-                            }
-                        }
-                    }
-
-                    // Final fallback: if still not valid, default to A or null (better than invalid string)
-                    if (!['A', 'B', 'C', 'D'].includes(ans)) {
-                        // Maybe it's like "Option A"
-                        const match = ans.match(/\b([A-D])\b/)
-                        if (match) {
-                            ans = match[1]
-                        }
-                    }
-
-                    q.correct_answer = ans
-                }
-
-                // Map Gemini 'solution' field to our 'solution_text'
-                if (generateSolution && q.solution) {
-                    q.solution_text = q.solution
-                } else {
-                    q.solution_text = null
-                }
-
-                // Randomize multiple choice options
-                if (q.type === 'multiple_choice' && q.options && Array.isArray(q.options) && q.options.length > 0) {
-                    const options = [...q.options]
-                    const correctLetter = q.correct_answer || 'A'
-                    const correctIndex = ['A', 'B', 'C', 'D'].indexOf(correctLetter)
-
-                    if (correctIndex !== -1 && correctIndex < options.length) {
-                        const correctValue = options[correctIndex]
-
-                        // Shuffle using Fisher-Yates
-                        for (let i = options.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [options[i], options[j]] = [options[j], options[i]];
-                        }
-
-                        // Find new index of the correct value
-                        const newCorrectIndex = options.indexOf(correctValue)
-                        if (newCorrectIndex !== -1) {
-                            q.options = options
-                            q.correct_answer = ['A', 'B', 'C', 'D'][newCorrectIndex]
-                        }
-                    } else {
-                        // If something is wrong with index, still shuffle but keep correct_answer if possible or default safely
-                        for (let i = options.length - 1; i > 0; i--) {
-                            const j = Math.floor(Math.random() * (i + 1));
-                            [options[i], options[j]] = [options[j], options[i]];
-                        }
-                        q.options = options
-                    }
-                }
-
-                // Inject diagram_image_url if we uploaded one (apply to all questions/variations)
-                if (diagramImageUrl) {
-                    q.diagram_image_url = diagramImageUrl
-                }
-
-                return q
-            })
-        }
-
-        return { success: true, data }
     } catch (error: any) {
         console.error("Gemini Error:", error)
         return { success: false, error: error.message || "Failed to generate exercise" }
@@ -1398,7 +1332,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     // 1. Fetch Collections
     const { data: collections } = await supabase
         .from('collections')
-        .select('*, assignments(id, points, points_enabled, published)')
+        .select('*, assignments(id, points, points_enabled, published, required_variations_count, questions(points))')
         .eq('classroom_id', classroomId)
         .order('created_at', { ascending: false })
 
@@ -1445,7 +1379,15 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
             .map((a: any) => {
                 const earned = earnedPointsMap.get(a.id)
                 const submitted = submittedAnswersMap.get(a.id)
-                const totalPts = a.points || 0
+                const requiredCount = a.required_variations_count || 0
+                const isVariation = requiredCount > 0
+
+                let totalPts = a.points || 0
+
+                if (isVariation && a.questions?.[0]) {
+                    const pointsPerVariation = a.questions[0].points || 1
+                    totalPts = pointsPerVariation * requiredCount
+                }
 
                 let status: 'correct' | 'incorrect' | 'unsubmitted' = 'unsubmitted'
 
@@ -1469,7 +1411,17 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
         // Calculate points for this collection
         collection.assignments.forEach((a: any) => {
             if (a.points_enabled && a.published) {
-                classroomTotalPoints += (a.points || 0)
+                const requiredCount = a.required_variations_count || 0
+                const isVariation = requiredCount > 0
+
+                let max = a.points || 0
+
+                if (isVariation && a.questions?.[0]) {
+                    const pointsPerVariation = a.questions[0].points || 1
+                    max = pointsPerVariation * requiredCount
+                }
+
+                classroomTotalPoints += max
                 classroomEarnedPoints += (earnedPointsMap.get(a.id) || 0)
             }
         })
