@@ -219,14 +219,6 @@ export function StudentAssignmentInterface({
             if (onProgressUpdate) onProgressUpdate()
             toast.success("Atsakymas pateiktas!")
             setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
-            // Check if all questions are now submitted
-            const updatedLockedCount = lockedQuestionIds.size + 1
-            const targetCount = isVariationMode ? requiredVariations : totalQuestions
-            // Auto-advance to next exercise only if this is NOT the last exercise
-            // For the last exercise, student should manually click finish to see final results
-            if (updatedLockedCount >= targetCount && onFinish && !isLastExercise) {
-                onFinish()
-            }
         } else if (result.alreadySubmitted) {
             toast.error("Šio varianto atsakymas jau buvo pateiktas")
         } else {

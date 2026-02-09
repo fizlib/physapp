@@ -158,13 +158,19 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     // State to control showing test results overlay (dismissable)
     const [showTestResults, setShowTestResults] = useState(false)
 
+    // Loading state for points results
+    const [isLoadingResults, setIsLoadingResults] = useState(false)
+
     // Fetch points results when completed
     useEffect(() => {
         if (isCompleted && isClasswork) {
+            setIsLoadingResults(true)
             getCollectionResults(collection.id).then(res => {
                 if (res.success && res.results) {
                     setPointsResults(res.results)
                 }
+            }).finally(() => {
+                setIsLoadingResults(false)
             })
         }
     }, [isCompleted, isClasswork, collection.id])
@@ -486,6 +492,27 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     }
 
     if (isCompleted && !isReviewing) {
+        // Show loading state while fetching results
+        if (isLoadingResults) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-background p-8">
+                    <Card className="max-w-md w-full border-2 border-primary/20 bg-card/50 backdrop-blur-sm">
+                        <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-6">
+                            <div className="rounded-full bg-primary/10 p-6">
+                                <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                            </div>
+                            <div className="space-y-2">
+                                <h2 className="text-2xl font-bold tracking-tight">Skaičiuojami rezultatai...</h2>
+                                <p className="text-muted-foreground">
+                                    Prašome palaukti
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )
+        }
+
         return (
             <div className="min-h-screen flex items-center justify-center bg-background p-8">
                 <Confetti
