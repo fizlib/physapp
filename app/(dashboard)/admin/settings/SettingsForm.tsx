@@ -2,7 +2,7 @@
 
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { updateSiteSetting } from "./actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -71,8 +71,8 @@ export function SettingsForm({ initialRegistrationEnabled, initialTestModePollin
                 <CardHeader>
                     <CardTitle>Test Mode Polling</CardTitle>
                     <CardDescription>
-                        When enabled, students automatically detect when a teacher starts a test and are redirected to the first exercise.
-                        Disable this if server load is a concern.
+                        When enabled, students automatically poll for test start and newly unlocked exercises.
+                        When disabled, students must refresh manually to see those updates.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

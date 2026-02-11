@@ -159,7 +159,8 @@ export async function checkIpAccess(classroomId: string, category: string, colle
 export async function getCollectionRuntimeStatus(
     classroomId: string,
     category: string,
-    collectionId: string
+    collectionId: string,
+    includeTestModeStatus = true
 ): Promise<{
     success: boolean
     isRestricted: boolean
@@ -177,11 +178,13 @@ export async function getCollectionRuntimeStatus(
             .select('allowed_ip, ip_check_enabled')
             .eq('id', classroomId)
             .single(),
-        supabase
-            .from('collections')
-            .select('test_mode_ends_at')
-            .eq('id', collectionId)
-            .single()
+        includeTestModeStatus
+            ? supabase
+                .from('collections')
+                .select('test_mode_ends_at')
+                .eq('id', collectionId)
+                .single()
+            : Promise.resolve({ data: null, error: null })
     ])
 
     if (classroomError || collectionError) {

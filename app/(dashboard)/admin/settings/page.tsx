@@ -10,8 +10,7 @@ export default async function AdminSettingsPage() {
     const registrationEnabled = registrationEnabledStr === 'true' // Default to true if not set or string 'true'
 
     const testModePollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
-    // Default to true if not set
-    const testModePollingEnabled = testModePollingEnabledStr !== 'false'
+    const testModePollingEnabled = (testModePollingEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <div className="p-8 max-w-7xl mx-auto">

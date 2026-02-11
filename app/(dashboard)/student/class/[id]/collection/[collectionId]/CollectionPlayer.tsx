@@ -137,6 +137,8 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const [knownTestModeEndsAt, setKnownTestModeEndsAt] = useState<string | null>(collection.test_mode_ends_at || null)
     // Use a ref for synchronous tracking (avoids stale closure issues in polling)
     const handledTestEndTimeRef = useRef<string | null>(collection.test_mode_ends_at || null)
+    // When test mode starts, redirect to first pointed exercise (only once)
+    const [hasRedirectedToPointed, setHasRedirectedToPointed] = useState(false)
 
     // Track if test mode has expired (time ran out) - shows results overlay but allows browsing
     const [testModeExpired, setTestModeExpired] = useState(() => {
@@ -291,7 +293,12 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
             }
 
             // Single request for IP restriction + test mode status
-            const status = await getCollectionRuntimeStatus(classroomId, collection.category, collection.id)
+            const status = await getCollectionRuntimeStatus(
+                classroomId,
+                collection.category,
+                collection.id,
+                testModePollingEnabled
+            )
             if (cancelled) return
 
             if (status.success && status.isRestricted) {
@@ -344,6 +351,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     // Polling effect for waiting for next exercise to be published
     useEffect(() => {
         if (!isWaitingForUnlock || !waitingForAssignmentId) return
+        if (!testModePollingEnabled) return
 
         let cancelled = false
         let timeout: ReturnType<typeof setTimeout> | null = null
@@ -401,7 +409,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
             cancelled = true
             if (timeout) clearTimeout(timeout)
         }
-    }, [isWaitingForUnlock, waitingForAssignmentId, collection.id])
+    }, [isWaitingForUnlock, waitingForAssignmentId, collection.id, testModePollingEnabled])
 
     // Test mode countdown effect
     useEffect(() => {
@@ -443,8 +451,6 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         return () => clearInterval(interval)
     }, [knownTestModeEndsAt, collection.id, isCompleted, testModeExpired])
 
-    // When test mode starts, redirect to first pointed exercise (only once)
-    const [hasRedirectedToPointed, setHasRedirectedToPointed] = useState(false)
     useEffect(() => {
         if (!isTestModeActive || hasRedirectedToPointed) return
 

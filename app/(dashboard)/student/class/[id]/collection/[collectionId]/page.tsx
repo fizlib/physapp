@@ -153,7 +153,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     // Fetch polling setting
     const pollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
-    const testModePollingEnabled = pollingEnabledStr !== 'false' // Default to true
+    const testModePollingEnabled = (pollingEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>

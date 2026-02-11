@@ -34,6 +34,9 @@ export async function updateSiteSetting(key: string, value: string) {
     }
 
     revalidatePath('/admin/settings')
+    if (key === 'test_mode_polling_enabled') {
+        revalidatePath('/student/class/[id]/collection/[collectionId]', 'page')
+    }
     return { success: true }
 }
 
