@@ -320,7 +320,7 @@ export async function getCollectionProgress(collectionId: string): Promise<{
     // Fetch progress for these assignments
     const { data: progress, error } = await supabase
         .from('assignment_progress')
-        .select('*')
+        .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 

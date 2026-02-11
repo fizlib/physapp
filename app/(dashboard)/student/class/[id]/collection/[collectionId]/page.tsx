@@ -143,7 +143,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     if (assignmentIds.length > 0) {
         const { data: progress } = await supabase
             .from('assignment_progress')
-            .select('*')
+            .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers')
+            .eq('student_id', user.id)
             .in('assignment_id', assignmentIds)
 
         if (progress) {

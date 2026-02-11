@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
@@ -70,6 +70,7 @@ export function StudentAssignmentInterface({
     )
     const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(initialSubmittedAnswers || {})
     const [isFinishing, setIsFinishing] = useState(false)
+    const lastSyncedIndexRef = useRef(currentIndex)
     const router = useRouter()
 
     // If variation mode, "showAll" is overridden to false
@@ -120,8 +121,10 @@ export function StudentAssignmentInterface({
         // Skip if we haven't done our initial variation check yet
         if (!hasCheckedVariationSwitch) return
 
-        // Skip if it hasn't changed from DB value
-        if (currentIndex === initialActiveQuestionIndex) return
+        // Only sync when the active index actually changes.
+        // Other dependency changes (e.g. completed/revealed updates) should not trigger extra writes.
+        if (lastSyncedIndexRef.current === currentIndex) return
+        lastSyncedIndexRef.current = currentIndex
 
         upsertAssignmentProgress(
             assignment.id,
@@ -133,7 +136,7 @@ export function StudentAssignmentInterface({
         ).then(res => {
             if (res.success && onProgressUpdate) onProgressUpdate()
         })
-    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, initialActiveQuestionIndex, onProgressUpdate, hasCheckedVariationSwitch])
+    }, [currentIndex, assignment.id, completedIndices, revealedIndices, isVariationMode, requiredVariations, totalQuestions, onProgressUpdate, hasCheckedVariationSwitch, submittedAnswers])
 
     // Check for persistent diagram from first question
     const firstQuestion = questions[0]
