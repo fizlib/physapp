@@ -15,7 +15,15 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { checkIpAccess, getCollectionAssignments, getCollectionResults, autoSubmitCollectionPointsAnswers, getCollectionProgress, getCollectionTestStatus } from "../../../../actions"
+import {
+    checkIpAccess,
+    getCollectionAssignments,
+    getCollectionResults,
+    autoSubmitCollectionPointsAnswers,
+    getCollectionProgress,
+    getCollectionRuntimeStatus,
+    getAssignmentPublishStatus
+} from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
 import { SlidesButton } from "@/components/student/SlidesButton"
 
@@ -86,6 +94,14 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
         }
         return initialIndex
     })
+    const currentAssignmentIndexRef = useRef(currentAssignmentIndex)
+    useEffect(() => {
+        currentAssignmentIndexRef.current = currentAssignmentIndex
+    }, [currentAssignmentIndex])
+    const assignmentsRef = useRef(assignments)
+    useEffect(() => {
+        assignmentsRef.current = assignments
+    }, [assignments])
 
     // Sync URL with currentAssignmentIndex
     useEffect(() => {
@@ -257,102 +273,134 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     useEffect(() => {
         if (isCompleted || collection.category !== 'classwork') return
 
-        const check = async () => {
-            // IP Check
-            const result = await checkIpAccess(classroomId, collection.category, collection.id)
-            if (result.isRestricted) {
-                setRestrictionData(result)
-            }
+        let cancelled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
 
-            // Time Check
+        const BASE_POLL_MS = 12000
+        const JITTER_MS = 3000
+
+        const check = async () => {
+            // Time Check (local, no server round-trip needed)
             if (collection.scheduled_end_at) {
                 const now = new Date()
                 const end = new Date(collection.scheduled_end_at)
                 if (now > end) {
                     setIsTimeUp(true)
+                    return
                 }
             }
 
-            // Test Mode Check - only poll when NOT already in active test mode
-            // and only if polling is enabled in admin settings
-            if (!isTestModeActive && testModePollingEnabled) {
-                const testStatus = await getCollectionTestStatus(collection.id)
+            // Single request for IP restriction + test mode status
+            const status = await getCollectionRuntimeStatus(classroomId, collection.category, collection.id)
+            if (cancelled) return
 
-                if (testStatus.success && testStatus.testModeEndsAt) {
-                    const endTime = new Date(testStatus.testModeEndsAt).getTime()
-                    const now = Date.now()
-                    const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
+            if (status.success && status.isRestricted) {
+                setRestrictionData({ isRestricted: true, studentIp: status.studentIp })
+                return
+            }
 
-                    // Check if this is a NEW test (different from what we already handled)
-                    const alreadyHandled = testStatus.testModeEndsAt === handledTestEndTimeRef.current
+            // Test Mode Check - only when NOT already active and polling is enabled
+            if (status.success && !isTestModeActive && testModePollingEnabled && status.testModeEndsAt) {
+                const endTime = new Date(status.testModeEndsAt).getTime()
+                const now = Date.now()
+                const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
 
-                    if (remaining > 0 && !alreadyHandled) {
-                        // Test mode has started! Update states
-                        // Update ref immediately (synchronous) to prevent re-entry
-                        handledTestEndTimeRef.current = testStatus.testModeEndsAt
-                        setKnownTestModeEndsAt(testStatus.testModeEndsAt)
-                        setTestModeRemainingSeconds(remaining)
-                        setTestModeExpired(false) // Reset expired state for new test
-                        setIsCompleted(false) // Reset completed state - new test means new attempt
-                        setIsReviewing(false) // Exit review mode for new test
-                        // Find and navigate to first pointed exercise
-                        const firstPointedIndex = assignments.findIndex((a: any) => a.points_enabled)
-                        if (firstPointedIndex >= 0 && currentAssignmentIndex !== firstPointedIndex) {
-                            setCurrentAssignmentIndex(firstPointedIndex)
-                        }
-                        setHasRedirectedToPointed(true)
+                // Check if this is a NEW test (different from what we already handled)
+                const alreadyHandled = status.testModeEndsAt === handledTestEndTimeRef.current
+
+                if (remaining > 0 && !alreadyHandled) {
+                    // Test mode has started! Update states
+                    // Update ref immediately (synchronous) to prevent re-entry
+                    handledTestEndTimeRef.current = status.testModeEndsAt
+                    setKnownTestModeEndsAt(status.testModeEndsAt)
+                    setTestModeRemainingSeconds(remaining)
+                    setTestModeExpired(false) // Reset expired state for new test
+                    setIsCompleted(false) // Reset completed state - new test means new attempt
+                    setIsReviewing(false) // Exit review mode for new test
+
+                    // Find and navigate to first pointed exercise
+                    const firstPointedIndex = assignmentsRef.current.findIndex((a: any) => a.points_enabled)
+                    if (firstPointedIndex >= 0 && currentAssignmentIndexRef.current !== firstPointedIndex) {
+                        setCurrentAssignmentIndex(firstPointedIndex)
                     }
+                    setHasRedirectedToPointed(true)
                 }
+            }
+
+            if (!cancelled) {
+                const delayMs = BASE_POLL_MS + Math.floor(Math.random() * JITTER_MS)
+                timeout = setTimeout(check, delayMs)
             }
         }
 
-        // Poll every 10 seconds - reasonable delay for test start detection
-        // IP/Time checks don't need to be faster than this
-        const interval = setInterval(check, 10000)
         // Also check immediately
         check()
-        return () => clearInterval(interval)
-    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModeExpired, assignments, currentAssignmentIndex, knownTestModeEndsAt])
+        return () => {
+            cancelled = true
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModePollingEnabled])
 
     // Polling effect for waiting for next exercise to be published
     useEffect(() => {
         if (!isWaitingForUnlock || !waitingForAssignmentId) return
 
+        let cancelled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
+        const targetAssignmentId = waitingForAssignmentId
+
+        const INITIAL_POLL_MS = 5000
+        const MAX_POLL_MS = 12000
+        let currentDelayMs = INITIAL_POLL_MS
+
         const checkPublished = async () => {
-            const result = await getCollectionAssignments(collection.id)
-            if (result.success && result.assignments) {
-                const targetAssignment = result.assignments.find(a => a.id === waitingForAssignmentId)
-                if (targetAssignment?.published) {
+            const status = await getAssignmentPublishStatus(targetAssignmentId)
+            if (cancelled) return
+
+            if (status.success && status.isPublished) {
+                const [assignmentsResult, progressResult] = await Promise.all([
+                    getCollectionAssignments(collection.id),
+                    getCollectionProgress(collection.id)
+                ])
+                if (cancelled) return
+
+                if (assignmentsResult.success && assignmentsResult.assignments) {
                     // The exercise we are waiting for is now published
                     // Update both lists from the fresh data
-                    setAllAssignmentsState(result.assignments)
-                    setAssignments(result.assignments.filter(a => a.published))
+                    setAllAssignmentsState(assignmentsResult.assignments)
+                    setAssignments(assignmentsResult.assignments.filter(a => a.published))
 
                     // Also refresh progress data to ensure we have correct state for all assignments
-                    const progressResult = await getCollectionProgress(collection.id)
                     if (progressResult.success && progressResult.progress) {
                         setProgressDataState(progressResult.progress)
                     }
 
                     // Navigate to the new assignment
                     // Find where it is in the published list
-                    const newPublishedList = result.assignments.filter(a => a.published)
-                    const newIndex = newPublishedList.findIndex(a => a.id === waitingForAssignmentId)
+                    const newPublishedList = assignmentsResult.assignments.filter(a => a.published)
+                    const newIndex = newPublishedList.findIndex(a => a.id === targetAssignmentId)
                     if (newIndex >= 0) {
                         setCurrentAssignmentIndex(newIndex)
                         setIsWaitingForUnlock(false)
                         setWaitingForAssignmentId(null)
                     }
                 }
+                return
+            }
+
+            if (!cancelled) {
+                const delay = currentDelayMs
+                currentDelayMs = Math.min(MAX_POLL_MS, Math.floor(currentDelayMs * 1.5))
+                timeout = setTimeout(checkPublished, delay)
             }
         }
 
         // Check immediately
         checkPublished()
-
-        // Then poll every 3 seconds
-        const interval = setInterval(checkPublished, 3000)
-        return () => clearInterval(interval)
+        return () => {
+            cancelled = true
+            if (timeout) clearTimeout(timeout)
+        }
     }, [isWaitingForUnlock, waitingForAssignmentId, collection.id])
 
     // Test mode countdown effect

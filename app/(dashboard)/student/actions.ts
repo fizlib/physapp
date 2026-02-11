@@ -154,6 +154,73 @@ export async function checkIpAccess(classroomId: string, category: string, colle
     return { isRestricted, studentIp }
 }
 
+// Lightweight status check used by classwork polling:
+// combines IP restriction and test mode state in a single server action call.
+export async function getCollectionRuntimeStatus(
+    classroomId: string,
+    category: string,
+    collectionId: string
+): Promise<{
+    success: boolean
+    isRestricted: boolean
+    studentIp?: string
+    testModeEndsAt?: string | null
+    error?: string
+}> {
+    const supabase = await createClient()
+    const studentIp = await getClientIp()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const [{ data: classroom, error: classroomError }, { data: collection, error: collectionError }] = await Promise.all([
+        supabase
+            .from('classrooms')
+            .select('allowed_ip, ip_check_enabled')
+            .eq('id', classroomId)
+            .single(),
+        supabase
+            .from('collections')
+            .select('test_mode_ends_at')
+            .eq('id', collectionId)
+            .single()
+    ])
+
+    if (classroomError || collectionError) {
+        console.error("Error fetching collection runtime status:", classroomError || collectionError)
+        return {
+            success: false,
+            isRestricted: false,
+            studentIp,
+            error: "Failed to fetch runtime status"
+        }
+    }
+
+    let isRestricted = category === 'classwork' &&
+        classroom?.ip_check_enabled &&
+        classroom?.allowed_ip &&
+        studentIp !== classroom.allowed_ip
+
+    if (isRestricted && user) {
+        const { data: bypass } = await createAdminClient()
+            .from('ip_bypasses')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('collection_id', collectionId)
+            .gt('expires_at', new Date().toISOString())
+            .maybeSingle()
+
+        if (bypass) {
+            isRestricted = false
+        }
+    }
+
+    return {
+        success: true,
+        isRestricted,
+        studentIp,
+        testModeEndsAt: collection?.test_mode_ends_at || null
+    }
+}
+
 export async function checkAssignmentPublished(assignmentId: string): Promise<{ isPublished: boolean, assignment?: any }> {
     const supabase = await createClient()
 
@@ -174,6 +241,30 @@ export async function checkAssignmentPublished(assignmentId: string): Promise<{ 
     }
 
     return { isPublished: false }
+}
+
+// Lightweight publish status check for polling while waiting for unlock.
+export async function getAssignmentPublishStatus(assignmentId: string): Promise<{
+    success: boolean
+    isPublished: boolean
+}> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('assignments')
+        .select('published')
+        .eq('id', assignmentId)
+        .single()
+
+    if (error) {
+        console.error("Error fetching assignment publish status:", error)
+        return { success: false, isPublished: false }
+    }
+
+    return {
+        success: true,
+        isPublished: !!data?.published
+    }
 }
 
 export async function getCollectionAssignments(collectionId: string): Promise<{ success: boolean, assignments?: any[] }> {
