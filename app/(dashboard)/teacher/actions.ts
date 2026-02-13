@@ -34,6 +34,15 @@ const AddStudentSchema = z.object({
     classroomId: z.string().uuid(),
 })
 
+const SubmitTeacherManualPointsAnswerSchema = z.object({
+    classroomId: z.string().uuid(),
+    studentId: z.string().uuid(),
+    assignmentId: z.string().uuid(),
+    questionId: z.string().uuid(),
+    submittedAnswer: z.string().trim().min(1),
+    isCorrect: z.boolean(),
+})
+
 import { getClientIp } from '@/lib/ip'
 
 export async function createClassroom(formData: FormData) {
@@ -1536,6 +1545,9 @@ export async function getStudentAssignmentSubmissionForTeacher(
                 question_type,
                 latex_text,
                 options,
+                correct_value,
+                tolerance_percent,
+                correct_answer,
                 diagram_type,
                 diagram_svg,
                 diagram_image_url,
@@ -1570,6 +1582,147 @@ export async function getStudentAssignmentSubmissionForTeacher(
         submittedAnswers: progress?.submitted_answers || {},
         earnedPoints: progress?.earned_points || 0,
         isCompleted: !!progress?.is_completed
+    }
+}
+
+export async function submitTeacherManualPointsAnswer(
+    classroomId: string,
+    studentId: string,
+    assignmentId: string,
+    questionId: string,
+    submittedAnswer: string,
+    isCorrect: boolean
+): Promise<ActionState & {
+    submittedAnswers?: Record<string, string>
+    earnedPoints?: number
+    isCompleted?: boolean
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = SubmitTeacherManualPointsAnswerSchema.safeParse({
+        classroomId,
+        studentId,
+        assignmentId,
+        questionId,
+        submittedAnswer,
+        isCorrect
+    })
+
+    if (!validated.success) {
+        return { success: false, error: "Invalid submission data" }
+    }
+
+    const payload = validated.data
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', payload.classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { data: assignment } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            points_enabled,
+            required_variations_count,
+            questions(
+                id,
+                points
+            )
+        `)
+        .eq('id', payload.assignmentId)
+        .eq('classroom_id', payload.classroomId)
+        .single()
+
+    if (!assignment) {
+        return { success: false, error: "Exercise not found" }
+    }
+
+    if (!assignment.points_enabled) {
+        return { success: false, error: "Manual submission is available only for point exercises" }
+    }
+
+    const questions = Array.isArray(assignment.questions) ? assignment.questions : []
+    const selectedQuestion = questions.find((question) => question.id === payload.questionId)
+
+    if (!selectedQuestion) {
+        return { success: false, error: "Selected variation was not found" }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const { data: existingProgress } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('submitted_answers, earned_points_per_part, completed_question_indices')
+        .eq('student_id', payload.studentId)
+        .eq('assignment_id', payload.assignmentId)
+        .maybeSingle()
+
+    const submittedAnswers: Record<string, string> = existingProgress?.submitted_answers && typeof existingProgress.submitted_answers === 'object'
+        ? { ...existingProgress.submitted_answers }
+        : {}
+
+    const earnedPointsPerPart: Record<string, number> = existingProgress?.earned_points_per_part && typeof existingProgress.earned_points_per_part === 'object'
+        ? { ...existingProgress.earned_points_per_part }
+        : {}
+
+    const completedIndices: number[] = Array.isArray(existingProgress?.completed_question_indices)
+        ? existingProgress.completed_question_indices
+        : []
+
+    const existingAnswer = submittedAnswers[payload.questionId]
+    if (typeof existingAnswer === 'string' && existingAnswer.trim().length > 0) {
+        return { success: false, error: "This variation already has a submitted answer" }
+    }
+
+    submittedAnswers[payload.questionId] = payload.submittedAnswer
+
+    const pointsPerPart = selectedQuestion.points || 1
+    earnedPointsPerPart[payload.questionId] = payload.isCorrect ? pointsPerPart : 0
+
+    const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
+    const submittedCount = Object.keys(submittedAnswers).length
+    const totalQuestions = questions.length
+    const requiredVariationsCount = assignment.required_variations_count || 0
+
+    const isFullyCompleted = requiredVariationsCount > 0
+        ? submittedCount >= requiredVariationsCount
+        : submittedCount >= totalQuestions
+
+    const { error: upsertError } = await supabaseAdmin
+        .from('assignment_progress')
+        .upsert({
+            student_id: payload.studentId,
+            assignment_id: payload.assignmentId,
+            completed_question_indices: completedIndices,
+            is_completed: isFullyCompleted,
+            submitted_answers: submittedAnswers,
+            earned_points_per_part: earnedPointsPerPart,
+            earned_points: totalEarnedPoints,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'student_id, assignment_id'
+        })
+
+    if (upsertError) {
+        console.error("Teacher manual points submit error", upsertError)
+        return { success: false, error: "Failed to submit answer manually" }
+    }
+
+    revalidatePath(`/teacher/class/${payload.classroomId}`)
+
+    return {
+        success: true,
+        submittedAnswers,
+        earnedPoints: totalEarnedPoints,
+        isCompleted: isFullyCompleted
     }
 }
 

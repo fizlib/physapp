@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -13,12 +13,14 @@ import {
 import { Loader2, CheckCircle2 } from "lucide-react"
 import {
     getStudentClassroomProgress,
-    getStudentAssignmentSubmissionForTeacher
+    getStudentAssignmentSubmissionForTeacher,
+    submitTeacherManualPointsAnswer
 } from "../../actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
 import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "./assignment/[assignmentId]/TestInterface"
+import { toast } from "sonner"
 
 interface StudentProgressDialogProps {
     classroomId: string
@@ -40,6 +42,7 @@ interface ExerciseReviewData {
     assignment: {
         id: string
         title: string
+        points_enabled: boolean
         required_variations_count: number | null
         questions: ExerciseQuestion[]
     }
@@ -53,9 +56,19 @@ interface ExerciseQuestion {
     question_type: 'numerical' | 'multiple_choice'
     latex_text: string | null
     options: string[] | null
+    correct_value: number | null
+    tolerance_percent: number | null
+    correct_answer: string | null
     diagram_type: 'graph' | 'scheme' | null
     diagram_svg: string | null
     diagram_image_url: string | null
+    points: number | null
+}
+
+interface ManualSubmissionUpdate {
+    submittedAnswers: Record<string, string>
+    earnedPoints: number
+    isCompleted: boolean
 }
 
 interface AssignmentStatus {
@@ -162,6 +175,19 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
         }
     }
 
+    const handleManualSubmissionApplied = useCallback((update: ManualSubmissionUpdate) => {
+        setSelectedExerciseData((prev) => {
+            if (!prev) return prev
+            return {
+                ...prev,
+                submittedAnswers: update.submittedAnswers,
+                earnedPoints: update.earnedPoints,
+                isCompleted: update.isCompleted
+            }
+        })
+        void fetchProgress()
+    }, [fetchProgress])
+
     const homeworkCollections = collections.filter(c => c.category === 'homework' || !c.category)
     const classworkCollections = collections.filter(c => c.category === 'classwork')
 
@@ -202,6 +228,8 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                     {classworkCollections.map(collection => (
                                         <CollectionProgressRow
                                             key={collection.id}
+                                            classroomId={classroomId}
+                                            studentId={student?.id || ''}
                                             collection={collection}
                                             selectedAssignmentId={selectedExercise?.assignmentId || null}
                                             selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
@@ -209,6 +237,7 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                             selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
                                             selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
                                             onSelectExercise={handleExerciseSelect}
+                                            onManualSubmissionApplied={handleManualSubmissionApplied}
                                             onCloseReview={() => {
                                                 exerciseRequestIdRef.current += 1
                                                 setSelectedExercise(null)
@@ -232,6 +261,8 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                     {homeworkCollections.map(collection => (
                                         <CollectionProgressRow
                                             key={collection.id}
+                                            classroomId={classroomId}
+                                            studentId={student?.id || ''}
                                             collection={collection}
                                             selectedAssignmentId={selectedExercise?.assignmentId || null}
                                             selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
@@ -239,6 +270,7 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                             selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
                                             selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
                                             onSelectExercise={handleExerciseSelect}
+                                            onManualSubmissionApplied={handleManualSubmissionApplied}
                                             onCloseReview={() => {
                                                 exerciseRequestIdRef.current += 1
                                                 setSelectedExercise(null)
@@ -268,6 +300,8 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
 }
 
 function CollectionProgressRow({
+    classroomId,
+    studentId,
     collection,
     selectedAssignmentId,
     selectedExercise,
@@ -275,8 +309,11 @@ function CollectionProgressRow({
     selectedExerciseLoading,
     selectedExerciseError,
     onSelectExercise,
+    onManualSubmissionApplied,
     onCloseReview
 }: {
+    classroomId: string
+    studentId: string
     collection: ProgressCollection
     selectedAssignmentId: string | null
     selectedExercise: ExerciseSelection | null
@@ -284,6 +321,7 @@ function CollectionProgressRow({
     selectedExerciseLoading: boolean
     selectedExerciseError: string | null
     onSelectExercise: (selection: ExerciseSelection) => void
+    onManualSubmissionApplied: (update: ManualSubmissionUpdate) => void
     onCloseReview: () => void
 }) {
     const isComplete = collection.progress === 100
@@ -375,10 +413,13 @@ function CollectionProgressRow({
 
             {selectedExercise && (
                 <ExerciseReviewPanel
+                    classroomId={classroomId}
+                    studentId={studentId}
                     selection={selectedExercise}
                     data={selectedExerciseData}
                     loading={selectedExerciseLoading}
                     error={selectedExerciseError}
+                    onManualSubmissionApplied={onManualSubmissionApplied}
                     onClose={onCloseReview}
                 />
             )}
@@ -387,18 +428,27 @@ function CollectionProgressRow({
 }
 
 function ExerciseReviewPanel({
+    classroomId,
+    studentId,
     selection,
     data,
     loading,
     error,
+    onManualSubmissionApplied,
     onClose
 }: {
+    classroomId: string
+    studentId: string
     selection: ExerciseSelection
     data: ExerciseReviewData | null
     loading: boolean
     error: string | null
+    onManualSubmissionApplied: (update: ManualSubmissionUpdate) => void
     onClose: () => void
 }) {
+    const [selectedManualQuestionId, setSelectedManualQuestionId] = useState<string | null>(null)
+    const [isSubmittingManualAnswer, setIsSubmittingManualAnswer] = useState(false)
+
     const statusPill = selection.status === 'correct'
         ? { label: 'Correct', className: 'bg-green-100 text-green-700' }
         : { label: 'Incorrect', className: 'bg-rose-100 text-rose-700' }
@@ -418,6 +468,95 @@ function ExerciseReviewPanel({
             : (data.assignment.questions || [])
 
     const showNoVariationSubmission = !!data && isVariationExercise && questionsToRender.length === 0
+
+    const unansweredQuestions = useMemo(() => {
+        if (!data) return []
+        return (data.assignment.questions || []).filter((question) => {
+            const submitted = data.submittedAnswers?.[question.id]
+            return typeof submitted !== 'string' || submitted.trim().length === 0
+        })
+    }, [data])
+
+    useEffect(() => {
+        if (unansweredQuestions.length === 0) {
+            setSelectedManualQuestionId(null)
+            return
+        }
+
+        const isCurrentSelectionAvailable = !!selectedManualQuestionId
+            && unansweredQuestions.some((question) => question.id === selectedManualQuestionId)
+
+        if (!isCurrentSelectionAvailable) {
+            setSelectedManualQuestionId(unansweredQuestions[0].id)
+        }
+    }, [selectedManualQuestionId, unansweredQuestions])
+
+    const selectedManualQuestion = useMemo(() => {
+        if (unansweredQuestions.length === 0) return null
+        return unansweredQuestions.find((question) => question.id === selectedManualQuestionId) || unansweredQuestions[0]
+    }, [selectedManualQuestionId, unansweredQuestions])
+
+    const selectedManualVariationNumber = useMemo(() => {
+        if (!data || !selectedManualQuestion) return null
+        const questionIndex = (data.assignment.questions || []).findIndex((question) => question.id === selectedManualQuestion.id)
+        return questionIndex >= 0 ? questionIndex + 1 : null
+    }, [data, selectedManualQuestion])
+
+    const showManualSubmissionPanel = !!data
+        && data.assignment.points_enabled
+        && showNoVariationSubmission
+        && !!selectedManualQuestion
+
+    const handleManualPointsSubmit = async (
+        questionId: string,
+        _questionPoints: number,
+        answer: string,
+        isCorrect: boolean
+    ) => {
+        if (!classroomId || !studentId) {
+            toast.error("Missing classroom or student context")
+            return
+        }
+
+        setIsSubmittingManualAnswer(true)
+        try {
+            const result = await submitTeacherManualPointsAnswer(
+                classroomId,
+                studentId,
+                selection.assignmentId,
+                questionId,
+                answer,
+                isCorrect
+            )
+
+            if (!result.success) {
+                toast.error(result.error || "Failed to submit manual answer")
+                return
+            }
+
+            if (
+                !result.submittedAnswers
+                || typeof result.earnedPoints !== 'number'
+                || typeof result.isCompleted !== 'boolean'
+            ) {
+                toast.error("Manual answer was saved, but response data was incomplete")
+                return
+            }
+
+            onManualSubmissionApplied({
+                submittedAnswers: result.submittedAnswers,
+                earnedPoints: result.earnedPoints,
+                isCompleted: result.isCompleted
+            })
+
+            toast.success("Manual answer submitted")
+        } catch (submitError) {
+            console.error(submitError)
+            toast.error("Failed to submit manual answer")
+        } finally {
+            setIsSubmittingManualAnswer(false)
+        }
+    }
 
     return (
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
@@ -458,6 +597,75 @@ function ExerciseReviewPanel({
                         <p className="text-sm text-muted-foreground">
                             No answer was submitted to this exercise.
                         </p>
+                    )}
+
+                    {showManualSubmissionPanel && selectedManualQuestion && (
+                        <div className="rounded-md border border-amber-300/60 bg-amber-50/50 p-4 space-y-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+                                    Teacher Manual Submission
+                                </p>
+                                {isSubmittingManualAnswer && (
+                                    <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                                )}
+                            </div>
+
+                            {isVariationExercise && unansweredQuestions.length > 1 && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        Choose variation
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {unansweredQuestions.map((question) => {
+                                            const variationIndex = (data.assignment.questions || []).findIndex((q) => q.id === question.id)
+                                            const variationNumber = variationIndex >= 0 ? variationIndex + 1 : '?'
+                                            const isSelected = selectedManualQuestion.id === question.id
+
+                                            return (
+                                                <Button
+                                                    key={question.id}
+                                                    variant={isSelected ? "default" : "outline"}
+                                                    size="sm"
+                                                    disabled={isSubmittingManualAnswer}
+                                                    onClick={() => setSelectedManualQuestionId(question.id)}
+                                                >
+                                                    Variation {variationNumber}
+                                                </Button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="rounded-md border border-border/60 bg-background p-4 space-y-4">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {isVariationExercise
+                                        ? `Variation ${selectedManualVariationNumber ?? '?'} (manual review)`
+                                        : "Question (manual review)"}
+                                </div>
+                                <div className="text-sm leading-relaxed">
+                                    <MathDisplay content={selectedManualQuestion.latex_text || "No question text"} />
+                                </div>
+                                <DiagramDisplay
+                                    diagramType={selectedManualQuestion.diagram_type}
+                                    diagramSvg={selectedManualQuestion.diagram_svg}
+                                    diagramImageUrl={selectedManualQuestion.diagram_image_url}
+                                />
+                                <div className="border-t pt-3 space-y-2">
+                                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        Submit answer manually
+                                    </p>
+                                    <TestInterface
+                                        question={selectedManualQuestion}
+                                        questionId={selectedManualQuestion.id}
+                                        questionPoints={selectedManualQuestion.points || 1}
+                                        pointsMode={true}
+                                        disabled={isSubmittingManualAnswer}
+                                        onPointsSubmit={handleManualPointsSubmit}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     {questionsToRender.map((question, index: number) => {
