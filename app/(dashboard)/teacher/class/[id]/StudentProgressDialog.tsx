@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -10,10 +10,15 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
 import { Loader2, CheckCircle2 } from "lucide-react"
-import { getStudentClassroomProgress } from "../../actions"
+import {
+    getStudentClassroomProgress,
+    getStudentAssignmentSubmissionForTeacher
+} from "../../actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
+import MathDisplay from "@/components/MathDisplay"
+import { DiagramDisplay } from "@/components/DiagramDisplay"
+import { TestInterface } from "./assignment/[assignmentId]/TestInterface"
 
 interface StudentProgressDialogProps {
     classroomId: string
@@ -21,33 +26,139 @@ interface StudentProgressDialogProps {
     onClose: () => void
 }
 
+type ExerciseStatus = 'correct' | 'incorrect' | 'unsubmitted'
+
+interface ExerciseSelection {
+    collectionId: string
+    assignmentId: string
+    assignmentNumber: number
+    collectionTitle: string
+    status: ExerciseStatus
+}
+
+interface ExerciseReviewData {
+    assignment: {
+        id: string
+        title: string
+        required_variations_count: number | null
+        questions: ExerciseQuestion[]
+    }
+    submittedAnswers: Record<string, string>
+    earnedPoints: number
+    isCompleted: boolean
+}
+
+interface ExerciseQuestion {
+    id: string
+    question_type: 'numerical' | 'multiple_choice'
+    latex_text: string | null
+    options: string[] | null
+    diagram_type: 'graph' | 'scheme' | null
+    diagram_svg: string | null
+    diagram_image_url: string | null
+}
+
+interface AssignmentStatus {
+    id: string
+    status: ExerciseStatus
+    points: number
+    earned: number
+    pointsEnabled: boolean
+}
+
+interface ProgressCollection {
+    id: string
+    title: string
+    category?: 'homework' | 'classwork' | null
+    progress: number
+    completedAssignments: number
+    totalAssignments: number
+    assignmentStatuses?: AssignmentStatus[]
+}
+
+interface StudentProgressResponse {
+    collections: ProgressCollection[]
+    totalPoints: number
+    earnedPoints: number
+}
+
 export function StudentProgressDialog({ classroomId, student, onClose }: StudentProgressDialogProps) {
-    const [collections, setCollections] = useState<any[]>([])
+    const [collections, setCollections] = useState<ProgressCollection[]>([])
     const [stats, setStats] = useState<{ totalPoints: number, earnedPoints: number } | null>(null)
     const [loading, setLoading] = useState(false)
+    const [selectedExercise, setSelectedExercise] = useState<ExerciseSelection | null>(null)
+    const [selectedExerciseData, setSelectedExerciseData] = useState<ExerciseReviewData | null>(null)
+    const [selectedExerciseLoading, setSelectedExerciseLoading] = useState(false)
+    const [selectedExerciseError, setSelectedExerciseError] = useState<string | null>(null)
+    const exerciseRequestIdRef = useRef(0)
 
     useEffect(() => {
-        if (student) {
-            fetchProgress()
-        }
-    }, [student])
+        exerciseRequestIdRef.current += 1
+        setSelectedExercise(null)
+        setSelectedExerciseData(null)
+        setSelectedExerciseError(null)
+    }, [student?.id])
 
-    const fetchProgress = async () => {
+    const fetchProgress = useCallback(async () => {
         if (!student) return
         setLoading(true)
         try {
             const data = await getStudentClassroomProgress(classroomId, student.id)
-            if (data && 'collections' in data) {
-                setCollections(data.collections || [])
+            if (data && typeof data === 'object' && 'collections' in data) {
+                const typedData = data as StudentProgressResponse
+                setCollections(typedData.collections || [])
                 setStats({
-                    totalPoints: data.totalPoints || 0,
-                    earnedPoints: data.earnedPoints || 0
+                    totalPoints: typedData.totalPoints || 0,
+                    earnedPoints: typedData.earnedPoints || 0
                 })
+            } else {
+                setCollections([])
+                setStats(null)
             }
         } catch (error) {
             console.error(error)
         } finally {
             setLoading(false)
+        }
+    }, [classroomId, student])
+
+    useEffect(() => {
+        if (student) {
+            fetchProgress()
+        }
+    }, [student, fetchProgress])
+
+    const handleExerciseSelect = async (selection: ExerciseSelection) => {
+        if (!student || selection.status === 'unsubmitted') return
+
+        const requestId = ++exerciseRequestIdRef.current
+        setSelectedExercise(selection)
+        setSelectedExerciseData(null)
+        setSelectedExerciseError(null)
+        setSelectedExerciseLoading(true)
+
+        try {
+            const data = await getStudentAssignmentSubmissionForTeacher(
+                classroomId,
+                student.id,
+                selection.assignmentId
+            )
+
+            if (!data) {
+                if (exerciseRequestIdRef.current !== requestId) return
+                setSelectedExerciseError("Failed to load exercise details.")
+                return
+            }
+
+            if (exerciseRequestIdRef.current !== requestId) return
+            setSelectedExerciseData(data as ExerciseReviewData)
+        } catch (error) {
+            if (exerciseRequestIdRef.current !== requestId) return
+            console.error(error)
+            setSelectedExerciseError("Failed to load exercise details.")
+        } finally {
+            if (exerciseRequestIdRef.current !== requestId) return
+            setSelectedExerciseLoading(false)
         }
     }
 
@@ -89,7 +200,23 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                 </h3>
                                 <div className="space-y-3">
                                     {classworkCollections.map(collection => (
-                                        <CollectionProgressRow key={collection.id} collection={collection} />
+                                        <CollectionProgressRow
+                                            key={collection.id}
+                                            collection={collection}
+                                            selectedAssignmentId={selectedExercise?.assignmentId || null}
+                                            selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
+                                            selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
+                                            selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
+                                            selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
+                                            onSelectExercise={handleExerciseSelect}
+                                            onCloseReview={() => {
+                                                exerciseRequestIdRef.current += 1
+                                                setSelectedExercise(null)
+                                                setSelectedExerciseData(null)
+                                                setSelectedExerciseError(null)
+                                                setSelectedExerciseLoading(false)
+                                            }}
+                                        />
                                     ))}
                                 </div>
                             </div>
@@ -103,7 +230,23 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
                                 </h3>
                                 <div className="space-y-3">
                                     {homeworkCollections.map(collection => (
-                                        <CollectionProgressRow key={collection.id} collection={collection} />
+                                        <CollectionProgressRow
+                                            key={collection.id}
+                                            collection={collection}
+                                            selectedAssignmentId={selectedExercise?.assignmentId || null}
+                                            selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
+                                            selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
+                                            selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
+                                            selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
+                                            onSelectExercise={handleExerciseSelect}
+                                            onCloseReview={() => {
+                                                exerciseRequestIdRef.current += 1
+                                                setSelectedExercise(null)
+                                                setSelectedExerciseData(null)
+                                                setSelectedExerciseError(null)
+                                                setSelectedExerciseLoading(false)
+                                            }}
+                                        />
                                     ))}
                                 </div>
                             </div>
@@ -124,7 +267,25 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
     )
 }
 
-function CollectionProgressRow({ collection }: { collection: any }) {
+function CollectionProgressRow({
+    collection,
+    selectedAssignmentId,
+    selectedExercise,
+    selectedExerciseData,
+    selectedExerciseLoading,
+    selectedExerciseError,
+    onSelectExercise,
+    onCloseReview
+}: {
+    collection: ProgressCollection
+    selectedAssignmentId: string | null
+    selectedExercise: ExerciseSelection | null
+    selectedExerciseData: ExerciseReviewData | null
+    selectedExerciseLoading: boolean
+    selectedExerciseError: string | null
+    onSelectExercise: (selection: ExerciseSelection) => void
+    onCloseReview: () => void
+}) {
     const isComplete = collection.progress === 100
 
     return (
@@ -144,12 +305,12 @@ function CollectionProgressRow({ collection }: { collection: any }) {
             </div>
 
             <div className="flex flex-wrap gap-2">
-                {collection.assignmentStatuses?.map((as: any, idx: number) => {
+                {collection.assignmentStatuses?.map((as, idx: number) => {
                     let bgColor = 'bg-muted'
                     let borderColor = 'border-border/40'
                     let textColor = 'text-muted-foreground'
                     const frameColor = as.pointsEnabled ? 'ring-1 ring-amber-300/80 border-amber-400' : ''
-                    let style: React.CSSProperties = {}
+                    let style: CSSProperties = {}
 
                     if (as.status === 'correct') {
                         bgColor = 'bg-green-500 shadow-sm shadow-green-500/20'
@@ -172,18 +333,173 @@ function CollectionProgressRow({ collection }: { collection: any }) {
                         }
                     }
 
+                    const isClickable = as.status === 'correct' || as.status === 'incorrect'
+                    const isSelected = selectedAssignmentId === as.id
+                    const baseClasses = `flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all ${bgColor} ${borderColor} ${frameColor} ${textColor}`
+                    const selectedClasses = isSelected ? 'outline outline-2 outline-primary/80 outline-offset-1' : ''
+                    const title = `${as.earned} / ${as.points} tasku${isClickable ? ' - Click to review answer' : ''}`
+
+                    if (isClickable) {
+                        return (
+                            <button
+                                key={as.id}
+                                type="button"
+                                onClick={() => onSelectExercise({
+                                    collectionId: collection.id,
+                                    assignmentId: as.id,
+                                    assignmentNumber: idx + 1,
+                                    collectionTitle: collection.title,
+                                    status: as.status
+                                })}
+                                className={`${baseClasses} ${selectedClasses} hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}
+                                style={style}
+                                title={title}
+                            >
+                                {idx + 1}
+                            </button>
+                        )
+                    }
+
                     return (
                         <div
                             key={as.id}
-                            className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all ${bgColor} ${borderColor} ${frameColor} ${textColor}`}
+                            className={baseClasses}
                             style={style}
-                            title={`${as.earned} / ${as.points} tasku`}
+                            title={title}
                         >
                             {idx + 1}
                         </div>
                     )
                 })}
             </div>
+
+            {selectedExercise && (
+                <ExerciseReviewPanel
+                    selection={selectedExercise}
+                    data={selectedExerciseData}
+                    loading={selectedExerciseLoading}
+                    error={selectedExerciseError}
+                    onClose={onCloseReview}
+                />
+            )}
+        </div>
+    )
+}
+
+function ExerciseReviewPanel({
+    selection,
+    data,
+    loading,
+    error,
+    onClose
+}: {
+    selection: ExerciseSelection
+    data: ExerciseReviewData | null
+    loading: boolean
+    error: string | null
+    onClose: () => void
+}) {
+    const statusPill = selection.status === 'correct'
+        ? { label: 'Correct', className: 'bg-green-100 text-green-700' }
+        : { label: 'Incorrect', className: 'bg-rose-100 text-rose-700' }
+
+    const isVariationExercise = !!data && (data.assignment.required_variations_count || 0) > 0
+    const variationWithAnswer = isVariationExercise && data
+        ? (data.assignment.questions || []).find((question) => {
+            const submitted = data.submittedAnswers?.[question.id]
+            return typeof submitted === 'string' && submitted.trim().length > 0
+        })
+        : null
+
+    const questionsToRender = !data
+        ? []
+        : isVariationExercise
+            ? (variationWithAnswer ? [variationWithAnswer] : [])
+            : (data.assignment.questions || [])
+
+    const showNoVariationSubmission = !!data && isVariationExercise && questionsToRender.length === 0
+
+    return (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Exercise Review</p>
+                    <h4 className="font-semibold text-sm mt-0.5">
+                        {selection.collectionTitle} - Exercise {selection.assignmentNumber}
+                    </h4>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusPill.className}`}>
+                            {statusPill.label}
+                        </span>
+                        {data?.assignment?.title && (
+                            <span className="text-xs text-muted-foreground">
+                                {data.assignment.title}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={onClose}>
+                    Close review
+                </Button>
+            </div>
+
+            {loading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading exercise details...
+                </div>
+            ) : error ? (
+                <p className="text-sm text-rose-600">{error}</p>
+            ) : !data ? (
+                <p className="text-sm text-muted-foreground">No exercise details found.</p>
+            ) : (
+                <div className="space-y-4">
+                    {showNoVariationSubmission && (
+                        <p className="text-sm text-muted-foreground">
+                            No answer was submitted to this exercise.
+                        </p>
+                    )}
+
+                    {questionsToRender.map((question, index: number) => {
+                        const hasSubmittedAnswer = Object.prototype.hasOwnProperty.call(data.submittedAnswers || {}, question.id)
+                        const submittedAnswer = hasSubmittedAnswer ? String(data.submittedAnswers[question.id] ?? '') : undefined
+
+                        return (
+                            <div key={question.id || index} className="rounded-md border border-border/60 bg-background p-4 space-y-4">
+                                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {isVariationExercise ? "Variation answered by student" : `Question ${index + 1}`}
+                                </div>
+                                <div className="text-sm leading-relaxed">
+                                    <MathDisplay content={question.latex_text || "No question text"} />
+                                </div>
+                                <DiagramDisplay
+                                    diagramType={question.diagram_type}
+                                    diagramSvg={question.diagram_svg}
+                                    diagramImageUrl={question.diagram_image_url}
+                                />
+                                <div className="border-t pt-3 space-y-2">
+                                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        Student answer
+                                    </p>
+                                    {hasSubmittedAnswer ? (
+                                        <TestInterface
+                                            question={question}
+                                            disabled={true}
+                                            submittedAnswer={submittedAnswer}
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No submitted answer for this question.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
+
+                    {!showNoVariationSubmission && questionsToRender.length === 0 && (
+                        <p className="text-sm text-muted-foreground">This exercise has no questions.</p>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

@@ -1473,6 +1473,77 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     }
 }
 
+export async function getStudentAssignmentSubmissionForTeacher(
+    classroomId: string,
+    studentId: string,
+    assignmentId: string
+) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return null
+    }
+
+    const { data: assignment } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            title,
+            points_enabled,
+            points,
+            required_variations_count,
+            questions(
+                id,
+                created_at,
+                question_type,
+                latex_text,
+                options,
+                diagram_type,
+                diagram_svg,
+                diagram_image_url,
+                points
+            )
+        `)
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+        .single()
+
+    if (!assignment) return null
+
+    const supabaseAdmin = createAdminClient()
+    const { data: progress } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('submitted_answers, earned_points, is_completed')
+        .eq('student_id', studentId)
+        .eq('assignment_id', assignmentId)
+        .maybeSingle()
+
+    const orderedQuestions = [...(assignment.questions || [])].sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
+        return aTime - bTime
+    })
+
+    return {
+        assignment: {
+            ...assignment,
+            questions: orderedQuestions
+        },
+        submittedAnswers: progress?.submitted_answers || {},
+        earnedPoints: progress?.earned_points || 0,
+        isCompleted: !!progress?.is_completed
+    }
+}
+
 
 
 export async function deleteCollection(collectionId: string, classroomId: string, deleteExercises: boolean = false): Promise<ActionState> {
