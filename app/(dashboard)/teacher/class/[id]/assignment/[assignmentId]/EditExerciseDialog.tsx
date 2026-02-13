@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload, Sparkles } from "lucide-react"
-import { updateAssignmentWithQuestion, uploadIllustration, generateVariationsFromExercise } from "../../../../actions"
+import { updateAssignmentWithQuestion, uploadIllustration, generateVariationsFromExercise, editExerciseSvgWithPrompt } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -170,6 +170,14 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const [illustrationFiles, setIllustrationFiles] = useState<Record<number, File | null>>({})
     const [illustrationPreviews, setIllustrationPreviews] = useState<Record<number, string | null>>({})
     const illustrationInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+    const [svgPromptByQuestion, setSvgPromptByQuestion] = useState<Record<number, string>>({})
+    const [editingSvgIndex, setEditingSvgIndex] = useState<number | null>(null)
+    const [applySvgEditToAllVariations, setApplySvgEditToAllVariations] = useState(true)
+
+    const hasMultipleVariations = data.exercise_type === 'variations' && data.questions.length > 1
+    const variationSvgCount = hasMultipleVariations
+        ? data.questions.filter((question, questionIndex) => !!question.diagram_svg && !illustrationPreviews[questionIndex]).length
+        : 0
 
     // Populate data when dialog opens
     useEffect(() => {
@@ -208,6 +216,9 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
             })
             setIllustrationPreviews(previews)
             setIllustrationFiles({})
+            setSvgPromptByQuestion({})
+            setEditingSvgIndex(null)
+            setApplySvgEditToAllVariations(true)
         }
     }, [initialData, open])
 
@@ -285,6 +296,80 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
             toast.error("An error occurred during generation")
         } finally {
             setGeneratingIndex(null)
+        }
+    }
+
+    const handleGeminiSvgEdit = async (index: number) => {
+        const prompt = (svgPromptByQuestion[index] || '').trim()
+        if (!prompt) {
+            toast.error("Enter an SVG edit prompt first")
+            return
+        }
+
+        const currentQuestion = data.questions[index]
+        if (!currentQuestion?.diagram_svg) {
+            toast.error("This question has no SVG to edit")
+            return
+        }
+
+        const targetIndices = hasMultipleVariations && applySvgEditToAllVariations
+            ? data.questions
+                .map((question, questionIndex) =>
+                    question.diagram_svg && !illustrationPreviews[questionIndex] ? questionIndex : -1
+                )
+                .filter((questionIndex) => questionIndex >= 0)
+            : [index]
+
+        if (targetIndices.length === 0) {
+            toast.error("No editable SVG variations found")
+            return
+        }
+
+        const targets = targetIndices.map((questionIndex) => {
+            const question = data.questions[questionIndex]
+            return {
+                index: questionIndex,
+                latex_text: question.latex_text,
+                diagram_svg: question.diagram_svg || '',
+                diagram_type: question.diagram_type || null
+            }
+        })
+
+        setEditingSvgIndex(index)
+        try {
+            const result = await editExerciseSvgWithPrompt({
+                classroomId,
+                assignmentId,
+                prompt,
+                targets
+            })
+
+            if (result.success && result.data) {
+                setData((prev) => {
+                    const updatedQuestions = [...prev.questions]
+                    result.data?.forEach((updated) => {
+                        if (!updatedQuestions[updated.index]) return
+                        updatedQuestions[updated.index] = {
+                            ...updatedQuestions[updated.index],
+                            diagram_svg: updated.diagram_svg
+                        }
+                    })
+                    return { ...prev, questions: updatedQuestions }
+                })
+
+                toast.success(
+                    result.data.length > 1
+                        ? `Updated ${result.data.length} SVG variations`
+                        : "Updated SVG"
+                )
+            } else {
+                toast.error(result.error || "Failed to edit SVG")
+            }
+        } catch (err) {
+            console.error(err)
+            toast.error("An error occurred while editing SVG")
+        } finally {
+            setEditingSvgIndex(null)
         }
     }
 
@@ -747,7 +832,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                             )}
 
                                             {q.diagram_svg && !illustrationPreviews[index] && (
-                                                <div className="space-y-2">
+                                                <div className="space-y-3">
                                                     <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
                                                         <div
                                                             dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
@@ -762,6 +847,49 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                                         value={q.diagram_svg || ''}
                                                         onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
                                                     />
+
+                                                    <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                                                        <Label className="text-sm font-medium">Gemini SVG Prompt</Label>
+                                                        <textarea
+                                                            className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                            placeholder="e.g. Change labels to Lithuanian and color the force vector red."
+                                                            value={svgPromptByQuestion[index] || ''}
+                                                            onChange={(e) =>
+                                                                setSvgPromptByQuestion((prev) => ({ ...prev, [index]: e.target.value }))
+                                                            }
+                                                        />
+
+                                                        {hasMultipleVariations && (
+                                                            <div className="flex items-center space-x-2">
+                                                                <Checkbox
+                                                                    id={`edit-svg-all-${index}`}
+                                                                    checked={applySvgEditToAllVariations}
+                                                                    onCheckedChange={(checked) => setApplySvgEditToAllVariations(checked as boolean)}
+                                                                />
+                                                                <Label htmlFor={`edit-svg-all-${index}`} className="text-xs font-normal">
+                                                                    Apply to all variation SVGs ({variationSvgCount})
+                                                                </Label>
+                                                            </div>
+                                                        )}
+
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-full sm:w-auto"
+                                                            onClick={() => handleGeminiSvgEdit(index)}
+                                                            disabled={editingSvgIndex !== null || !(svgPromptByQuestion[index] || '').trim()}
+                                                        >
+                                                            {editingSvgIndex === index ? (
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <Sparkles className="mr-2 h-4 w-4" />
+                                                            )}
+                                                            {hasMultipleVariations && applySvgEditToAllVariations
+                                                                ? "Edit all variation SVGs"
+                                                                : "Edit SVG with Gemini"}
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             )}
 

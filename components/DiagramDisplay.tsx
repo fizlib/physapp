@@ -3,7 +3,6 @@
 import {
     Dialog,
     DialogContent,
-    DialogHeader,
     DialogTitle,
     DialogTrigger,
     DialogClose,
@@ -29,7 +28,7 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
         <div className="mt-4 border rounded-lg p-4 bg-muted/10">
             <Dialog>
                 <DialogTrigger asChild>
-                    <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] overflow-hidden cursor-pointer hover:border-primary/50 transition-colors">
+                    <div className="group relative flex items-center justify-center p-4 bg-white rounded-lg border min-h-[150px] max-h-[350px] cursor-pointer hover:border-primary/50 transition-colors">
                         {diagramImageUrl ? (
                             <div className="relative w-full h-[200px] sm:h-[300px]">
                                 <Image
@@ -44,7 +43,7 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                         ) : (
                             <div
                                 dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                className="w-full pointer-events-none md:[&>svg]:max-h-[300px] flex items-center justify-center"
+                                className="w-full min-w-0 pointer-events-none flex items-center justify-center [&>svg]:mx-auto [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:max-h-[300px] [&>svg]:overflow-visible"
                             />
                         )}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -85,7 +84,7 @@ export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: Dia
                                 ) : (
                                     <div
                                         dangerouslySetInnerHTML={{ __html: sanitizedSvg! }}
-                                        className="w-full h-full max-w-[1400px] bg-white rounded-xl p-8 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:max-h-[80vh]"
+                                        className="w-full max-w-[1400px] max-h-[85vh] bg-white rounded-xl p-4 sm:p-8 flex items-center justify-center [&>svg]:mx-auto [&>svg]:block [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:max-h-[80vh] [&>svg]:overflow-visible"
                                     />
                                 )}
                             </div>

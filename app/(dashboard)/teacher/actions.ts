@@ -483,22 +483,75 @@ export async function uploadIllustration(formData: FormData): Promise<{ success:
     return { success: true, url: publicUrl }
 }
 
+const normalizeSvgString = (svg: string) => {
+    const parseSvgDimension = (value?: string) => {
+        if (!value) return null
+        const normalized = value.trim().toLowerCase()
+        if (normalized.endsWith('%')) return null
+        const match = normalized.match(/^([0-9]*\.?[0-9]+)(px)?$/)
+        if (!match) return null
+        const parsed = Number.parseFloat(match[1])
+        return Number.isFinite(parsed) ? parsed : null
+    }
+
+    const formatDimension = (value: number) => (
+        Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)))
+    )
+
+    let result = svg.trim()
+    result = result.replace(/&lt;/g, '<')
+    result = result.replace(/&gt;/g, '>')
+    result = result.replace(/&amp;/g, '&')
+    result = result.replace(/&quot;/g, '"')
+    result = result.replace(/&#39;/g, "'")
+    result = result.replace(/&#x27;/g, "'")
+    result = result.replace(/&#x2F;/g, '/')
+    result = result.replace(/\\n/g, '\n')
+    result = result.replace(/\\r/g, '')
+
+    const svgTagMatch = result.match(/<svg\b([^>]*)>/i)
+    if (!svgTagMatch) return result.trim()
+
+    let attrs = (svgTagMatch[1] || '').replace(/\s+/g, ' ').trim()
+    const widthValue = attrs.match(/\bwidth\s*=\s*["']([^"']+)["']/i)?.[1]
+    const heightValue = attrs.match(/\bheight\s*=\s*["']([^"']+)["']/i)?.[1]
+    const numericWidth = parseSvgDimension(widthValue)
+    const numericHeight = parseSvgDimension(heightValue)
+    const hasViewBox = /\bviewBox\s*=\s*["'][^"']*["']/i.test(attrs)
+
+    // Preserve sizing context by deriving viewBox before stripping fixed dimensions.
+    if (!hasViewBox && numericWidth !== null && numericHeight !== null) {
+        attrs = `${attrs} viewBox="0 0 ${formatDimension(numericWidth)} ${formatDimension(numericHeight)}"`.trim()
+    }
+
+    if (/\bviewBox\s*=\s*["'][^"']*["']/i.test(attrs)) {
+        attrs = attrs
+            .replace(/\s+width\s*=\s*["'][^"']*["']/ig, '')
+            .replace(/\s+height\s*=\s*["'][^"']*["']/ig, '')
+            .trim()
+    }
+
+    result = result.replace(/<svg\b[^>]*>/i, `<svg${attrs ? ` ${attrs}` : ''}>`)
+    return result.trim()
+}
+
+const extractSvgFromText = (text: string) => {
+    const cleaned = text
+        .replace(/```svg/gi, '')
+        .replace(/```xml/gi, '')
+        .replace(/```html/gi, '')
+        .replace(/```/g, '')
+        .trim()
+
+    const svgMatch = cleaned.match(/<svg[\s\S]*<\/svg>/i)
+    if (!svgMatch) return null
+
+    return normalizeSvgString(svgMatch[0])
+}
+
 const sanitizeOptionSvg = (opt: string) => {
     if (opt && opt.trim().startsWith('<svg')) {
-        let svg = opt.trim()
-        svg = svg.replace(/&lt;/g, '<')
-        svg = svg.replace(/&gt;/g, '>')
-        svg = svg.replace(/&amp;/g, '&')
-        svg = svg.replace(/&quot;/g, '"')
-        svg = svg.replace(/&#39;/g, "'")
-        svg = svg.replace(/&#x27;/g, "'")
-        svg = svg.replace(/&#x2F;/g, '/')
-        svg = svg.replace(/\\n/g, '\n')
-        svg = svg.replace(/\\r/g, '')
-        // Strip hardcoded width/height to make it responsive
-        svg = svg.replace(/<svg([^>]*)width="[^"]*"/i, '<svg$1')
-        svg = svg.replace(/<svg([^>]*)height="[^"]*"/i, '<svg$1')
-        return svg.trim()
+        return normalizeSvgString(opt)
     }
     return opt
 }
@@ -514,18 +567,7 @@ function processExerciseData(data: any, generateSolution: boolean, diagramImageU
 
         // Sanitize SVG content
         if (q.diagram_svg && typeof q.diagram_svg === 'string') {
-            let svg = q.diagram_svg
-            svg = svg.replace(/&lt;/g, '<')
-            svg = svg.replace(/&gt;/g, '>')
-            svg = svg.replace(/&amp;/g, '&')
-            svg = svg.replace(/&quot;/g, '"')
-            svg = svg.replace(/&#39;/g, "'")
-            svg = svg.replace(/&#x27;/g, "'")
-            svg = svg.replace(/&#x2F;/g, '/')
-            svg = svg.replace(/\\n/g, '\n')
-            svg = svg.replace(/\\r/g, '')
-            svg = svg.trim()
-            q.diagram_svg = svg
+            q.diagram_svg = normalizeSvgString(q.diagram_svg)
         }
 
         if (q.type === 'multiple_choice' && q.correct_answer) {
@@ -2162,6 +2204,109 @@ export async function generateVariationsFromExercise(
     } catch (error: any) {
         console.error("Gemini Variation Error:", error)
         return { success: false, error: error.message || "Failed to generate variations" }
+    }
+}
+
+const EditSvgTargetSchema = z.object({
+    index: z.number().int().min(0),
+    latex_text: z.string().optional(),
+    diagram_svg: z.string().min(1),
+    diagram_type: z.enum(['graph', 'scheme']).nullable().optional()
+})
+
+const EditExerciseSvgPromptSchema = z.object({
+    classroomId: z.string().uuid(),
+    assignmentId: z.string().uuid(),
+    prompt: z.string().trim().min(1),
+    targets: z.array(EditSvgTargetSchema).min(1)
+})
+
+export async function editExerciseSvgWithPrompt(input: {
+    classroomId: string
+    assignmentId: string
+    prompt: string
+    targets: Array<{
+        index: number
+        latex_text?: string
+        diagram_svg: string
+        diagram_type?: 'graph' | 'scheme' | null
+    }>
+}): Promise<{ success: boolean; data?: Array<{ index: number; diagram_svg: string }>; error?: string }> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = EditExerciseSvgPromptSchema.safeParse(input)
+    if (!validated.success) {
+        return { success: false, error: "Invalid SVG edit request" }
+    }
+
+    const data = validated.data
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', data.classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { data: assignment, error: assignmentError } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('id', data.assignmentId)
+        .eq('classroom_id', data.classroomId)
+        .single()
+
+    if (assignmentError || !assignment) {
+        return { success: false, error: "Assignment not found" }
+    }
+
+    try {
+        const editedTargets = await Promise.all(
+            data.targets.map(async (target) => {
+                const geminiPrompt = `
+You are an SVG editor for physics/math classroom exercises.
+Apply the user's edit request to the SVG below.
+
+USER EDIT REQUEST:
+${data.prompt}
+
+QUESTION CONTEXT:
+${target.latex_text || '(no question text)'}
+
+CURRENT SVG:
+${target.diagram_svg}
+
+RULES:
+- Return ONLY one valid <svg>...</svg> string.
+- Do not return markdown, JSON, or explanations.
+- Keep the diagram semantically consistent with the question unless the request says otherwise.
+- Preserve existing coordinate system/viewBox when possible.
+`
+
+                const result = await generateContentWithFallback("gemini-3-flash-preview", [geminiPrompt])
+                const response = await result.response
+                const text = response.text()
+                const editedSvg = extractSvgFromText(text)
+
+                if (!editedSvg) {
+                    throw new Error(`Gemini did not return a valid SVG for question ${target.index + 1}`)
+                }
+
+                return {
+                    index: target.index,
+                    diagram_svg: editedSvg
+                }
+            })
+        )
+
+        return { success: true, data: editedTargets }
+    } catch (error: any) {
+        console.error("Gemini SVG edit error:", error)
+        return { success: false, error: error.message || "Failed to edit SVG" }
     }
 }
 
