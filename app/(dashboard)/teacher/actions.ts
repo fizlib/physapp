@@ -1358,25 +1358,54 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     if (!collections) return []
 
     // 2. Fetch Progress for this student
-    const allAssignmentIds = collections.flatMap((c: any) => c.assignments.map((a: any) => a.id))
+    const allAssignments = collections.flatMap((c: any) => c.assignments || [])
+    const allAssignmentIds = allAssignments.map((a: any) => a.id)
+    const assignmentMetaById = new Map(
+        allAssignments.map((a: any) => [
+            a.id,
+            {
+                pointsEnabled: !!a.points_enabled,
+                requiredVariationsCount: a.required_variations_count || 0,
+                questionCount: Array.isArray(a.questions) ? a.questions.length : 0
+            }
+        ])
+    )
 
     // Use Admin Client to bypass RLS for reading other users' progress
     const supabaseAdmin = createAdminClient()
 
-    let completedAssignmentIds = new Set<string>()
-    let earnedPointsMap = new Map<string, number>()
-    let submittedAnswersMap = new Map<string, any>()
+    const completedAssignmentIds = new Set<string>()
+    const earnedPointsMap = new Map<string, number>()
+    const submittedAnswersMap = new Map<string, any>()
 
     if (allAssignmentIds.length > 0) {
         const { data: progressData } = await supabaseAdmin
             .from('assignment_progress')
-            .select('assignment_id, is_completed, earned_points, submitted_answers')
+            .select('assignment_id, is_completed, earned_points, submitted_answers, completed_question_indices')
             .in('assignment_id', allAssignmentIds)
             .eq('student_id', studentId)
 
         if (progressData) {
             progressData.forEach((p: any) => {
-                if (p.is_completed) completedAssignmentIds.add(p.assignment_id)
+                const meta = assignmentMetaById.get(p.assignment_id)
+                const completedIndicesCount = Array.isArray(p.completed_question_indices)
+                    ? p.completed_question_indices.length
+                    : 0
+                const submittedCount = p.submitted_answers && typeof p.submitted_answers === 'object'
+                    ? Object.keys(p.submitted_answers).length
+                    : 0
+
+                const requiredToComplete = meta
+                    ? ((meta.requiredVariationsCount > 0 ? meta.requiredVariationsCount : meta.questionCount) || 0)
+                    : 0
+
+                const inferredCompletion = !!meta && requiredToComplete > 0 && (
+                    meta.pointsEnabled
+                        ? submittedCount >= requiredToComplete
+                        : completedIndicesCount >= requiredToComplete
+                )
+
+                if (p.is_completed || inferredCompletion) completedAssignmentIds.add(p.assignment_id)
                 if (p.earned_points != null) earnedPointsMap.set(p.assignment_id, p.earned_points)
                 if (p.submitted_answers) submittedAnswersMap.set(p.assignment_id, p.submitted_answers)
             })

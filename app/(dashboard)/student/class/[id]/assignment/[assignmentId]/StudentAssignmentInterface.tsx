@@ -71,7 +71,18 @@ export function StudentAssignmentInterface({
     const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(initialSubmittedAnswers || {})
     const [isFinishing, setIsFinishing] = useState(false)
     const lastSyncedIndexRef = useRef(currentIndex)
+    const answerSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+    const completedIndicesRef = useRef<Set<number>>(new Set(initialCompletedIndices))
+    const submittedAnswersRef = useRef<Record<string, string>>(initialSubmittedAnswers || {})
     const router = useRouter()
+
+    useEffect(() => {
+        completedIndicesRef.current = completedIndices
+    }, [completedIndices])
+
+    useEffect(() => {
+        submittedAnswersRef.current = submittedAnswers
+    }, [submittedAnswers])
 
     // If variation mode, "showAll" is overridden to false
     const showAll = !isVariationMode && assignment.show_all_questions
@@ -145,28 +156,6 @@ export function StudentAssignmentInterface({
     // In variation mode, we never want a persistent diagram as each variation is a separate problem.
     const showPersistentDiagram = !isVariationMode && !showAll && currentIndex > 0 && hasPersistentDiagram
 
-    const handleCorrect = async () => {
-        const newSet = new Set(completedIndices).add(currentIndex)
-        setCompletedIndices(newSet)
-
-        // Save progress
-        await upsertAssignmentProgress(
-            assignment.id,
-            Array.from(newSet),
-            // Finish if we met the requirement
-            isVariationMode ? newSet.size >= requiredVariations : false,
-            currentIndex,
-            Array.from(revealedIndices),
-            submittedAnswers
-        )
-        if (onProgressUpdate) onProgressUpdate()
-
-        // For variation mode, auto-advance logic is handled in render or effect
-        if (isVariationMode && newSet.size < requiredVariations) {
-            // ...
-        }
-    }
-
     const handleRevealSolution = async () => {
         if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai užduočiai ir turėsite spręsti kitą.")) {
             return
@@ -188,19 +177,34 @@ export function StudentAssignmentInterface({
         toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
     }
 
-    const handleAnswerCheck = async (questionId: string, answer: string) => {
-        const newAnswers = { ...submittedAnswers, [questionId]: answer }
-        setSubmittedAnswers(newAnswers)
+    const handleAnswerCheck = async (questionId: string, answer: string, isCorrect: boolean, questionIndex: number) => {
+        const newAnswers = { ...submittedAnswersRef.current, [questionId]: answer }
+        const newCompleted = new Set(completedIndicesRef.current)
+        if (isCorrect) {
+            newCompleted.add(questionIndex)
+        }
 
-        await upsertAssignmentProgress(
-            assignment.id,
-            Array.from(completedIndices),
-            completedIndices.size >= (isVariationMode ? requiredVariations : totalQuestions),
-            currentIndex,
-            Array.from(revealedIndices),
-            newAnswers
-        )
-        if (onProgressUpdate) onProgressUpdate()
+        submittedAnswersRef.current = newAnswers
+        completedIndicesRef.current = newCompleted
+        setSubmittedAnswers(newAnswers)
+        if (isCorrect) {
+            setCompletedIndices(newCompleted)
+        }
+
+        const queuedSave = answerSaveQueueRef.current.then(async () => {
+            const saveResult = await upsertAssignmentProgress(
+                assignment.id,
+                Array.from(newCompleted),
+                newCompleted.size >= (isVariationMode ? requiredVariations : totalQuestions),
+                currentIndex,
+                Array.from(revealedIndices),
+                newAnswers
+            )
+            if (saveResult.success && onProgressUpdate) onProgressUpdate()
+        })
+
+        answerSaveQueueRef.current = queuedSave.then(() => undefined, () => undefined)
+        await queuedSave
     }
 
     // Points mode submission handler - one try per question
@@ -344,19 +348,18 @@ export function StudentAssignmentInterface({
                                             )}
 
                                             <div className={`pt-2 ${revealedIndices.has(index) ? "pointer-events-none" : ""}`}>
-                                                <TestInterface
-                                                    key={q.id || index}
-                                                    question={q}
-                                                    questionId={q.id}
-                                                    questionPoints={q.points || 1}
-                                                    onCorrect={() => setCompletedIndices(prev => new Set(prev).add(index))}
-                                                    pointsMode={pointsEnabled}
-                                                    disabled={lockedQuestionIds.has(q.id)}
-                                                    submittedAnswer={submittedAnswers[q.id]}
-                                                    onPointsSubmit={handlePointsSubmit}
-                                                    onCheck={(ans) => handleAnswerCheck(q.id, ans)}
-                                                    isRevealed={revealedIndices.has(index)}
-                                                />
+                                                    <TestInterface
+                                                        key={q.id || index}
+                                                        question={q}
+                                                        questionId={q.id}
+                                                        questionPoints={q.points || 1}
+                                                        pointsMode={pointsEnabled}
+                                                        disabled={lockedQuestionIds.has(q.id)}
+                                                        submittedAnswer={submittedAnswers[q.id]}
+                                                        onPointsSubmit={handlePointsSubmit}
+                                                        onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
+                                                        isRevealed={revealedIndices.has(index)}
+                                                    />
                                             </div>
                                         </div>
                                     </div>
@@ -508,12 +511,11 @@ export function StudentAssignmentInterface({
                                     question={questions[currentIndex]}
                                     questionId={questions[currentIndex].id}
                                     questionPoints={questions[currentIndex].points || 1}
-                                    onCorrect={handleCorrect}
                                     pointsMode={pointsEnabled}
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
                                     onPointsSubmit={handlePointsSubmit}
-                                    onCheck={(ans) => handleAnswerCheck(questions[currentIndex].id, ans)}
+                                    onCheck={(ans, isCorrect) => handleAnswerCheck(questions[currentIndex].id, ans, isCorrect, currentIndex)}
                                     isRevealed={revealedIndices.has(currentIndex)}
                                 />
                             </div>

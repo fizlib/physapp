@@ -30,7 +30,7 @@ export function TestInterface({
     disabled?: boolean,
     submittedAnswer?: string,
     onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void,
-    onCheck?: (answer: string) => void,
+    onCheck?: (answer: string, isCorrect: boolean) => void,
     isRevealed?: boolean
 }) {
     const [latexInput, setLatexInput] = useState("")
@@ -94,7 +94,7 @@ export function TestInterface({
             }
 
             // Normal mode: notify parent for saving
-            onCheck?.(String(val))
+            onCheck?.(String(val), isCorrect)
 
             // Normal mode: show feedback
             if (isCorrect) {
@@ -121,7 +121,7 @@ export function TestInterface({
             }
 
             // Normal mode: notify parent for saving
-            onCheck?.(mcqInput)
+            onCheck?.(mcqInput, isCorrect)
 
             // Normal mode: show feedback
             if (isCorrect) {
