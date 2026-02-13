@@ -1,3 +1,21 @@
+New, faster way.
+in VM ssh terminal:
+
+cd physapp
+git pull origin main
+npm install
+npm run build
+pm2 restart physapp
+
+
+
+
+
+_____________________
+
+
+
+
 1. Run locally:
 npm run build
 

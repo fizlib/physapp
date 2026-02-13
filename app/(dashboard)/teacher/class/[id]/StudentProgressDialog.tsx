@@ -148,11 +148,12 @@ function CollectionProgressRow({ collection }: { collection: any }) {
                     let bgColor = 'bg-muted'
                     let borderColor = 'border-border/40'
                     let textColor = 'text-muted-foreground'
+                    const frameColor = as.pointsEnabled ? 'ring-1 ring-amber-300/80 border-amber-400' : ''
                     let style: React.CSSProperties = {}
 
                     if (as.status === 'correct') {
                         bgColor = 'bg-green-500 shadow-sm shadow-green-500/20'
-                        borderColor = 'border-green-600'
+                        borderColor = as.pointsEnabled ? 'border-amber-400' : 'border-green-600'
                         textColor = 'text-white'
                     } else if (as.status === 'incorrect') {
                         if (as.earned > 0 && as.points > 0) {
@@ -162,11 +163,11 @@ function CollectionProgressRow({ collection }: { collection: any }) {
                                 background: `linear-gradient(90deg, #22c55e ${percent}%, #f43f5e ${percent}%)`
                             }
                             bgColor = 'shadow-sm shadow-orange-500/20'
-                            borderColor = 'border-orange-600/50'
+                            borderColor = as.pointsEnabled ? 'border-amber-400' : 'border-orange-600/50'
                             textColor = 'text-white'
                         } else {
                             bgColor = 'bg-rose-500 shadow-sm shadow-rose-500/20'
-                            borderColor = 'border-rose-600'
+                            borderColor = as.pointsEnabled ? 'border-amber-400' : 'border-rose-600'
                             textColor = 'text-white'
                         }
                     }
@@ -174,9 +175,9 @@ function CollectionProgressRow({ collection }: { collection: any }) {
                     return (
                         <div
                             key={as.id}
-                            className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all ${bgColor} ${borderColor} ${textColor}`}
+                            className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all ${bgColor} ${borderColor} ${frameColor} ${textColor}`}
                             style={style}
-                            title={`${as.earned} / ${as.points} taškų`}
+                            title={`${as.earned} / ${as.points} tasku`}
                         >
                             {idx + 1}
                         </div>
@@ -186,3 +187,4 @@ function CollectionProgressRow({ collection }: { collection: any }) {
         </div>
     )
 }
+

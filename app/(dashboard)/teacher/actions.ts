@@ -1351,7 +1351,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     // 1. Fetch Collections
     const { data: collections } = await supabase
         .from('collections')
-        .select('*, assignments(id, points, points_enabled, published, required_variations_count, questions(points))')
+        .select('*, assignments(id, order_index, points, points_enabled, published, required_variations_count, questions(points))')
         .eq('classroom_id', classroomId)
         .order('created_at', { ascending: false })
 
@@ -1410,20 +1410,32 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
 
                 let status: 'correct' | 'incorrect' | 'unsubmitted' = 'unsubmitted'
 
-                // If submitted answers exists and is not empty
-                if (submitted && Object.keys(submitted).length > 0) {
-                    if (earned != null && earned >= totalPts && totalPts > 0) {
-                        status = 'correct'
-                    } else {
-                        status = 'incorrect'
+                const isCompleted = completedAssignmentIds.has(a.id)
+                const hasSubmission = submitted && Object.keys(submitted).length > 0
+                const isPointExercise = !!a.points_enabled
+
+                // For point exercises, completion can still be 0 points, so correctness depends on earned points.
+                // For non-point exercises, completion itself means done/correct for teacher progress display.
+                if (isPointExercise) {
+                    if (isCompleted || hasSubmission) {
+                        if (earned != null && earned >= totalPts && totalPts > 0) {
+                            status = 'correct'
+                        } else {
+                            status = 'incorrect'
+                        }
                     }
+                } else if (isCompleted) {
+                    status = 'correct'
+                } else if (hasSubmission) {
+                    status = 'incorrect'
                 }
 
                 return {
                     id: a.id,
                     status,
                     points: totalPts,
-                    earned: earned || 0
+                    earned: earned || 0,
+                    pointsEnabled: !!a.points_enabled,
                 }
             })
 
