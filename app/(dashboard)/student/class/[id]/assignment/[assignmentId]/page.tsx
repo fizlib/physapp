@@ -59,6 +59,8 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                     initialRevealedIndices={initialRevealedIndices}
                     initialActiveQuestionIndex={progress?.active_question_index}
                     initialIsCompleted={initialIsCompleted}
+                    initialSubmittedAnswers={progress?.submitted_answers || {}}
+                    initialEarnedPointsPerPart={progress?.earned_points_per_part || {}}
                     hideRevealSolution={isClasswork}
                 />
             </div>

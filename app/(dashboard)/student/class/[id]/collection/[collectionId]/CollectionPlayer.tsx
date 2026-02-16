@@ -211,6 +211,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
     const currentRevealedIndices = currentProgress?.revealed_question_indices || []
     const currentIsCompleted = currentProgress?.is_completed || false
     const currentActiveIndex = currentProgress?.active_question_index
+    const currentEarnedPointsPerPart = currentProgress?.earned_points_per_part || {}
 
     // Find the next assignment (could be unpublished)
     const getNextAssignmentFromAllAssignments = () => {
@@ -886,6 +887,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         pointsEnabled={currentAssignment.points_enabled || false}
                         exercisePoints={currentAssignment.points || 1}
                         initialSubmittedAnswers={currentProgress?.submitted_answers || {}}
+                        initialEarnedPointsPerPart={currentEarnedPointsPerPart}
                         // Last exercise in collection - show "Finish" instead of "Next Exercise"
                         isLastExercise={!getNextAssignmentFromAllAssignments()}
                         onProgressUpdate={refreshProgress}

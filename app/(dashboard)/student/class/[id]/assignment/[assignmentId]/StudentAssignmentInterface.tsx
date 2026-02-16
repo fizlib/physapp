@@ -31,6 +31,7 @@ export function StudentAssignmentInterface({
     pointsEnabled = false,
     exercisePoints = 1,
     initialSubmittedAnswers = {},
+    initialEarnedPointsPerPart = {},
     isLastExercise = false,
     onProgressUpdate
 }: {
@@ -50,6 +51,7 @@ export function StudentAssignmentInterface({
     pointsEnabled?: boolean,
     exercisePoints?: number,
     initialSubmittedAnswers?: Record<string, string>,
+    initialEarnedPointsPerPart?: Record<string, number>,
     isLastExercise?: boolean,
     onProgressUpdate?: () => void
 }) {
@@ -69,6 +71,16 @@ export function StudentAssignmentInterface({
         new Set(pointsEnabled ? Object.keys(initialSubmittedAnswers || {}) : [])
     )
     const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(initialSubmittedAnswers || {})
+    const [pointsCorrectnessByQuestionId, setPointsCorrectnessByQuestionId] = useState<Record<string, boolean>>(() => {
+        if (!pointsEnabled) return {}
+        const correctness: Record<string, boolean> = {}
+        Object.entries(initialEarnedPointsPerPart || {}).forEach(([questionId, earnedPoints]) => {
+            if (typeof earnedPoints === 'number') {
+                correctness[questionId] = earnedPoints > 0
+            }
+        })
+        return correctness
+    })
     const [isFinishing, setIsFinishing] = useState(false)
     const lastSyncedIndexRef = useRef(currentIndex)
     const answerSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -226,9 +238,15 @@ export function StudentAssignmentInterface({
             if (onProgressUpdate) onProgressUpdate()
             toast.success("Atsakymas pateiktas!")
             setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
+            setPointsCorrectnessByQuestionId(prev => ({ ...prev, [questionId]: isCorrect }))
         } else if (result.alreadySubmitted) {
             toast.error("Šio varianto atsakymas jau buvo pateiktas")
         } else {
+            setLockedQuestionIds(prev => {
+                const next = new Set(prev)
+                next.delete(questionId)
+                return next
+            })
             toast.error(result.error || "Nepavyko pateikti atsakymo")
         }
     }
@@ -252,6 +270,16 @@ export function StudentAssignmentInterface({
     const progress = isVariationMode
         ? (effectiveCompletedCount / requiredVariations) * 100
         : (effectiveCompletedCount / totalQuestions) * 100
+    const getPointsQuestionStatus = (questionId?: string): 'correct' | 'incorrect' | 'unsubmitted' => {
+        if (!pointsEnabled || !questionId || !lockedQuestionIds.has(questionId)) {
+            return 'unsubmitted'
+        }
+        if (!(questionId in pointsCorrectnessByQuestionId)) {
+            return 'unsubmitted'
+        }
+        return pointsCorrectnessByQuestionId[questionId] ? 'correct' : 'incorrect'
+    }
+    const currentPointsStatus = getPointsQuestionStatus(questions[currentIndex]?.id)
 
     return (
         <div className="space-y-8 max-w-3xl mx-auto">
@@ -290,8 +318,16 @@ export function StudentAssignmentInterface({
                 <div className="space-y-8">
                     {questions.map((q: any, index: number) => {
                         const isCorrect = completedIndices.has(index)
+                        const pointsStatus = getPointsQuestionStatus(q.id)
+                        const cardStateClasses = pointsEnabled
+                            ? (pointsStatus === 'correct'
+                                ? 'border-green-500/40 bg-green-50/10'
+                                : pointsStatus === 'incorrect'
+                                    ? 'border-red-500/40 bg-red-50/10'
+                                    : 'border-amber-500/30')
+                            : (isCorrect ? 'border-green-500/40 bg-green-50/10' : '')
                         return (
-                            <Card key={index} className={`transition-all ${pointsEnabled ? 'border-amber-500/30' : ''} ${isCorrect ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                            <Card key={index} className={`transition-all ${cardStateClasses}`}>
                                 <CardContent className="p-6">
                                     <div className="flex gap-4">
                                         <div className="flex-none pt-1">
@@ -356,6 +392,7 @@ export function StudentAssignmentInterface({
                                                         pointsMode={pointsEnabled}
                                                         disabled={lockedQuestionIds.has(q.id)}
                                                         submittedAnswer={submittedAnswers[q.id]}
+                                                        submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[q.id] : undefined}
                                                         onPointsSubmit={handlePointsSubmit}
                                                         onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
                                                         isRevealed={revealedIndices.has(index)}
@@ -441,7 +478,13 @@ export function StudentAssignmentInterface({
                 </div>
             ) : (
                 /* Paginated View */
-                <Card className={`transition-all ${pointsEnabled ? 'border-amber-500/30' : ''} ${canProceed ? 'border-green-500/40 bg-green-50/10' : ''}`}>
+                <Card className={`transition-all ${pointsEnabled
+                    ? (currentPointsStatus === 'correct'
+                        ? 'border-green-500/40 bg-green-50/10'
+                        : currentPointsStatus === 'incorrect'
+                            ? 'border-red-500/40 bg-red-50/10'
+                            : 'border-amber-500/30')
+                    : (canProceed ? 'border-green-500/40 bg-green-50/10' : '')}`}>
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
@@ -514,6 +557,7 @@ export function StudentAssignmentInterface({
                                     pointsMode={pointsEnabled}
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
+                                    submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[questions[currentIndex].id] : undefined}
                                     onPointsSubmit={handlePointsSubmit}
                                     onCheck={(ans, isCorrect) => handleAnswerCheck(questions[currentIndex].id, ans, isCorrect, currentIndex)}
                                     isRevealed={revealedIndices.has(currentIndex)}
