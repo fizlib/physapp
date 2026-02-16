@@ -143,78 +143,77 @@ export function TestInterface({
         const correctMcqLetter = !isNumerical ? question.correct_answer?.trim().toUpperCase() : null
         const correctMcqOption = !isNumerical && correctMcqLetter ? question.options?.[['A', 'B', 'C', 'D'].indexOf(correctMcqLetter)] : null
         const showCorrectAnswer = submittedIsCorrect === false
+        const statusStyles = submittedIsCorrect
+            ? 'bg-green-100 text-green-700 border border-green-200'
+            : 'bg-red-100 text-red-700 border border-red-200'
 
         return (
-            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-700 shadow-sm animate-in fade-in zoom-in-95 duration-300">
-                <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 mb-3">
-                    <div className="bg-zinc-200/50 dark:bg-zinc-700 p-1 rounded-full">
-                        <Check className="h-4 w-4 text-zinc-600 dark:text-zinc-300" />
-                    </div>
-                    <span className="font-bold text-sm">Atsakymas pateiktas</span>
-                </div>
-
-                <div className="bg-white dark:bg-zinc-900/50 p-4 rounded-lg border border-zinc-100 dark:border-zinc-800">
+            <div className="rounded-lg border border-zinc-200/70 bg-zinc-50/80 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-zinc-600">Atsakymas pateiktas</span>
                     {submittedIsCorrect !== undefined && (
-                        <div className={`mb-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${submittedIsCorrect ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles}`}>
                             {submittedIsCorrect ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
                             {submittedIsCorrect ? 'Teisingai' : 'Neteisingai'}
+                        </span>
+                    )}
+                </div>
+
+                <div className="rounded-md border border-zinc-200/70 bg-white p-3">
+                    <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500">Jūsų atsakymas</div>
+                    {isNumerical ? (
+                        <div className="text-base font-semibold text-foreground">
+                            <MathDisplay content={submittedAnswer || "-"} />
+                        </div>
+                    ) : (
+                        <div className="flex items-start gap-2.5">
+                            <div className="mt-0.5 h-6 w-6 flex-none flex items-center justify-center rounded-full bg-zinc-100 text-zinc-700 text-[10px] font-bold border border-zinc-200">
+                                {submittedAnswer || "?"}
+                            </div>
+                            <div className="pt-0.5 text-sm leading-relaxed w-full">
+                                {mcqOption ? (
+                                    mcqOption.trim().startsWith('<svg') ? (
+                                        <div
+                                            className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
+                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption) }}
+                                        />
+                                    ) : (
+                                        <MathDisplay content={mcqOption} />
+                                    )
+                                ) : "Pasirinktas variantas"}
+                            </div>
                         </div>
                     )}
-                    <div className="text-foreground">
+                </div>
+
+                {showCorrectAnswer && (
+                    <div className="rounded-md border border-green-200 bg-green-50/60 p-3">
+                        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-green-700">Teisingas atsakymas</div>
                         {isNumerical ? (
-                            <div className="text-lg font-semibold">
-                                <MathDisplay content={submittedAnswer || "-"} />
+                            <div className="text-base font-semibold text-foreground">
+                                <MathDisplay content={String(question.correct_value ?? "-")} />
                             </div>
                         ) : (
-                            <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 flex-none flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 shadow-sm">
-                                    {submittedAnswer || "?"}
+                            <div className="flex items-start gap-2.5">
+                                <div className="mt-0.5 h-6 w-6 flex-none flex items-center justify-center rounded-full bg-green-100 text-green-700 text-[10px] font-bold border border-green-200">
+                                    {correctMcqLetter || "?"}
                                 </div>
-                                <div className="pt-0.5 text-sm leading-relaxed w-full">
-                                    {mcqOption ? (
-                                        mcqOption.trim().startsWith('<svg') ? (
+                                <div className="pt-0.5 text-sm leading-relaxed w-full text-foreground">
+                                    {correctMcqOption ? (
+                                        correctMcqOption.trim().startsWith('<svg') ? (
                                             <div
                                                 className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
-                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption) }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(correctMcqOption) }}
                                             />
                                         ) : (
-                                            <MathDisplay content={mcqOption} />
+                                            <MathDisplay content={correctMcqOption} />
                                         )
-                                    ) : "Pasirinktas variantas"}
+                                    ) : "Teisingas variantas"}
                                 </div>
                             </div>
                         )}
                     </div>
-
-                    {showCorrectAnswer && (
-                        <div className="mt-4 rounded-lg border border-green-200 bg-green-50/60 p-3">
-                            <div className="text-xs font-semibold text-green-700 mb-2">Teisingas atsakymas</div>
-                            {isNumerical ? (
-                                <div className="text-lg font-semibold text-foreground">
-                                    <MathDisplay content={String(question.correct_value ?? "-")} />
-                                </div>
-                            ) : (
-                                <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 flex-none flex items-center justify-center rounded-full bg-green-100 text-green-700 text-xs font-bold border border-green-200 shadow-sm">
-                                        {correctMcqLetter || "?"}
-                                    </div>
-                                    <div className="pt-0.5 text-sm leading-relaxed w-full text-foreground">
-                                        {correctMcqOption ? (
-                                            correctMcqOption.trim().startsWith('<svg') ? (
-                                                <div
-                                                    className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
-                                                    dangerouslySetInnerHTML={{ __html: sanitizeSvg(correctMcqOption) }}
-                                                />
-                                            ) : (
-                                                <MathDisplay content={correctMcqOption} />
-                                            )
-                                        ) : "Teisingas variantas"}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
+                )}
             </div>
         )
     }
