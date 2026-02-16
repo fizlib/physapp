@@ -709,6 +709,8 @@ export async function generateExerciseFromImage(formData: FormData) {
 
   LATEX FORMATTING: Use LaTeX for ALL math, units, and symbols. For multiple_choice options, wrap LaTeX in single dollar signs.
   NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
+  PHYSICAL CONSTANTS: Use g = 10 m/s^2 for gravitational acceleration unless otherwise specified in the problem image.
+  NOTATION: Weight ("Sunkio jėga") MUST be written as F with a subscript "s" (F_s in LaTeX).
 
   ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
   - Generate diagram_svg ONLY if the input image contains a diagram, graph, or schema. If the input image is text-only, set diagram_type and diagram_svg to null.
@@ -2160,6 +2162,8 @@ export async function generateVariationsFromExercise(
     - CRITICAL: All generated output text (latex_text, options, solution) MUST be in the Lithuanian language.
     - LATEX FORMATTING: Use LaTeX for ALL math, units, and symbols. For multiple_choice options, wrap LaTeX in single dollar signs.
     - NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
+    - PHYSICAL CONSTANTS: Use g = 10 m/s^2 for gravitational acceleration unless otherwise specified in the problem image.
+    - NOTATION: Weight ("Sunkio jėga") MUST be written as F with a subscript "s" (F_s in LaTeX).
     - If diagram_svg exists, keep the same diagram structure but update labels or values if they changed in the text.
     ${generateSolution ? '- SOLUTION MANUAL MODE: Generate step-by-step solution in Lithuanian for each variation.' : ''}
 
