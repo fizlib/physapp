@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { FileText } from "lucide-react"
 import { SlidesModal } from "./SlidesModal"
@@ -14,6 +14,15 @@ interface SlidesButtonProps {
 
 export function SlidesButton({ url, title, variant = "outline", className }: SlidesButtonProps) {
     const [isOpen, setIsOpen] = useState(false)
+    const isIOS = useMemo(() => {
+        if (typeof navigator === "undefined") return false
+
+        const ua = navigator.userAgent || ""
+        const isLegacyIOS = /iPad|iPhone|iPod/.test(ua)
+        const isIPadOSDesktopUA = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1
+
+        return isLegacyIOS || isIPadOSDesktopUA
+    }, [])
 
     if (!url) return null
 
@@ -26,18 +35,28 @@ export function SlidesButton({ url, title, variant = "outline", className }: Sli
                 onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
+
+                    if (isIOS) {
+                        const popup = window.open(url, "_blank", "noopener,noreferrer")
+                        // If popups are blocked, fall back to modal.
+                        if (!popup) setIsOpen(true)
+                        return
+                    }
+
                     setIsOpen(true)
                 }}
             >
                 <FileText className="w-4 h-4 mr-2" />
                 Skaidrės
             </Button>
-            <SlidesModal
-                url={url}
-                title={title}
-                isOpen={isOpen}
-                onOpenChange={setIsOpen}
-            />
+            {!isIOS && (
+                <SlidesModal
+                    url={url}
+                    title={title}
+                    isOpen={isOpen}
+                    onOpenChange={setIsOpen}
+                />
+            )}
         </>
     )
 }
