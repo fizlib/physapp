@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
+import { logSolutionRevealClick, upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
 import { toast } from "sonner"
 import { Award } from "lucide-react"
 
@@ -168,6 +168,41 @@ export function StudentAssignmentInterface({
     // In variation mode, we never want a persistent diagram as each variation is a separate problem.
     const showPersistentDiagram = !isVariationMode && !showAll && currentIndex > 0 && hasPersistentDiagram
 
+    const persistRevealState = async (questionIndex: number, newRevealed: Set<number>) => {
+        const questionId = questions[questionIndex]?.id
+        if (!questionId) {
+            console.warn("Reveal click log skipped: missing question id", { assignmentId: assignment.id, questionIndex })
+        }
+
+        try {
+            const [progressResult, logResult] = await Promise.all([
+                upsertAssignmentProgress(
+                    assignment.id,
+                    Array.from(completedIndices),
+                    false, // Revelation never completes the assignment
+                    currentIndex,
+                    Array.from(newRevealed),
+                    submittedAnswers
+                ),
+                questionId
+                    ? logSolutionRevealClick(assignment.id, questionId, questionIndex)
+                    : Promise.resolve({ success: false, error: "Missing question id" })
+            ])
+
+            if (!progressResult.success) {
+                console.error("Failed to save reveal progress:", progressResult.error)
+            }
+
+            if (questionId && !logResult.success) {
+                console.error("Failed to log reveal click:", logResult.error)
+            }
+        } catch (error) {
+            console.error("Failed to persist reveal state:", error)
+        }
+
+        if (onProgressUpdate) onProgressUpdate()
+    }
+
     const handleRevealSolution = async () => {
         if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai užduočiai ir turėsite spręsti kitą.")) {
             return
@@ -176,16 +211,7 @@ export function StudentAssignmentInterface({
         const newRevealed = new Set(revealedIndices).add(currentIndex)
         setRevealedIndices(newRevealed)
 
-        // Save progress immediately
-        await upsertAssignmentProgress(
-            assignment.id,
-            Array.from(completedIndices),
-            false, // Revelation never completes the assignment
-            currentIndex,
-            Array.from(newRevealed),
-            submittedAnswers
-        )
-        if (onProgressUpdate) onProgressUpdate()
+        await persistRevealState(currentIndex, newRevealed)
         toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
     }
 
@@ -373,8 +399,7 @@ export function StudentAssignmentInterface({
                                                             if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
                                                             const newRevealed = new Set(revealedIndices).add(index)
                                                             setRevealedIndices(newRevealed)
-                                                            await upsertAssignmentProgress(assignment.id, Array.from(completedIndices), false, currentIndex, Array.from(newRevealed), submittedAnswers)
-                                                            if (onProgressUpdate) onProgressUpdate()
+                                                            await persistRevealState(index, newRevealed)
                                                         }}
                                                     >
                                                         <HelpCircle className="h-3 w-3" />

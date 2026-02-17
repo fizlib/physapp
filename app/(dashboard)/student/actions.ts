@@ -15,10 +15,114 @@ const UpsertProgressSchema = z.object({
     submittedAnswers: z.record(z.string(), z.string()).optional()
 })
 
+const LogSolutionRevealClickSchema = z.object({
+    assignmentId: z.string().uuid(),
+    questionId: z.string().uuid(),
+    questionIndex: z.number().int().nonnegative()
+})
+
 export type ActionState = {
     success: boolean
     message?: string
     error?: string
+}
+
+export async function logSolutionRevealClick(
+    assignmentId: string,
+    questionId: string,
+    questionIndex: number
+): Promise<ActionState> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = LogSolutionRevealClickSchema.safeParse({ assignmentId, questionId, questionIndex })
+    if (!validated.success) return { success: false, error: "Invalid data" }
+
+    const { data: assignmentData, error: assignmentError } = await supabase
+        .from('assignments')
+        .select(`
+            classroom_id,
+            published,
+            collections (
+                id,
+                category
+            ),
+            classrooms (
+                allowed_ip,
+                ip_check_enabled
+            )
+        `)
+        .eq('id', assignmentId)
+        .maybeSingle()
+
+    if (assignmentError || !assignmentData) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    if (!assignmentData.published) {
+        return { success: false, error: "This assignment is currently in draft and cannot be saved." }
+    }
+
+    const { data: enrollment, error: enrollmentError } = await supabase
+        .from('enrollments')
+        .select('id')
+        .eq('student_id', user.id)
+        .eq('classroom_id', assignmentData.classroom_id)
+        .maybeSingle()
+
+    if (enrollmentError || !enrollment) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    const studentIp = await getClientIp()
+    const classroomData = assignmentData.classrooms
+    const collectionData = assignmentData.collections
+    const classroom = Array.isArray(classroomData) ? classroomData[0] : classroomData
+    const collection = Array.isArray(collectionData) ? collectionData[0] : collectionData
+
+    if (collection?.category === 'classwork' && classroom?.ip_check_enabled && classroom?.allowed_ip) {
+        if (studentIp !== classroom.allowed_ip) {
+            const { data: bypass } = await createAdminClient()
+                .from('ip_bypasses')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('collection_id', collection.id)
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle()
+
+            if (!bypass) {
+                return { success: false, error: "Access restricted: You have moved to a different network. Please reconnect to the classroom network to save progress." }
+            }
+        }
+    }
+
+    const { data: question, error: questionError } = await supabase
+        .from('questions')
+        .select('id')
+        .eq('id', questionId)
+        .eq('assignment_id', assignmentId)
+        .maybeSingle()
+
+    if (questionError || !question) {
+        return { success: false, error: "Invalid question" }
+    }
+
+    const { error } = await supabase
+        .from('solution_reveal_events')
+        .insert({
+            student_id: user.id,
+            assignment_id: assignmentId,
+            question_id: questionId,
+            question_index: questionIndex
+        })
+
+    if (error) {
+        console.error("Solution Reveal Log Error", error)
+        return { success: false, error: "Failed to log solution reveal" }
+    }
+
+    return { success: true }
 }
 
 export async function upsertAssignmentProgress(
