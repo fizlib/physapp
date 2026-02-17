@@ -1555,6 +1555,221 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     }
 }
 
+interface HomeworkSubmissionEventRow {
+    id: string
+    assignment_id: string | null
+    question_id: string | null
+    question_index: number | null
+    submitted_answer: string | null
+    is_correct: boolean | null
+    submitted_at: string | null
+}
+
+interface SolutionRevealEventRow {
+    id: string
+    assignment_id: string | null
+    question_id: string | null
+    question_index: number | null
+    clicked_at: string | null
+}
+
+interface ClassroomAssignmentLogMeta {
+    id: string
+    title: string | null
+    collection_id: string | null
+}
+
+interface CollectionLogMeta {
+    id: string
+    title: string | null
+}
+
+export interface StudentEventLogItem {
+    id: string
+    eventType: 'homework_submission' | 'solution_reveal'
+    occurredAt: string
+    assignmentId: string
+    assignmentTitle: string
+    collectionTitle: string
+    questionId: string
+    questionIndex: number
+    submittedAnswer: string | null
+    isCorrect: boolean | null
+}
+
+export async function getStudentClassroomEventLogs(
+    classroomId: string,
+    studentId: string
+): Promise<{ success: boolean, events: StudentEventLogItem[], error?: string }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, events: [], error: "Unauthorized" }
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, events: [], error: "Unauthorized to view student logs for this classroom" }
+    }
+
+    const { data: enrollment } = await supabase
+        .from('enrollments')
+        .select('id')
+        .eq('classroom_id', classroomId)
+        .eq('student_id', studentId)
+        .maybeSingle()
+
+    if (!enrollment) {
+        return { success: false, events: [], error: "Student is not enrolled in this classroom" }
+    }
+
+    const { data: assignments, error: assignmentsError } = await supabase
+        .from('assignments')
+        .select('id, title, collection_id')
+        .eq('classroom_id', classroomId)
+
+    if (assignmentsError) {
+        console.error("Student logs assignment fetch error", assignmentsError)
+        return { success: false, events: [], error: "Failed to fetch classroom assignments" }
+    }
+
+    const assignmentRows = (assignments || []) as ClassroomAssignmentLogMeta[]
+    if (assignmentRows.length === 0) {
+        return { success: true, events: [] }
+    }
+
+    const assignmentIds = assignmentRows
+        .map((assignment) => assignment.id)
+        .filter((assignmentId): assignmentId is string => typeof assignmentId === 'string' && assignmentId.length > 0)
+
+    if (assignmentIds.length === 0) {
+        return { success: true, events: [] }
+    }
+
+    const collectionIds = assignmentRows
+        .map((assignment) => assignment.collection_id)
+        .filter((collectionId): collectionId is string => typeof collectionId === 'string' && collectionId.length > 0)
+
+    const uniqueCollectionIds = [...new Set(collectionIds)]
+    let collectionTitleById = new Map<string, string>()
+
+    if (uniqueCollectionIds.length > 0) {
+        const { data: collections, error: collectionsError } = await supabase
+            .from('collections')
+            .select('id, title')
+            .in('id', uniqueCollectionIds)
+
+        if (collectionsError) {
+            console.error("Student logs collection fetch error", collectionsError)
+            return { success: false, events: [], error: "Failed to fetch collection metadata" }
+        }
+
+        collectionTitleById = new Map<string, string>(
+            ((collections || []) as CollectionLogMeta[]).map((collection) => [
+                collection.id,
+                collection.title?.trim() || "Untitled collection"
+            ])
+        )
+    }
+
+    const assignmentTitleById = new Map<string, string>(
+        assignmentRows.map((assignment) => [
+            assignment.id,
+            assignment.title?.trim() || "Untitled assignment"
+        ])
+    )
+
+    const collectionTitleByAssignmentId = new Map<string, string>(
+        assignmentRows.map((assignment) => {
+            const collectionId = assignment.collection_id
+            if (typeof collectionId !== 'string' || collectionId.length === 0) {
+                return [assignment.id, "No collection"]
+            }
+            return [assignment.id, collectionTitleById.get(collectionId) || "Unknown collection"]
+        })
+    )
+
+    const supabaseAdmin = createAdminClient()
+    const [homeworkEventsResult, revealEventsResult] = await Promise.all([
+        supabaseAdmin
+            .from('homework_submission_events')
+            .select('id, assignment_id, question_id, question_index, submitted_answer, is_correct, submitted_at')
+            .eq('student_id', studentId)
+            .in('assignment_id', assignmentIds)
+            .order('submitted_at', { ascending: false }),
+        supabaseAdmin
+            .from('solution_reveal_events')
+            .select('id, assignment_id, question_id, question_index, clicked_at')
+            .eq('student_id', studentId)
+            .in('assignment_id', assignmentIds)
+            .order('clicked_at', { ascending: false })
+    ])
+
+    if (homeworkEventsResult.error) {
+        console.error("Student logs homework events fetch error", homeworkEventsResult.error)
+        return { success: false, events: [], error: "Failed to fetch homework submission logs" }
+    }
+
+    if (revealEventsResult.error) {
+        console.error("Student logs solution reveal events fetch error", revealEventsResult.error)
+        return { success: false, events: [], error: "Failed to fetch solution reveal logs" }
+    }
+
+    const homeworkEvents = (homeworkEventsResult.data || []) as HomeworkSubmissionEventRow[]
+    const revealEvents = (revealEventsResult.data || []) as SolutionRevealEventRow[]
+
+    const normalizedHomeworkEvents: StudentEventLogItem[] = homeworkEvents.map((event) => {
+        const assignmentId = typeof event.assignment_id === 'string' ? event.assignment_id : ''
+        const questionId = typeof event.question_id === 'string' ? event.question_id : ''
+        const questionIndex = Number.isFinite(event.question_index) ? Number(event.question_index) : 0
+
+        return {
+            id: event.id,
+            eventType: 'homework_submission',
+            occurredAt: event.submitted_at || new Date(0).toISOString(),
+            assignmentId,
+            assignmentTitle: assignmentTitleById.get(assignmentId) || "Unknown assignment",
+            collectionTitle: collectionTitleByAssignmentId.get(assignmentId) || "Unknown collection",
+            questionId,
+            questionIndex,
+            submittedAnswer: event.submitted_answer ?? '',
+            isCorrect: typeof event.is_correct === 'boolean' ? event.is_correct : null
+        }
+    })
+
+    const normalizedRevealEvents: StudentEventLogItem[] = revealEvents.map((event) => {
+        const assignmentId = typeof event.assignment_id === 'string' ? event.assignment_id : ''
+        const questionId = typeof event.question_id === 'string' ? event.question_id : ''
+        const questionIndex = Number.isFinite(event.question_index) ? Number(event.question_index) : 0
+
+        return {
+            id: event.id,
+            eventType: 'solution_reveal',
+            occurredAt: event.clicked_at || new Date(0).toISOString(),
+            assignmentId,
+            assignmentTitle: assignmentTitleById.get(assignmentId) || "Unknown assignment",
+            collectionTitle: collectionTitleByAssignmentId.get(assignmentId) || "Unknown collection",
+            questionId,
+            questionIndex,
+            submittedAnswer: null,
+            isCorrect: null
+        }
+    })
+
+    const mergedEvents = [...normalizedHomeworkEvents, ...normalizedRevealEvents]
+        .sort((a, b) => {
+            const aTime = new Date(a.occurredAt).getTime()
+            const bTime = new Date(b.occurredAt).getTime()
+            return bTime - aTime
+        })
+
+    return { success: true, events: mergedEvents }
+}
+
 export async function getStudentAssignmentSubmissionForTeacher(
     classroomId: string,
     studentId: string,

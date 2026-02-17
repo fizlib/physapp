@@ -2,14 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog"
 import { Loader2, CheckCircle2 } from "lucide-react"
 import {
     getStudentClassroomProgress,
@@ -22,10 +14,9 @@ import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "./assignment/[assignmentId]/TestInterface"
 import { toast } from "sonner"
 
-interface StudentProgressDialogProps {
+interface StudentProgressPanelProps {
     classroomId: string
-    student: { id: string, name: string } | null
-    onClose: () => void
+    student: { id: string, name: string }
 }
 
 type ExerciseStatus = 'correct' | 'incorrect' | 'unsubmitted'
@@ -95,7 +86,7 @@ interface StudentProgressResponse {
     earnedPoints: number
 }
 
-export function StudentProgressDialog({ classroomId, student, onClose }: StudentProgressDialogProps) {
+export function StudentProgressPanel({ classroomId, student }: StudentProgressPanelProps) {
     const [collections, setCollections] = useState<ProgressCollection[]>([])
     const [stats, setStats] = useState<{ totalPoints: number, earnedPoints: number } | null>(null)
     const [loading, setLoading] = useState(false)
@@ -110,10 +101,9 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
         setSelectedExercise(null)
         setSelectedExerciseData(null)
         setSelectedExerciseError(null)
-    }, [student?.id])
+    }, [student.id])
 
     const fetchProgress = useCallback(async () => {
-        if (!student) return
         setLoading(true)
         try {
             const data = await getStudentClassroomProgress(classroomId, student.id)
@@ -133,16 +123,14 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
         } finally {
             setLoading(false)
         }
-    }, [classroomId, student])
+    }, [classroomId, student.id])
 
     useEffect(() => {
-        if (student) {
-            fetchProgress()
-        }
-    }, [student, fetchProgress])
+        void fetchProgress()
+    }, [fetchProgress])
 
     const handleExerciseSelect = async (selection: ExerciseSelection) => {
-        if (!student || selection.status === 'unsubmitted') return
+        if (selection.status === 'unsubmitted') return
 
         const requestId = ++exerciseRequestIdRef.current
         setSelectedExercise(selection)
@@ -192,110 +180,98 @@ export function StudentProgressDialog({ classroomId, student, onClose }: Student
     const classworkCollections = collections.filter(c => c.category === 'classwork')
 
     return (
-        <Dialog open={!!student} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>{student?.name}&apos;s Progress</DialogTitle>
-                    <DialogDescription>
-                        Overview of exercise completion.
-                    </DialogDescription>
-                </DialogHeader>
+        <div className="space-y-6">
+            {loading ? (
+                <div className="flex justify-center p-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {/* Summary Stats */}
+                    {stats && stats.totalPoints > 0 && (
+                        <div className="flex justify-center border-b border-border/40 pb-6 mb-6">
+                            <CircularGradeDisplay
+                                earnedPoints={stats.earnedPoints}
+                                maxPoints={stats.totalPoints}
+                                size={140}
+                            />
+                        </div>
+                    )}
 
-                {loading ? (
-                    <div className="flex justify-center p-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                ) : (
-                    <div className="space-y-6 py-4">
-                        {/* Summary Stats */}
-                        {stats && stats.totalPoints > 0 && (
-                            <div className="flex justify-center border-b border-border/40 pb-6 mb-6">
-                                <CircularGradeDisplay
-                                    earnedPoints={stats.earnedPoints}
-                                    maxPoints={stats.totalPoints}
-                                    size={140}
-                                />
-                            </div>
-                        )}
-
-                        {/* Classwork */}
-                        {classworkCollections.length > 0 && (
+                    {/* Classwork */}
+                    {classworkCollections.length > 0 && (
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                Classwork
+                            </h3>
                             <div className="space-y-3">
-                                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                    Classwork
-                                </h3>
-                                <div className="space-y-3">
-                                    {classworkCollections.map(collection => (
-                                        <CollectionProgressRow
-                                            key={collection.id}
-                                            classroomId={classroomId}
-                                            studentId={student?.id || ''}
-                                            collection={collection}
-                                            selectedAssignmentId={selectedExercise?.assignmentId || null}
-                                            selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
-                                            selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
-                                            selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
-                                            selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
-                                            onSelectExercise={handleExerciseSelect}
-                                            onManualSubmissionApplied={handleManualSubmissionApplied}
-                                            onCloseReview={() => {
-                                                exerciseRequestIdRef.current += 1
-                                                setSelectedExercise(null)
-                                                setSelectedExerciseData(null)
-                                                setSelectedExerciseError(null)
-                                                setSelectedExerciseLoading(false)
-                                            }}
-                                        />
-                                    ))}
-                                </div>
+                                {classworkCollections.map(collection => (
+                                    <CollectionProgressRow
+                                        key={collection.id}
+                                        classroomId={classroomId}
+                                        studentId={student.id}
+                                        collection={collection}
+                                        selectedAssignmentId={selectedExercise?.assignmentId || null}
+                                        selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
+                                        selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
+                                        selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
+                                        selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
+                                        onSelectExercise={handleExerciseSelect}
+                                        onManualSubmissionApplied={handleManualSubmissionApplied}
+                                        onCloseReview={() => {
+                                            exerciseRequestIdRef.current += 1
+                                            setSelectedExercise(null)
+                                            setSelectedExerciseData(null)
+                                            setSelectedExerciseError(null)
+                                            setSelectedExerciseLoading(false)
+                                        }}
+                                    />
+                                ))}
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {/* Homework */}
-                        {homeworkCollections.length > 0 && (
+                    {/* Homework */}
+                    {homeworkCollections.length > 0 && (
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                Homework
+                            </h3>
                             <div className="space-y-3">
-                                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                    Homework
-                                </h3>
-                                <div className="space-y-3">
-                                    {homeworkCollections.map(collection => (
-                                        <CollectionProgressRow
-                                            key={collection.id}
-                                            classroomId={classroomId}
-                                            studentId={student?.id || ''}
-                                            collection={collection}
-                                            selectedAssignmentId={selectedExercise?.assignmentId || null}
-                                            selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
-                                            selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
-                                            selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
-                                            selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
-                                            onSelectExercise={handleExerciseSelect}
-                                            onManualSubmissionApplied={handleManualSubmissionApplied}
-                                            onCloseReview={() => {
-                                                exerciseRequestIdRef.current += 1
-                                                setSelectedExercise(null)
-                                                setSelectedExerciseData(null)
-                                                setSelectedExerciseError(null)
-                                                setSelectedExerciseLoading(false)
-                                            }}
-                                        />
-                                    ))}
-                                </div>
+                                {homeworkCollections.map(collection => (
+                                    <CollectionProgressRow
+                                        key={collection.id}
+                                        classroomId={classroomId}
+                                        studentId={student.id}
+                                        collection={collection}
+                                        selectedAssignmentId={selectedExercise?.assignmentId || null}
+                                        selectedExercise={selectedExercise?.collectionId === collection.id ? selectedExercise : null}
+                                        selectedExerciseData={selectedExercise?.collectionId === collection.id ? selectedExerciseData : null}
+                                        selectedExerciseLoading={selectedExercise?.collectionId === collection.id ? selectedExerciseLoading : false}
+                                        selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
+                                        onSelectExercise={handleExerciseSelect}
+                                        onManualSubmissionApplied={handleManualSubmissionApplied}
+                                        onCloseReview={() => {
+                                            exerciseRequestIdRef.current += 1
+                                            setSelectedExercise(null)
+                                            setSelectedExerciseData(null)
+                                            setSelectedExerciseError(null)
+                                            setSelectedExerciseLoading(false)
+                                        }}
+                                    />
+                                ))}
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {collections.length === 0 && (
-                            <p className="text-center text-muted-foreground py-8">
-                                No collections found in this class.
-                            </p>
-                        )}
-                    </div>
-                )}
-                <DialogFooter>
-                    <Button onClick={onClose}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                    {collections.length === 0 && (
+                        <p className="text-center text-muted-foreground py-8">
+                            No collections found in this class.
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
     )
 }
 

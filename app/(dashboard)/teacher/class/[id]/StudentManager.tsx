@@ -8,7 +8,8 @@ import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ChevronDown, Chevr
 import Link from "next/link"
 import { getUnassignedStudents, enrollStudent } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
-import { StudentProgressDialog } from "./StudentProgressDialog"
+import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
+import { StudentProgressPanel } from "./StudentProgressPanel"
 
 interface Student {
     id: string
@@ -47,7 +48,7 @@ function formatPoints(value: number): string {
 
 export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById }: StudentManagerProps) {
     const router = useRouter()
-    const [view, setView] = useState<'list' | 'add'>('list')
+    const [view, setView] = useState<'list' | 'add' | 'detail'>('list')
     const [pointsSortDirection, setPointsSortDirection] = useState<PointsSortDirection>('desc')
     const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
     const [isLoading, setIsLoading] = useState(false)
@@ -68,8 +69,14 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     }
 
     const handleSwitchToAdd = () => {
+        setSelectedStudent(null)
         setView('add')
         fetchUnassignedStudents()
+    }
+
+    const handleBackToList = () => {
+        setSelectedStudent(null)
+        setView('list')
     }
 
     const handleAddStudent = async (studentId: string) => {
@@ -195,15 +202,35 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
         )
     }
 
+    if (view === 'detail' && selectedStudent) {
+        return (
+            <div className="space-y-6 animate-fade-in-up">
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={handleBackToList} className="-ml-2 text-muted-foreground hover:text-foreground">
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Back
+                        </Button>
+                        <h2 className="font-serif text-xl font-semibold tracking-tight">{selectedStudent.name}&apos;s Progress</h2>
+                    </div>
+                    <StudentEventLogsDialog classroomId={classroomId} student={selectedStudent} />
+                </div>
+
+                <div className="rounded-md border border-border/40 bg-background shadow-sm">
+                    <div className="p-4">
+                        <StudentProgressPanel
+                            classroomId={classroomId}
+                            student={selectedStudent}
+                        />
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     // LIST VIEW
     return (
         <div className="space-y-6 animate-fade-in-up">
-            <StudentProgressDialog
-                classroomId={classroomId}
-                student={selectedStudent}
-                onClose={() => setSelectedStudent(null)}
-            />
-
             <div className="flex items-center justify-between">
                 <h2 className="font-serif text-xl font-semibold tracking-tight">Enrolled Students</h2>
                 <Button size="sm" onClick={handleSwitchToAdd}>
@@ -243,7 +270,10 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                     <div
                                         key={enrollment.id}
                                         className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 py-3 px-2 group hover:bg-muted/30 transition-colors cursor-pointer rounded-md"
-                                        onClick={() => setSelectedStudent({ id: enrollment.student_id, name })}
+                                        onClick={() => {
+                                            setSelectedStudent({ id: enrollment.student_id, name })
+                                            setView('detail')
+                                        }}
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
