@@ -7,8 +7,10 @@ npm install
 npm run build
 pm2 restart physapp
 
+_______________________________
 
-
+After VM downgrade/upgrade:
+pm2 start npm --name "physapp" -- start
 
 
 _____________________
