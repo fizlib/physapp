@@ -20,7 +20,13 @@ interface StudentPointsSummary {
 }
 
 interface ClassroomEnrollment {
+    id: string
     student_id: string
+    profiles: {
+        first_name: string | null
+        last_name: string | null
+        email: string | null
+    } | null
 }
 
 interface AssignmentQuestionPoints {
