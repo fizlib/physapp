@@ -236,7 +236,13 @@ export function StudentAssignmentInterface({
                 newCompleted.size >= (isVariationMode ? requiredVariations : totalQuestions),
                 currentIndex,
                 Array.from(revealedIndices),
-                newAnswers
+                newAnswers,
+                {
+                    questionId,
+                    questionIndex,
+                    submittedAnswer: answer,
+                    isCorrect
+                }
             )
             if (saveResult.success && onProgressUpdate) onProgressUpdate()
         })
@@ -246,7 +252,7 @@ export function StudentAssignmentInterface({
     }
 
     // Points mode submission handler - one try per question
-    const handlePointsSubmit = async (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => {
+    const handlePointsSubmit = async (questionId: string, questionPoints: number, answer: string, isCorrect: boolean, questionIndex: number) => {
         // Lock this specific question
         setLockedQuestionIds(prev => new Set(prev).add(questionId))
 
@@ -257,7 +263,8 @@ export function StudentAssignmentInterface({
             isCorrect,
             questionPoints,
             totalQuestions,
-            isVariationMode ? requiredVariations : undefined
+            isVariationMode ? requiredVariations : undefined,
+            questionIndex
         )
 
         if (result.success) {
@@ -418,7 +425,9 @@ export function StudentAssignmentInterface({
                                                         disabled={lockedQuestionIds.has(q.id)}
                                                         submittedAnswer={submittedAnswers[q.id]}
                                                         submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[q.id] : undefined}
-                                                        onPointsSubmit={handlePointsSubmit}
+                                                        onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
+                                                            handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, index)
+                                                        }
                                                         onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
                                                         isRevealed={revealedIndices.has(index)}
                                                     />
@@ -583,7 +592,9 @@ export function StudentAssignmentInterface({
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
                                     submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[questions[currentIndex].id] : undefined}
-                                    onPointsSubmit={handlePointsSubmit}
+                                    onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
+                                        handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, currentIndex)
+                                    }
                                     onCheck={(ans, isCorrect) => handleAnswerCheck(questions[currentIndex].id, ans, isCorrect, currentIndex)}
                                     isRevealed={revealedIndices.has(currentIndex)}
                                 />

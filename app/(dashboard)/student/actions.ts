@@ -6,13 +6,23 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getClientIp } from '@/lib/ip'
 
+const HomeworkSubmissionEventSchema = z.object({
+    questionId: z.string().uuid(),
+    questionIndex: z.number().int().nonnegative(),
+    submittedAnswer: z.string(),
+    isCorrect: z.boolean()
+})
+
+type HomeworkSubmissionEventInput = z.infer<typeof HomeworkSubmissionEventSchema>
+
 const UpsertProgressSchema = z.object({
     assignmentId: z.string().uuid(),
     completedIndices: z.array(z.number()),
     isCompleted: z.boolean(),
     activeQuestionIndex: z.number().optional(),
     revealedIndices: z.array(z.number()).optional(),
-    submittedAnswers: z.record(z.string(), z.string()).optional()
+    submittedAnswers: z.record(z.string(), z.string()).optional(),
+    submissionEvent: HomeworkSubmissionEventSchema.optional()
 })
 
 const LogSolutionRevealClickSchema = z.object({
@@ -131,14 +141,15 @@ export async function upsertAssignmentProgress(
     isCompleted: boolean,
     activeQuestionIndex?: number,
     revealedIndices?: number[],
-    submittedAnswers?: Record<string, string>
+    submittedAnswers?: Record<string, string>,
+    submissionEvent?: HomeworkSubmissionEventInput
 ): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex, revealedIndices, submittedAnswers })
+    const validated = UpsertProgressSchema.safeParse({ assignmentId, completedIndices, isCompleted, activeQuestionIndex, revealedIndices, submittedAnswers, submissionEvent })
     if (!validated.success) return { success: false, error: "Invalid data" }
 
     // IP Enforcement Check
@@ -186,6 +197,45 @@ export async function upsertAssignmentProgress(
                 if (!bypass) {
                     return { success: false, error: "Access restricted: You have moved to a different network. Please reconnect to the classroom network to save progress." }
                 }
+            }
+        }
+    }
+
+    if (submissionEvent) {
+        if (!assignmentData) {
+            return { success: false, error: "Unauthorized" }
+        }
+
+        const collectionData = assignmentData.collections
+        const collection = Array.isArray(collectionData) ? collectionData[0] : collectionData
+        const isHomeworkAssignment = (collection as { category?: string | null } | null | undefined)?.category !== 'classwork'
+
+        if (isHomeworkAssignment) {
+            const { data: question, error: questionError } = await supabase
+                .from('questions')
+                .select('id')
+                .eq('id', submissionEvent.questionId)
+                .eq('assignment_id', assignmentId)
+                .maybeSingle()
+
+            if (questionError || !question) {
+                return { success: false, error: "Invalid question" }
+            }
+
+            const { error: submissionEventError } = await supabase
+                .from('homework_submission_events')
+                .insert({
+                    student_id: user.id,
+                    assignment_id: assignmentId,
+                    question_id: submissionEvent.questionId,
+                    question_index: submissionEvent.questionIndex,
+                    submitted_answer: submissionEvent.submittedAnswer,
+                    is_correct: submissionEvent.isCorrect
+                })
+
+            if (submissionEventError) {
+                console.error("Homework Submission Log Error", submissionEventError)
+                return { success: false, error: "Failed to log homework submission" }
             }
         }
     }
@@ -469,12 +519,17 @@ export async function submitPointsAnswer(
     isCorrect: boolean,
     pointsPerPart: number,
     totalQuestions: number,
-    requiredVariationsCount?: number
+    requiredVariationsCount?: number,
+    questionIndex?: number
 ): Promise<ActionState & { alreadySubmitted?: boolean }> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
+
+    if (questionIndex !== undefined && (!Number.isInteger(questionIndex) || questionIndex < 0)) {
+        return { success: false, error: "Invalid data" }
+    }
 
     // Fetch existing progress
     const { data: existing } = await supabase
@@ -492,6 +547,56 @@ export async function submitPointsAnswer(
     // Check if this specific question was already submitted
     if (submittedAnswers[questionId] !== undefined) {
         return { success: false, error: "Answer already submitted for this part", alreadySubmitted: true }
+    }
+
+    if (questionIndex !== undefined) {
+        const [{ data: assignmentData, error: assignmentError }, { data: question, error: questionError }] = await Promise.all([
+            supabase
+                .from('assignments')
+                .select(`
+                    collections (
+                        category
+                    )
+                `)
+                .eq('id', assignmentId)
+                .maybeSingle(),
+            supabase
+                .from('questions')
+                .select('id')
+                .eq('id', questionId)
+                .eq('assignment_id', assignmentId)
+                .maybeSingle()
+        ])
+
+        if (assignmentError || !assignmentData) {
+            return { success: false, error: "Unauthorized" }
+        }
+
+        if (questionError || !question) {
+            return { success: false, error: "Invalid question" }
+        }
+
+        const collectionData = assignmentData.collections
+        const collection = Array.isArray(collectionData) ? collectionData[0] : collectionData
+        const isHomeworkAssignment = (collection as { category?: string | null } | null | undefined)?.category !== 'classwork'
+
+        if (isHomeworkAssignment) {
+            const { error: submissionEventError } = await supabase
+                .from('homework_submission_events')
+                .insert({
+                    student_id: user.id,
+                    assignment_id: assignmentId,
+                    question_id: questionId,
+                    question_index: questionIndex,
+                    submitted_answer: submittedAnswer,
+                    is_correct: isCorrect
+                })
+
+            if (submissionEventError) {
+                console.error("Homework Submission Log Error", submissionEventError)
+                return { success: false, error: "Failed to log homework submission" }
+            }
+        }
     }
 
     // Add this question's submission
