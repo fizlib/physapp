@@ -17,7 +17,7 @@ export async function proxy(request: NextRequest) {
                     return request.cookies.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) => {
+                    cookiesToSet.forEach(({ name, value }) => {
                         request.cookies.set(name, value)
                     })
                     response = NextResponse.next({
@@ -33,11 +33,12 @@ export async function proxy(request: NextRequest) {
         }
     )
 
-    // Use getSession() instead of getUser() for faster middleware execution.
-    // getSession() validates the JWT locally without a network call to Supabase.
-    // This is safe for routing decisions; page components still use getUser() for secure verification.
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user ?? null
+    // Use getUser() for routing decisions to avoid stale-cookie loops:
+    // getSession() can treat an expired/stale cookie as authenticated in some cases,
+    // while server components/layouts use getUser() and may reject the same session.
+    // Using getUser() here keeps proxy auth decisions consistent with page auth checks.
+    const { data, error: userError } = await supabase.auth.getUser()
+    const user = userError ? null : data.user
 
     // Protected routes pattern
     const nextUrl = request.nextUrl
