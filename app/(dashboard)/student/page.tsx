@@ -56,19 +56,23 @@ export default async function StudentDashboard() {
                                     />
                                 </div>
                             )}
-                            <Link href={`/student/class/${classroom.id}`} className="group h-full">
-                                <Card className="h-full border-border/60 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
+                            <Link
+                                href={`/student/class/${classroom.id}`}
+                                className="group h-full rounded-xl touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                aria-label={`Open classroom: ${classroom.name}`}
+                            >
+                                <Card className="h-full border-border/60 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 group-active:scale-[0.99] group-active:border-primary/60 group-active:bg-primary/5">
                                     <CardHeader className="space-y-1">
                                         <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
                                             <BookOpen className="h-4 w-4" />
                                         </div>
-                                        <CardTitle className="font-medium tracking-tight group-hover:text-primary">
+                                        <CardTitle className="font-medium tracking-tight group-hover:text-primary group-active:text-primary">
                                             {classroom.name}
                                         </CardTitle>
 
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-sm text-muted-foreground group-hover:text-foreground/80">
+                                        <div className="text-sm text-muted-foreground group-hover:text-foreground/80 group-active:text-foreground/80">
                                             Peržiūrėti modulius ir užduotis &rarr;
                                         </div>
                                     </CardContent>

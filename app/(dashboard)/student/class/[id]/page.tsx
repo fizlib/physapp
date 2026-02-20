@@ -144,11 +144,15 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                 const isLocked = isRestrictedByIp || isTimeUp
 
                                                 return (
-                                                    <Card key={collection.id} className={`relative transition-colors bg-secondary/10 ${isLocked ? 'opacity-75 cursor-not-allowed' : 'hover:border-primary/50'}`}>
+                                                    <Card key={collection.id} className={`group relative transition-all bg-secondary/10 ${isLocked ? 'opacity-75 cursor-not-allowed' : 'cursor-pointer hover:border-primary/50'}`}>
                                                         {!isLocked && (
-                                                            <Link href={`/student/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                            <Link
+                                                                href={`/student/class/${id}/collection/${collection.id}`}
+                                                                aria-label={`Open collection: ${collection.title}`}
+                                                                className="absolute inset-0 z-10 rounded-xl touch-manipulation transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 active:bg-primary/10"
+                                                            />
                                                         )}
-                                                        <CardContent className="p-6 space-y-4 relative z-10 pointer-events-none">
+                                                        <CardContent className="p-6 space-y-4 relative z-20 pointer-events-none">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="space-y-1.5 flex-1 pr-4">
                                                                     <div className="flex items-center gap-2">
@@ -178,15 +182,17 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Darbas klasėje</span>
                                                             </div>
 
-                                                            <div className="flex items-center justify-between gap-4 pointer-events-auto">
+                                                            <div className="flex items-center justify-between gap-4">
                                                                 <div className="flex-1">
                                                                     {collection.slides_url && (
-                                                                        <SlidesButton
-                                                                            url={collection.slides_url}
-                                                                            title={collection.title}
-                                                                            variant="secondary"
-                                                                            className="h-8 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
-                                                                        />
+                                                                        <div className="pointer-events-auto relative z-30 inline-flex">
+                                                                            <SlidesButton
+                                                                                url={collection.slides_url}
+                                                                                title={collection.title}
+                                                                                variant="secondary"
+                                                                                className="h-8 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
+                                                                            />
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -218,9 +224,13 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                             {collections.filter((c: any) => c.category === 'homework' || !c.category).map((collection: any) => {
                                                 const progress = getCollectionProgress(collection)
                                                 return (
-                                                    <Card key={collection.id} className="relative hover:border-primary/50 transition-colors bg-secondary/10">
-                                                        <Link href={`/student/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
-                                                        <CardContent className="p-6 space-y-4 relative z-10 pointer-events-none">
+                                                    <Card key={collection.id} className="group relative cursor-pointer hover:border-primary/50 transition-all bg-secondary/10">
+                                                        <Link
+                                                            href={`/student/class/${id}/collection/${collection.id}`}
+                                                            aria-label={`Open collection: ${collection.title}`}
+                                                            className="absolute inset-0 z-10 rounded-xl touch-manipulation transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 active:bg-primary/10"
+                                                        />
+                                                        <CardContent className="p-6 space-y-4 relative z-20 pointer-events-none">
                                                             <div className="flex justify-between items-start">
                                                                 <div className="space-y-1.5 flex-1 pr-4">
                                                                     <h3 className="font-semibold leading-none">{collection.title}</h3>
@@ -234,7 +244,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                             </div>
 
                                                             {collection.slides_url && (
-                                                                <div className="pt-1 pointer-events-auto">
+                                                                <div className="pt-1 pointer-events-auto relative z-30">
                                                                     <SlidesButton
                                                                         url={collection.slides_url}
                                                                         title={collection.title}
@@ -245,7 +255,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                             )}
 
                                                             {/* Progress Section */}
-                                                            <div className="space-y-2 pointer-events-auto">
+                                                            <div className="space-y-2">
                                                                 {progress > 0 && progress < 100 && (
                                                                     <div className="flex justify-between text-xs text-muted-foreground">
                                                                         <span>{Math.round(progress)}% Atlikta</span>
