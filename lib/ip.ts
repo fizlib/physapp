@@ -1,5 +1,9 @@
 import { headers } from 'next/headers'
 
+let cachedDevPublicIp: string | null = null
+let cachedDevPublicIpFetchedAt = 0
+const DEV_PUBLIC_IP_CACHE_TTL_MS = 5 * 60 * 1000
+
 export async function getClientIp() {
     const headerList = await headers()
 
@@ -18,25 +22,43 @@ export async function getClientIp() {
         ip = ip.substring(7)
     }
 
-    // Determine if we're in local development (no forwarded headers and local IP)
-    const isLocalDevelopment = !forwardedFor && !realIp && isLocalIp(ip)
+    // Optional fallback for local development only.
+    // Keep disabled by default to avoid network latency in server rendering.
+    const shouldUsePublicFallback =
+        process.env.NODE_ENV === 'development' &&
+        process.env.ENABLE_PUBLIC_IP_FALLBACK === 'true' &&
+        !forwardedFor &&
+        !realIp &&
+        isLocalIp(ip)
 
-    // Only use external service fallback during LOCAL DEVELOPMENT
-    // In production, we must trust the proxy headers - external service would return server IP
-    if (isLocalDevelopment) {
+    if (shouldUsePublicFallback) {
+        const now = Date.now()
+        if (cachedDevPublicIp && now - cachedDevPublicIpFetchedAt < DEV_PUBLIC_IP_CACHE_TTL_MS) {
+            return cachedDevPublicIp
+        }
+
+        let timeoutId: ReturnType<typeof setTimeout> | null = null
         try {
             const controller = new AbortController()
-            const id = setTimeout(() => controller.abort(), 2000)
+            timeoutId = setTimeout(() => controller.abort(), 800)
 
-            const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal })
-            clearTimeout(id)
+            const res = await fetch('https://api.ipify.org?format=json', {
+                signal: controller.signal,
+                cache: 'no-store',
+            })
 
             if (res.ok) {
                 const data = await res.json()
-                if (data.ip) ip = data.ip
+                if (data.ip) {
+                    ip = data.ip
+                    cachedDevPublicIp = data.ip
+                    cachedDevPublicIpFetchedAt = now
+                }
             }
         } catch (e) {
             console.warn('Failed to fetch public IP fallback:', e)
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId)
         }
     }
 

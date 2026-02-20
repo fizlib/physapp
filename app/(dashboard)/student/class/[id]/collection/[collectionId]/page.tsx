@@ -4,10 +4,52 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
-import { getSiteSetting } from "@/app/(dashboard)/admin/settings/actions"
+import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
 import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+
+interface CollectionData {
+    id: string
+    classroom_id: string
+    title: string
+    category: string | null
+    slides_url: string | null
+    scheduled_end_at: string | null
+    test_mode_ends_at: string | null
+}
+
+interface AssignmentMetaRow {
+    id: string
+    title: string
+    published: boolean
+    order_index: number | null
+    points_enabled: boolean | null
+}
+
+interface AssignmentQuestionRow {
+    id: string
+    created_at: string
+    latex_text: string
+    question_type: string
+    correct_value: number | null
+    tolerance_percent: number | null
+    options: string[] | null
+    correct_answer: string | null
+    points: number | null
+    solution_text: string | null
+    diagram_type: string | null
+    diagram_latex: string | null
+    diagram_svg: string | null
+    diagram_image_url: string | null
+}
+
+interface PublishedAssignmentRow extends AssignmentMetaRow {
+    points: number | null
+    required_variations_count: number | null
+    show_all_questions: boolean | null
+    questions: AssignmentQuestionRow[] | null
+}
 
 export default async function StudentCollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
     const supabase = await createClient()
@@ -17,47 +59,213 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     if (!user) return <div>Please log in</div>
 
     const studentIp = await getClientIp()
+    const nowIso = new Date().toISOString()
 
-    // Fetch collection with assignments and their questions
-    // This deep fetch is important
-    const { data: collection } = await supabase
-        .from('collections')
-        .select(`
-            *,
-            assignments (
-                *,
-                questions (*)
-            )
-        `)
-        .eq('id', collectionId)
-        .eq('classroom_id', id)
-        .single()
+    // Fetch collection plus assignment data in two shapes:
+    // - metadata for all assignments (including unpublished)
+    // - full assignment+question payload for published assignments only
+    const [collectionResult, allAssignmentsResult, publishedAssignmentsResult] = await Promise.all([
+        supabase
+            .from('collections')
+            .select(`
+                id,
+                classroom_id,
+                title,
+                category,
+                slides_url,
+                scheduled_end_at,
+                test_mode_ends_at
+            `)
+            .eq('id', collectionId)
+            .eq('classroom_id', id)
+            .single(),
+        supabase
+            .from('assignments')
+            .select('id, title, published, order_index, points_enabled')
+            .eq('collection_id', collectionId)
+            .order('order_index', { ascending: true }),
+        supabase
+            .from('assignments')
+            .select('*, questions(*)')
+            .eq('collection_id', collectionId)
+            .eq('published', true)
+            .order('order_index', { ascending: true }),
+    ])
+
+    const collection = collectionResult.data as CollectionData | null
 
     if (!collection) notFound()
 
-    // Store all assignments (including unpublished) for dropdown and waiting state
-    const allAssignments = collection.assignments ? [...collection.assignments].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) : []
+    let allAssignmentsRows = (allAssignmentsResult.data || []) as AssignmentMetaRow[]
+    let publishedAssignments = (publishedAssignmentsResult.data || []) as PublishedAssignmentRow[]
+    let assignmentLoadError: string | null = null
 
-    // Filter out unpublished assignments for the main player
-    if (collection.assignments) {
-        collection.assignments = collection.assignments.filter((a: any) => a.published)
+    if (allAssignmentsResult.error) {
+        console.error('Collection assignment metadata query failed', {
+            classroomId: id,
+            collectionId,
+            error: allAssignmentsResult.error.message,
+        })
     }
 
-    // 2. IP Restriction Check
-    const { data: classroom } = await supabase
-        .from('classrooms')
-        .select('allowed_ip, ip_check_enabled')
-        .eq('id', id)
-        .single()
+    if (publishedAssignmentsResult.error) {
+        console.error('Collection published assignments query failed', {
+            classroomId: id,
+            collectionId,
+            error: publishedAssignmentsResult.error.message,
+        })
+    }
 
-    // Check for IP bypass
-    const { data: bypass } = await createAdminClient()
-        .from('ip_bypasses')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('collection_id', collectionId)
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle()
+    const publishedMetaCount = allAssignmentsRows.filter((assignment) => !!assignment.published).length
+    const shouldRunFallback =
+        !!allAssignmentsResult.error ||
+        !!publishedAssignmentsResult.error ||
+        (publishedMetaCount > 0 && publishedAssignments.length === 0)
+
+    if (shouldRunFallback) {
+        if (!allAssignmentsResult.error && !publishedAssignmentsResult.error && publishedMetaCount > 0 && publishedAssignments.length === 0) {
+            console.warn('Collection assignment query mismatch detected', {
+                classroomId: id,
+                collectionId,
+                publishedMetaCount,
+                publishedAssignmentsPayloadCount: publishedAssignments.length,
+            })
+        }
+
+        const fallbackResult = await supabase
+            .from('collections')
+            .select(`
+                id,
+                assignments (
+                    *,
+                    questions (*)
+                )
+            `)
+            .eq('id', collectionId)
+            .eq('classroom_id', id)
+            .single()
+
+        if (fallbackResult.error || !fallbackResult.data) {
+            console.error('Collection assignments fallback query failed', {
+                classroomId: id,
+                collectionId,
+                error: fallbackResult.error?.message || 'No fallback data',
+            })
+
+            const shouldShowLoadError =
+                !!publishedAssignmentsResult.error ||
+                (!!allAssignmentsResult.error && publishedAssignments.length === 0)
+
+            if (shouldShowLoadError) {
+                assignmentLoadError = 'Nepavyko įkelti rinkinio užduočių.'
+            }
+        } else {
+            const fallbackAssignments = ((fallbackResult.data as { assignments?: PublishedAssignmentRow[] }).assignments || [])
+            const fallbackPublishedAssignments = fallbackAssignments.filter((assignment) => !!assignment.published)
+
+            if (allAssignmentsResult.error || allAssignmentsRows.length === 0) {
+                allAssignmentsRows = fallbackAssignments.map((assignment) => ({
+                    id: assignment.id,
+                    title: assignment.title,
+                    published: !!assignment.published,
+                    order_index: assignment.order_index,
+                    points_enabled: assignment.points_enabled,
+                }))
+            }
+
+            if (publishedAssignmentsResult.error || publishedAssignments.length === 0) {
+                publishedAssignments = fallbackPublishedAssignments
+            }
+
+            console.warn('Collection loader recovered with fallback assignments query', {
+                classroomId: id,
+                collectionId,
+                totalAssignments: fallbackAssignments.length,
+                publishedAssignments: fallbackPublishedAssignments.length,
+            })
+        }
+    }
+
+    // Published assignments are the only ones rendered in player state.
+    publishedAssignments = publishedAssignments
+        .map((assignment) => ({
+            ...assignment,
+            questions: assignment.questions
+                ? [...assignment.questions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                : assignment.questions,
+        }))
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+
+    if (allAssignmentsRows.length === 0 && publishedAssignments.length > 0) {
+        allAssignmentsRows = publishedAssignments.map((assignment) => ({
+            id: assignment.id,
+            title: assignment.title,
+            published: !!assignment.published,
+            order_index: assignment.order_index,
+            points_enabled: assignment.points_enabled,
+        }))
+    }
+
+    const allAssignmentsMeta = allAssignmentsRows
+        .map((assignment) => ({
+            id: assignment.id,
+            title: assignment.title,
+            order_index: assignment.order_index,
+            published: !!assignment.published,
+            points_enabled: !!assignment.points_enabled,
+        }))
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+
+    if (!assignmentLoadError && allAssignmentsRows.length > 0 && publishedAssignments.length === 0) {
+        console.info('Collection has assignments but none are currently published', {
+            classroomId: id,
+            collectionId,
+            totalAssignments: allAssignmentsRows.length,
+        })
+    }
+
+    const assignmentIds = publishedAssignments.map((assignment) => assignment.id)
+    const progressPromise = assignmentIds.length > 0
+        ? supabase
+            .from('assignment_progress')
+            .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part')
+            .eq('student_id', user.id)
+            .in('assignment_id', assignmentIds)
+        : Promise.resolve({ data: null as {
+            assignment_id: string
+            completed_question_indices: number[] | null
+            revealed_question_indices: number[] | null
+            is_completed: boolean
+            active_question_index: number | null
+            submitted_answers: Record<string, string> | null
+            earned_points_per_part: Record<string, number> | null
+        }[] | null })
+
+    const [classroomResult, bypassResult, progressResult, settings] = await Promise.all([
+        supabase
+            .from('classrooms')
+            .select('allowed_ip, ip_check_enabled')
+            .eq('id', id)
+            .single(),
+        createAdminClient()
+            .from('ip_bypasses')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('collection_id', collectionId)
+            .gt('expires_at', nowIso)
+            .maybeSingle(),
+        progressPromise,
+        getSiteSettings(['test_mode_polling_enabled', 'virtual_keyboard_toggle_enabled']),
+    ])
+
+    const { data: classroom } = classroomResult
+    const { data: bypass } = bypassResult
+    const progressData = progressResult.data || []
+
+    const collectionForPlayer = {
+        ...collection,
+        assignments: publishedAssignments,
+    }
 
     const isRestricted = collection.category === 'classwork' &&
         classroom?.ip_check_enabled &&
@@ -119,52 +327,38 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         )
     }
 
-
-    // Key Step: Sort assignments by order_index
-    if (collection.assignments) {
-        collection.assignments.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
-
-        // Also sort questions for each assignment just in case
-        collection.assignments.forEach((assign: any) => {
-            if (assign.questions) {
-                // Assuming creation order is fine for questions, but if we had question index, use it.
-                // Database usually returns in insertion order or arbitrary.
-                // Ideally add .order() to the query, but nested order in Supabase JS is tricky.
-                // Simple sort by created_at
-                assign.questions.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-            }
-        })
+    if (assignmentLoadError) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Nepavyko įkelti rinkinio</h1>
+                        <p className="text-muted-foreground">
+                            {assignmentLoadError} Bandykite dar kartą.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={`/student/class/${id}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į klasę
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
     }
 
-    // Fetch progress
-    const assignmentIds = collection.assignments?.map((a: any) => a.id) || []
-    let progressData: any[] = []
 
-    if (assignmentIds.length > 0) {
-        const { data: progress } = await supabase
-            .from('assignment_progress')
-            .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part')
-            .eq('student_id', user.id)
-            .in('assignment_id', assignmentIds)
-
-        if (progress) {
-            progressData = progress
-        }
-    }
-
-    // Fetch polling setting
-    const pollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
-    const testModePollingEnabled = (pollingEnabledStr ?? 'true').toLowerCase() === 'true'
-    const virtualKeyboardToggleEnabledStr = await getSiteSetting('virtual_keyboard_toggle_enabled')
-    const virtualKeyboardToggleEnabled = (virtualKeyboardToggleEnabledStr ?? 'true').toLowerCase() === 'true'
+    const testModePollingEnabled = (settings.test_mode_polling_enabled ?? 'true').toLowerCase() === 'true'
+    const virtualKeyboardToggleEnabled = (settings.virtual_keyboard_toggle_enabled ?? 'true').toLowerCase() === 'true'
 
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
             <CollectionPlayer
-                collection={collection}
+                collection={collectionForPlayer}
                 classroomId={id}
                 progressData={progressData}
-                allAssignments={allAssignments}
+                allAssignmentsMeta={allAssignmentsMeta}
                 testModePollingEnabled={testModePollingEnabled}
                 showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
             />

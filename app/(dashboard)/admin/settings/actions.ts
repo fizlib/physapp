@@ -19,6 +19,33 @@ export async function getSiteSetting(key: string) {
     return data?.value ?? null
 }
 
+export async function getSiteSettings(keys: string[]): Promise<Record<string, string | null>> {
+    const uniqueKeys = Array.from(new Set(keys.filter(Boolean)))
+    if (uniqueKeys.length === 0) return {}
+
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('site_settings')
+        .select('key, value')
+        .in('key', uniqueKeys)
+
+    const settings: Record<string, string | null> = {}
+    uniqueKeys.forEach((key) => {
+        settings[key] = null
+    })
+
+    if (error) {
+        console.error('Error fetching settings:', error)
+        return settings
+    }
+
+    data?.forEach((row) => {
+        settings[row.key] = row.value ?? null
+    })
+
+    return settings
+}
+
 export async function updateSiteSetting(key: string, value: string) {
     const supabase = await createClient()
 

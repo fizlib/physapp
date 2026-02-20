@@ -27,11 +27,19 @@ import {
 import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
 import { SlidesButton } from "@/components/student/SlidesButton"
 
+interface AssignmentMeta {
+    id: string
+    title?: string | null
+    order_index?: number | null
+    published?: boolean
+    points_enabled?: boolean
+}
+
 interface CollectionPlayerProps {
     collection: any
     classroomId: string
     progressData?: any[]
-    allAssignments?: any[] // All assignments including unpublished, for tracking waiting state
+    allAssignmentsMeta?: AssignmentMeta[] // All assignments including unpublished (metadata only)
     testModePollingEnabled?: boolean // Admin setting to enable/disable test mode polling
     showVirtualKeyboardToggle?: boolean // Admin setting to show/hide student virtual keyboard toggle button
 }
@@ -40,7 +48,7 @@ export function CollectionPlayer({
     collection,
     classroomId,
     progressData = [],
-    allAssignments: initialAllAssignments = [],
+    allAssignmentsMeta: initialAllAssignmentsMeta = [],
     testModePollingEnabled = true,
     showVirtualKeyboardToggle = true
 }: CollectionPlayerProps) {
@@ -49,10 +57,15 @@ export function CollectionPlayer({
 
     // Use state for assignments so we can dynamically add newly published ones
     const [assignments, setAssignments] = useState(collection.assignments || [])
-    // Also track allAssignments as state to update dropdown locked status
-    const [allAssignmentsState, setAllAssignmentsState] = useState(initialAllAssignments)
+    // Track metadata for all assignments to drive dropdown and waiting logic.
+    const [allAssignmentsMetaState, setAllAssignmentsMetaState] = useState(initialAllAssignmentsMeta)
     // Track progress data as state so we can refresh it when assignments update
     const [progressDataState, setProgressDataState] = useState(progressData)
+
+    const sortedAllAssignmentsMeta = useMemo(
+        () => [...allAssignmentsMetaState].sort((a: AssignmentMeta, b: AssignmentMeta) => (a.order_index || 0) - (b.order_index || 0)),
+        [allAssignmentsMetaState]
+    )
 
     // Determine initial state based on progress
     // Create a map for easy lookup - use useMemo to recalculate when progressDataState changes
@@ -166,6 +179,12 @@ export function CollectionPlayer({
 
     const totalAssignments = assignments.length
     const currentAssignment = assignments[currentAssignmentIndex]
+    const currentDisplayedAssignmentNumber = useMemo(() => {
+        if (!currentAssignment) return currentAssignmentIndex + 1
+        if (sortedAllAssignmentsMeta.length === 0) return currentAssignmentIndex + 1
+        const index = sortedAllAssignmentsMeta.findIndex((assignment) => assignment.id === currentAssignment.id)
+        return index >= 0 ? index + 1 : currentAssignmentIndex + 1
+    }, [currentAssignment, currentAssignmentIndex, sortedAllAssignmentsMeta])
 
     // Points results state
     const [pointsResults, setPointsResults] = useState<{
@@ -223,14 +242,10 @@ export function CollectionPlayer({
 
     // Find the next assignment (could be unpublished)
     const getNextAssignmentFromAllAssignments = () => {
-        if (!allAssignmentsState.length) return null
-        // Find current assignment's order_index
-        const currentOrderIndex = currentAssignment?.order_index ?? 0
-        // Find the next assignment by order_index
-        const sorted = [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
-        const currentPos = sorted.findIndex((a: any) => a.id === currentAssignment?.id)
-        if (currentPos >= 0 && currentPos < sorted.length - 1) {
-            return sorted[currentPos + 1]
+        if (sortedAllAssignmentsMeta.length === 0) return null
+        const currentPos = sortedAllAssignmentsMeta.findIndex((assignment) => assignment.id === currentAssignment?.id)
+        if (currentPos >= 0 && currentPos < sortedAllAssignmentsMeta.length - 1) {
+            return sortedAllAssignmentsMeta[currentPos + 1]
         }
         return null
     }
@@ -383,8 +398,14 @@ export function CollectionPlayer({
 
                 if (assignmentsResult.success && assignmentsResult.assignments) {
                     // The exercise we are waiting for is now published
-                    // Update both lists from the fresh data
-                    setAllAssignmentsState(assignmentsResult.assignments)
+                    // Update both lists from fresh data
+                    setAllAssignmentsMetaState(assignmentsResult.assignments.map((assignment: any) => ({
+                        id: assignment.id,
+                        title: assignment.title,
+                        order_index: assignment.order_index,
+                        published: !!assignment.published,
+                        points_enabled: !!assignment.points_enabled,
+                    })))
                     setAssignments(assignmentsResult.assignments.filter(a => a.published))
 
                     // Also refresh progress data to ensure we have correct state for all assignments
@@ -544,9 +565,14 @@ export function CollectionPlayer({
     }
 
     if (assignments.length === 0) {
+        const hasAnyAssignmentsInCollection = sortedAllAssignmentsMeta.length > 0
         return (
             <div className="text-center py-12">
-                <p>Šiame rinkinyje nėra užduočių.</p>
+                <p>
+                    {hasAnyAssignmentsInCollection
+                        ? 'Šiame rinkinyje dar nėra paskelbtų užduočių. Palaukite, kol mokytojas jas paskelbs.'
+                        : 'Šiame rinkinyje nėra užduočių.'}
+                </p>
                 <Button asChild className="mt-4" variant="outline">
                     <Link href={`/student/class/${classroomId}`}>Grįžti į klasę</Link>
                 </Button>
@@ -737,16 +763,14 @@ export function CollectionPlayer({
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                                    Užduotis {allAssignmentsState.length > 0 ? [...allAssignmentsState].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1 : currentAssignmentIndex + 1} iš {allAssignmentsState.length > 0 ? allAssignmentsState.length : totalAssignments}
+                                    Užduotis {currentDisplayedAssignmentNumber} iš {sortedAllAssignmentsMeta.length > 0 ? sortedAllAssignmentsMeta.length : totalAssignments}
                                     <ChevronDown className="ml-2 h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                {allAssignmentsState.length > 0 ? (
+                                {sortedAllAssignmentsMeta.length > 0 ? (
                                     // Show all assignments including unpublished ones
-                                    [...allAssignmentsState]
-                                        .sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0))
-                                        .map((assignment: any, index: number) => {
+                                    sortedAllAssignmentsMeta.map((assignment: AssignmentMeta, index: number) => {
                                             const isPublished = assignment.published
                                             const publishedIndex = assignments.findIndex((a: any) => a.id === assignment.id)
                                             const isCurrent = assignment.id === currentAssignment?.id
@@ -891,7 +915,7 @@ export function CollectionPlayer({
                         initialIsCompleted={currentIsCompleted}
                         initialActiveQuestionIndex={currentActiveIndex}
                         hideRevealSolution={collection.category === 'classwork'}
-                        exerciseNumber={allAssignmentsState.length > 0 ? (allAssignmentsState.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)).findIndex((a: any) => a.id === currentAssignment?.id) + 1) : (currentAssignmentIndex + 1)}
+                        exerciseNumber={currentDisplayedAssignmentNumber}
                         // Points mode props
                         pointsEnabled={currentAssignment.points_enabled || false}
                         exercisePoints={currentAssignment.points || 1}

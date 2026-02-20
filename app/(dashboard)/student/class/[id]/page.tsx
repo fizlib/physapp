@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, Activity, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
+import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -18,35 +18,41 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
     if (!user) return <div>Prašome prisijungti</div>
 
-    // 1. Fetch Classroom, Published Standalone Assignments, and Collections
-    const [classroomResult, assignmentsResult, collectionsResult, bypassesResult] = await Promise.all([
+    const nowIso = new Date().toISOString()
+
+    // 1. Fetch classroom and collections (standalone assignments are hidden in UI)
+    const [classroomResult, collectionsResult, bypassesResult] = await Promise.all([
         supabase
             .from('classrooms')
-            .select('*')
+            .select('id, name, allowed_ip, ip_check_enabled')
             .eq('id', id)
             .single(),
         supabase
-            .from('assignments')
-            .select('*, questions(count)')
-            .eq('classroom_id', id)
-            .eq('published', true)
-            .is('collection_id', null) // Only show standalone assignments here
-            .order('created_at', { ascending: false }),
-        supabase
             .from('collections')
-            .select('*, assignments(*)')
+            .select(`
+                id,
+                title,
+                category,
+                created_at,
+                scheduled_date,
+                scheduled_end_at,
+                slides_url,
+                assignments (
+                    id,
+                    published
+                )
+            `)
             .eq('classroom_id', id)
-            .or(`scheduled_date.is.null,scheduled_date.lte.${new Date().toISOString()}`)
+            .or(`scheduled_date.is.null,scheduled_date.lte.${nowIso}`)
             .order('created_at', { ascending: false }),
         createAdminClient()
             .from('ip_bypasses')
             .select('collection_id')
             .eq('user_id', user.id)
-            .gt('expires_at', new Date().toISOString())
+            .gt('expires_at', nowIso)
     ])
 
     const { data: classroom } = classroomResult
-    const { data: assignments } = assignmentsResult
     let { data: collections } = collectionsResult
     const { data: activeBypasses } = bypassesResult
 
@@ -70,7 +76,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
     // Fetch progress for all assignments in collections
     const allCollectionAssignmentIds = collections?.flatMap((c: any) => c.assignments.map((a: any) => a.id)) || []
 
-    let completedAssignmentIds = new Set<string>()
+    const completedAssignmentIds = new Set<string>()
     if (allCollectionAssignmentIds.length > 0) {
         const { data: progressData } = await supabase
             .from('assignment_progress')
