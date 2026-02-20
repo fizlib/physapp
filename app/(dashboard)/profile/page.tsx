@@ -2,25 +2,26 @@ import { createClient } from "@/lib/supabase/server"
 import { LogoutButton } from "@/components/logout-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { User, Mail, Shield } from "lucide-react"
+import { redirect } from "next/navigation"
 
 export default async function ProfilePage() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
-    let profile = null
-    if (user) {
-        const { data } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single()
-        profile = data
+    if (!user) {
+        redirect('/login')
     }
 
-    if (!user || !profile) {
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+    if (!profile) {
         return (
             <div className="flex h-screen items-center justify-center text-muted-foreground">
-                Prašome prisijungti, kad matytumėte savo profilį.
+                Unable to load profile.
             </div>
         )
     }

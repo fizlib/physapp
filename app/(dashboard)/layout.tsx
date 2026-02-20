@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Atom, BookOpen, Home, Shield, User } from "lucide-react";
+import { BookOpen, Home, Shield, User, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
 import { Logo } from "@/components/logo";
@@ -8,23 +8,17 @@ import { getCachedUser, getCachedProfile, getCachedStudentClassroom } from "@/li
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
     const user = await getCachedUser();
 
-    if (user) {
-        const profile = await getCachedProfile(user.id);
-        if (!profile?.approved) {
-            redirect('/waiting-approval');
-        }
+    if (!user) {
+        redirect('/login');
     }
 
-    let isAdmin = false;
-    let studentClassroomId = null;
-
-    if (user) {
-        const profile = await getCachedProfile(user.id);
-        isAdmin = !!profile?.is_admin;
-        if (!isAdmin) {
-            studentClassroomId = await getCachedStudentClassroom(user.id);
-        }
+    const profile = await getCachedProfile(user.id);
+    if (!profile?.approved) {
+        redirect('/waiting-approval');
     }
+
+    const isAdmin = !!profile?.is_admin;
+    const studentClassroomId = !isAdmin ? await getCachedStudentClassroom(user.id) : null;
 
     return (
         <div className="flex min-h-screen flex-col md:flex-row bg-background">
@@ -64,7 +58,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     );
 }
 
-function NavItem({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
+function NavItem({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
     return (
         <Link
             href={href}
@@ -76,7 +70,7 @@ function NavItem({ href, icon: Icon, label }: { href: string; icon: any; label: 
     );
 }
 
-function MobileNavItem({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
+function MobileNavItem({ href, icon: Icon, label }: { href: string; icon: LucideIcon; label: string }) {
     return (
         <Link
             href={href}
