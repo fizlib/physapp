@@ -11,6 +11,8 @@ export default async function AdminSettingsPage() {
 
     const testModePollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
     const testModePollingEnabled = (testModePollingEnabledStr ?? 'true').toLowerCase() === 'true'
+    const virtualKeyboardToggleEnabledStr = await getSiteSetting('virtual_keyboard_toggle_enabled')
+    const virtualKeyboardToggleEnabled = (virtualKeyboardToggleEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <div className="p-8 max-w-7xl mx-auto">
@@ -32,6 +34,7 @@ export default async function AdminSettingsPage() {
                 <SettingsForm
                     initialRegistrationEnabled={registrationEnabled}
                     initialTestModePollingEnabled={testModePollingEnabled}
+                    initialVirtualKeyboardToggleEnabled={virtualKeyboardToggleEnabled}
                 />
                 <GeminiKeysManager initialKeys={await getGeminiKeys()} />
             </div>

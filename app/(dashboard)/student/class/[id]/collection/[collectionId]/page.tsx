@@ -155,10 +155,19 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     // Fetch polling setting
     const pollingEnabledStr = await getSiteSetting('test_mode_polling_enabled')
     const testModePollingEnabled = (pollingEnabledStr ?? 'true').toLowerCase() === 'true'
+    const virtualKeyboardToggleEnabledStr = await getSiteSetting('virtual_keyboard_toggle_enabled')
+    const virtualKeyboardToggleEnabled = (virtualKeyboardToggleEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
-            <CollectionPlayer collection={collection} classroomId={id} progressData={progressData} allAssignments={allAssignments} testModePollingEnabled={testModePollingEnabled} />
+            <CollectionPlayer
+                collection={collection}
+                classroomId={id}
+                progressData={progressData}
+                allAssignments={allAssignments}
+                testModePollingEnabled={testModePollingEnabled}
+                showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
+            />
         </Suspense>
     )
 }

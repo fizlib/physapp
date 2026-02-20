@@ -37,6 +37,10 @@ export async function updateSiteSetting(key: string, value: string) {
     if (key === 'test_mode_polling_enabled') {
         revalidatePath('/student/class/[id]/collection/[collectionId]', 'page')
     }
+    if (key === 'virtual_keyboard_toggle_enabled') {
+        revalidatePath('/student/class/[id]/collection/[collectionId]', 'page')
+        revalidatePath('/student/class/[id]/assignment/[assignmentId]', 'page')
+    }
     return { success: true }
 }
 

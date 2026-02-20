@@ -33,6 +33,7 @@ export function StudentAssignmentInterface({
     initialSubmittedAnswers = {},
     initialEarnedPointsPerPart = {},
     isLastExercise = false,
+    showVirtualKeyboardToggle = true,
     onProgressUpdate
 }: {
     assignment: any,
@@ -53,6 +54,7 @@ export function StudentAssignmentInterface({
     initialSubmittedAnswers?: Record<string, string>,
     initialEarnedPointsPerPart?: Record<string, number>,
     isLastExercise?: boolean,
+    showVirtualKeyboardToggle?: boolean,
     onProgressUpdate?: () => void
 }) {
     const questions = assignment.questions || []
@@ -419,6 +421,7 @@ export function StudentAssignmentInterface({
                                                     <TestInterface
                                                         key={q.id || index}
                                                         question={q}
+                                                        showVirtualKeyboardToggle={showVirtualKeyboardToggle}
                                                         questionId={q.id}
                                                         questionPoints={q.points || 1}
                                                         pointsMode={pointsEnabled}
@@ -586,6 +589,7 @@ export function StudentAssignmentInterface({
                                 <TestInterface
                                     key={questions[currentIndex].id || currentIndex}
                                     question={questions[currentIndex]}
+                                    showVirtualKeyboardToggle={showVirtualKeyboardToggle}
                                     questionId={questions[currentIndex].id}
                                     questionPoints={questions[currentIndex].points || 1}
                                     pointsMode={pointsEnabled}

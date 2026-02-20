@@ -9,9 +9,17 @@ interface MathInputProps {
     onKeyDown?: (e: React.KeyboardEvent) => void;
     placeholder?: string;
     className?: string;
+    showVirtualKeyboardToggle?: boolean;
 }
 
-export default function MathInput({ value, onChange, onKeyDown, placeholder, className }: MathInputProps) {
+export default function MathInput({
+    value,
+    onChange,
+    onKeyDown,
+    placeholder,
+    className,
+    showVirtualKeyboardToggle = true
+}: MathInputProps) {
     const mfe = useRef<any>(null);
     const [mounted, setMounted] = useState(false);
 
@@ -65,6 +73,11 @@ export default function MathInput({ value, onChange, onKeyDown, placeholder, cla
                 math-field::part(menu-handle) {
                     display: none !important;
                 }
+                ${showVirtualKeyboardToggle ? '' : `
+                math-field::part(virtual-keyboard-toggle) {
+                    display: none !important;
+                }
+                `}
             `}</style>
             {/* @ts-ignore */}
             <math-field

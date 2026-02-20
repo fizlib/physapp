@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { BookOpen } from "lucide-react"
 import { StudentAssignmentInterface } from "./StudentAssignmentInterface"
+import { getSiteSetting } from "@/app/(dashboard)/admin/settings/actions"
 
 export default async function StudentAssignmentPage({ params }: { params: Promise<{ id: string, assignmentId: string }> }) {
     const supabase = await createClient()
@@ -37,6 +38,8 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
     const initialCompletedIndices = progress?.completed_question_indices || []
     const initialRevealedIndices = progress?.revealed_question_indices || []
     const initialIsCompleted = progress?.is_completed || false
+    const virtualKeyboardToggleEnabledStr = await getSiteSetting('virtual_keyboard_toggle_enabled')
+    const virtualKeyboardToggleEnabled = (virtualKeyboardToggleEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -55,6 +58,7 @@ export default async function StudentAssignmentPage({ params }: { params: Promis
                 <StudentAssignmentInterface
                     assignment={assignment}
                     classId={id}
+                    showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
                     initialCompletedIndices={initialCompletedIndices}
                     initialRevealedIndices={initialRevealedIndices}
                     initialActiveQuestionIndex={progress?.active_question_index}

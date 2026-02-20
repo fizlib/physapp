@@ -10,11 +10,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 interface SettingsFormProps {
     initialRegistrationEnabled: boolean
     initialTestModePollingEnabled: boolean
+    initialVirtualKeyboardToggleEnabled: boolean
 }
 
-export function SettingsForm({ initialRegistrationEnabled, initialTestModePollingEnabled }: SettingsFormProps) {
+export function SettingsForm({
+    initialRegistrationEnabled,
+    initialTestModePollingEnabled,
+    initialVirtualKeyboardToggleEnabled
+}: SettingsFormProps) {
     const [registrationEnabled, setRegistrationEnabled] = useState(initialRegistrationEnabled)
     const [testModePollingEnabled, setTestModePollingEnabled] = useState(initialTestModePollingEnabled)
+    const [virtualKeyboardToggleEnabled, setVirtualKeyboardToggleEnabled] = useState(initialVirtualKeyboardToggleEnabled)
     const [isLoading, setIsLoading] = useState(false)
 
     const handleRegistrationToggle = async (checked: boolean) => {
@@ -43,6 +49,21 @@ export function SettingsForm({ initialRegistrationEnabled, initialTestModePollin
             toast.error("Error", { description: "Failed to update setting." })
         } else {
             toast.success("Success", { description: `Test mode polling is now ${checked ? 'enabled' : 'disabled'}.` })
+        }
+        setIsLoading(false)
+    }
+
+    const handleVirtualKeyboardToggle = async (checked: boolean) => {
+        setIsLoading(true)
+        setVirtualKeyboardToggleEnabled(checked)
+
+        const result = await updateSiteSetting('virtual_keyboard_toggle_enabled', String(checked))
+
+        if (result?.error) {
+            setVirtualKeyboardToggleEnabled(!checked)
+            toast.error("Error", { description: "Failed to update setting." })
+        } else {
+            toast.success("Success", { description: `Virtual keyboard toggle is now ${checked ? 'enabled' : 'disabled'} for students.` })
         }
         setIsLoading(false)
     }
@@ -84,6 +105,26 @@ export function SettingsForm({ initialRegistrationEnabled, initialTestModePollin
                             disabled={isLoading}
                         />
                         <Label htmlFor="polling-mode">Enable Test Mode Polling</Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Virtual Keyboard Toggle</CardTitle>
+                    <CardDescription>
+                        Control whether students can use the virtual keyboard toggle button in numerical answer inputs.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch
+                            id="virtual-keyboard-toggle"
+                            checked={virtualKeyboardToggleEnabled}
+                            onCheckedChange={handleVirtualKeyboardToggle}
+                            disabled={isLoading}
+                        />
+                        <Label htmlFor="virtual-keyboard-toggle">Show Virtual Keyboard Toggle in Student Inputs</Label>
                     </div>
                 </CardContent>
             </Card>

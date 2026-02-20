@@ -20,7 +20,8 @@ export function TestInterface({
     submittedIsCorrect,
     onPointsSubmit,
     onCheck,
-    isRevealed = false
+    isRevealed = false,
+    showVirtualKeyboardToggle = true
 }: {
     question: any,
     questionId?: string,
@@ -33,7 +34,8 @@ export function TestInterface({
     submittedIsCorrect?: boolean,
     onPointsSubmit?: (questionId: string, questionPoints: number, answer: string, isCorrect: boolean) => void,
     onCheck?: (answer: string, isCorrect: boolean) => void,
-    isRevealed?: boolean
+    isRevealed?: boolean,
+    showVirtualKeyboardToggle?: boolean
 }) {
     const [latexInput, setLatexInput] = useState("")
     const [asciiInput, setAsciiInput] = useState("")
@@ -226,6 +228,7 @@ export function TestInterface({
                         <div className="flex-1">
                             <MathInput
                                 value={latexInput}
+                                showVirtualKeyboardToggle={showVirtualKeyboardToggle}
                                 onChange={(latex, ascii) => {
                                     setLatexInput(latex)
                                     setAsciiInput(ascii || "")

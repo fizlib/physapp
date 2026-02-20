@@ -33,9 +33,17 @@ interface CollectionPlayerProps {
     progressData?: any[]
     allAssignments?: any[] // All assignments including unpublished, for tracking waiting state
     testModePollingEnabled?: boolean // Admin setting to enable/disable test mode polling
+    showVirtualKeyboardToggle?: boolean // Admin setting to show/hide student virtual keyboard toggle button
 }
 
-export function CollectionPlayer({ collection, classroomId, progressData = [], allAssignments: initialAllAssignments = [], testModePollingEnabled = true }: CollectionPlayerProps) {
+export function CollectionPlayer({
+    collection,
+    classroomId,
+    progressData = [],
+    allAssignments: initialAllAssignments = [],
+    testModePollingEnabled = true,
+    showVirtualKeyboardToggle = true
+}: CollectionPlayerProps) {
     // Determine if this is classwork (all published accessible) or homework (sequential unlock)
     const isClasswork = collection.category === 'classwork'
 
@@ -873,6 +881,7 @@ export function CollectionPlayer({ collection, classroomId, progressData = [], a
                         key={currentAssignment.id}
                         assignment={currentAssignment}
                         classId={classroomId}
+                        showVirtualKeyboardToggle={showVirtualKeyboardToggle}
                         onFinish={handleAssignmentFinish}
                         onPrevious={currentAssignmentIndex > 0 ? handlePrevious : undefined}
                         canSkip={isClasswork}
