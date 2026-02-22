@@ -42,6 +42,7 @@ interface CollectionPlayerProps {
     allAssignmentsMeta?: AssignmentMeta[] // All assignments including unpublished (metadata only)
     testModePollingEnabled?: boolean // Admin setting to enable/disable test mode polling
     showVirtualKeyboardToggle?: boolean // Admin setting to show/hide student virtual keyboard toggle button
+    initialIsTestParticipant?: boolean // Whether the student is a participant in the current test
 }
 
 export function CollectionPlayer({
@@ -50,7 +51,8 @@ export function CollectionPlayer({
     progressData = [],
     allAssignmentsMeta: initialAllAssignmentsMeta = [],
     testModePollingEnabled = true,
-    showVirtualKeyboardToggle = true
+    showVirtualKeyboardToggle = true,
+    initialIsTestParticipant = true
 }: CollectionPlayerProps) {
     // Determine if this is classwork (all published accessible) or homework (sequential unlock)
     const isClasswork = collection.category === 'classwork'
@@ -142,9 +144,12 @@ export function CollectionPlayer({
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const { width, height } = useWindowSize()
 
+    // Track whether this student is a test participant
+    const [isTestParticipant, setIsTestParticipant] = useState(initialIsTestParticipant)
+
     // Test mode timer state
     const [testModeRemainingSeconds, setTestModeRemainingSeconds] = useState<number | null>(() => {
-        if (collection.test_mode_ends_at) {
+        if (collection.test_mode_ends_at && initialIsTestParticipant) {
             const endTime = new Date(collection.test_mode_ends_at).getTime()
             const now = Date.now()
             const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
@@ -155,15 +160,19 @@ export function CollectionPlayer({
     const isTestModeActive = testModeRemainingSeconds !== null && testModeRemainingSeconds > 0
 
     // Track the known test end time (to detect when a new test starts)
-    const [knownTestModeEndsAt, setKnownTestModeEndsAt] = useState<string | null>(collection.test_mode_ends_at || null)
+    const [knownTestModeEndsAt, setKnownTestModeEndsAt] = useState<string | null>(
+        initialIsTestParticipant ? (collection.test_mode_ends_at || null) : null
+    )
     // Use a ref for synchronous tracking (avoids stale closure issues in polling)
-    const handledTestEndTimeRef = useRef<string | null>(collection.test_mode_ends_at || null)
+    const handledTestEndTimeRef = useRef<string | null>(
+        initialIsTestParticipant ? (collection.test_mode_ends_at || null) : null
+    )
     // When test mode starts, redirect to first pointed exercise (only once)
     const [hasRedirectedToPointed, setHasRedirectedToPointed] = useState(false)
 
     // Track if test mode has expired (time ran out) - shows results overlay but allows browsing
     const [testModeExpired, setTestModeExpired] = useState(() => {
-        if (collection.test_mode_ends_at) {
+        if (collection.test_mode_ends_at && initialIsTestParticipant) {
             return new Date() > new Date(collection.test_mode_ends_at)
         }
         return false
@@ -339,8 +348,12 @@ export function CollectionPlayer({
                 // Check if this is a NEW test (different from what we already handled)
                 const alreadyHandled = status.testModeEndsAt === handledTestEndTimeRef.current
 
-                if (remaining > 0 && !alreadyHandled) {
-                    // Test mode has started! Update states
+                // Update participation status
+                const participantStatus = status.isTestParticipant !== undefined ? status.isTestParticipant : true
+                setIsTestParticipant(participantStatus)
+
+                if (remaining > 0 && !alreadyHandled && participantStatus) {
+                    // Test mode has started and student IS a participant! Update states
                     // Update ref immediately (synchronous) to prevent re-entry
                     handledTestEndTimeRef.current = status.testModeEndsAt
                     setKnownTestModeEndsAt(status.testModeEndsAt)
@@ -445,7 +458,7 @@ export function CollectionPlayer({
     useEffect(() => {
         // Use knownTestModeEndsAt instead of collection.test_mode_ends_at
         // because knownTestModeEndsAt is updated when we detect a new test via polling
-        if (!knownTestModeEndsAt || isCompleted || testModeExpired) return
+        if (!knownTestModeEndsAt || isCompleted || testModeExpired || !isTestParticipant) return
 
         const endTime = new Date(knownTestModeEndsAt).getTime()
         // Don't start countdown if already expired
@@ -479,7 +492,7 @@ export function CollectionPlayer({
         // Then tick every second
         const interval = setInterval(tick, 1000)
         return () => clearInterval(interval)
-    }, [knownTestModeEndsAt, collection.id, isCompleted, testModeExpired])
+    }, [knownTestModeEndsAt, collection.id, isCompleted, testModeExpired, isTestParticipant])
 
     useEffect(() => {
         if (!isTestModeActive || hasRedirectedToPointed) return

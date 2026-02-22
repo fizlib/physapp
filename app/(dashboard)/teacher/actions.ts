@@ -2533,9 +2533,11 @@ RULES:
 export async function startTestCollection(
     collectionId: string,
     classroomId: string,
-    durationMinutes: number
+    durationMinutes: number,
+    selectedStudentIds?: string[]
 ): Promise<ActionState> {
     const supabase = await createClient()
+    const supabaseAdmin = createAdminClient()
 
     // Verify Auth
     const { data: { user } } = await supabase.auth.getUser()
@@ -2555,11 +2557,12 @@ export async function startTestCollection(
     // Calculate end time
     const testEndTime = new Date()
     testEndTime.setMinutes(testEndTime.getMinutes() + durationMinutes)
+    const testEndTimeIso = testEndTime.toISOString()
 
     // Update collection with test_mode_ends_at
     const { error: collectionError } = await supabase
         .from('collections')
-        .update({ test_mode_ends_at: testEndTime.toISOString() })
+        .update({ test_mode_ends_at: testEndTimeIso })
         .eq('id', collectionId)
         .eq('classroom_id', classroomId)
 
@@ -2578,6 +2581,52 @@ export async function startTestCollection(
     if (assignmentError) {
         console.error("Assignment publish error:", assignmentError)
         return { success: false, error: "Failed to publish pointed exercises" }
+    }
+
+    // Manage test participants
+    if (selectedStudentIds && selectedStudentIds.length > 0) {
+        // Remove old participants for this collection
+        await supabaseAdmin
+            .from('collection_test_participants')
+            .delete()
+            .eq('collection_id', collectionId)
+
+        // Insert new participants
+        const participantRows = selectedStudentIds.map(studentId => ({
+            collection_id: collectionId,
+            student_id: studentId,
+            test_mode_ends_at: testEndTimeIso,
+        }))
+
+        const { error: participantsError } = await supabaseAdmin
+            .from('collection_test_participants')
+            .insert(participantRows)
+
+        if (participantsError) {
+            console.error("Participants insert error:", participantsError)
+            // Non-fatal: test still works, just without participant filtering
+        }
+
+        // Reset assignment_progress for selected students on pointed exercises in this collection
+        const { data: pointedAssignments } = await supabase
+            .from('assignments')
+            .select('id')
+            .eq('collection_id', collectionId)
+            .eq('points_enabled', true)
+
+        if (pointedAssignments && pointedAssignments.length > 0) {
+            const pointedIds = pointedAssignments.map(a => a.id)
+            const { error: resetError } = await supabaseAdmin
+                .from('assignment_progress')
+                .delete()
+                .in('assignment_id', pointedIds)
+                .in('student_id', selectedStudentIds)
+
+            if (resetError) {
+                console.error("Progress reset error:", resetError)
+                // Non-fatal
+            }
+        }
     }
 
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
@@ -2634,4 +2683,130 @@ export async function endTestCollection(
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
     revalidatePath(`/student/class/${classroomId}/collection/${collectionId}`)
     return { success: true }
+}
+
+// Fetch students for the test start dialog
+export async function getStudentsForTestDialog(
+    classroomId: string,
+    collectionId: string
+): Promise<{
+    success: boolean
+    students?: Array<{
+        id: string
+        firstName: string | null
+        lastName: string | null
+        hasCompleted: boolean
+        earnedPoints: number
+        maxPoints: number
+    }>
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Fetch enrolled students
+    const { data: enrollments, error: enrollError } = await supabase
+        .from('enrollments')
+        .select('student_id, profiles:student_id(id, first_name, last_name)')
+        .eq('classroom_id', classroomId)
+
+    if (enrollError || !enrollments) {
+        return { success: false, error: "Failed to fetch students" }
+    }
+
+    // Fetch pointed assignments in this collection
+    const { data: pointedAssignments } = await supabase
+        .from('assignments')
+        .select('id, points, required_variations_count, questions(id, points)')
+        .eq('collection_id', collectionId)
+        .eq('points_enabled', true)
+
+    const pointedIds = pointedAssignments?.map(a => a.id) || []
+
+    // Calculate max points for the collection
+    let maxPoints = 0
+    if (pointedAssignments) {
+        pointedAssignments.forEach((a: any) => {
+            const requiredCount = Number(a.required_variations_count) || 0
+            const isVariation = requiredCount > 0
+            let assignmentMax = Number(a.points) || 0
+            if (isVariation && a.questions?.[0]) {
+                const pointsPerVariation = Number(a.questions[0].points) || 1
+                assignmentMax = pointsPerVariation * requiredCount
+            }
+            maxPoints += assignmentMax
+        })
+    }
+
+    // Fetch progress for all students on pointed assignments
+    const studentIds = enrollments
+        .map((e: any) => {
+            const profile = e.profiles
+            return profile?.id || e.student_id
+        })
+        .filter((id: unknown): id is string => typeof id === 'string')
+
+    let progressByStudent: Record<string, { earned: number; completed: boolean }> = {}
+
+    if (pointedIds.length > 0 && studentIds.length > 0) {
+        const supabaseAdmin = createAdminClient()
+        const { data: progressData } = await supabaseAdmin
+            .from('assignment_progress')
+            .select('student_id, assignment_id, earned_points, is_completed')
+            .in('assignment_id', pointedIds)
+            .in('student_id', studentIds)
+
+        if (progressData) {
+            progressData.forEach((p: any) => {
+                const sid = p.student_id
+                if (!progressByStudent[sid]) {
+                    progressByStudent[sid] = { earned: 0, completed: true }
+                }
+                progressByStudent[sid].earned += Number(p.earned_points) || 0
+                if (!p.is_completed) {
+                    progressByStudent[sid].completed = false
+                }
+            })
+        }
+    }
+
+    const students = enrollments.map((enrollment: any) => {
+        const profile = enrollment.profiles
+        const studentId = profile?.id || enrollment.student_id
+        const progress = progressByStudent[studentId]
+        // Consider "has completed" only if they have progress at all and all pointed exercises are completed
+        const hasProgress = !!progress
+        const completedAllPointed = hasProgress && progress.completed && pointedIds.length > 0
+        // But also check if they actually have progress rows for ALL pointed assignments
+        return {
+            id: studentId,
+            firstName: profile?.first_name || null,
+            lastName: profile?.last_name || null,
+            hasCompleted: completedAllPointed,
+            earnedPoints: progress?.earned || 0,
+            maxPoints,
+        }
+    })
+
+    // Sort by last name
+    students.sort((a: any, b: any) => {
+        const aName = (a.lastName || '').toLowerCase()
+        const bName = (b.lastName || '').toLowerCase()
+        return aName.localeCompare(bName)
+    })
+
+    return { success: true, students }
 }

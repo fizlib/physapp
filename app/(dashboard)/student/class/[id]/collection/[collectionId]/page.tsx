@@ -231,17 +231,19 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part')
             .eq('student_id', user.id)
             .in('assignment_id', assignmentIds)
-        : Promise.resolve({ data: null as {
-            assignment_id: string
-            completed_question_indices: number[] | null
-            revealed_question_indices: number[] | null
-            is_completed: boolean
-            active_question_index: number | null
-            submitted_answers: Record<string, string> | null
-            earned_points_per_part: Record<string, number> | null
-        }[] | null })
+        : Promise.resolve({
+            data: null as {
+                assignment_id: string
+                completed_question_indices: number[] | null
+                revealed_question_indices: number[] | null
+                is_completed: boolean
+                active_question_index: number | null
+                submitted_answers: Record<string, string> | null
+                earned_points_per_part: Record<string, number> | null
+            }[] | null
+        })
 
-    const [classroomResult, bypassResult, progressResult, settings] = await Promise.all([
+    const [classroomResult, bypassResult, progressResult, settings, participationResult] = await Promise.all([
         supabase
             .from('classrooms')
             .select('allowed_ip, ip_check_enabled')
@@ -256,11 +258,32 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             .maybeSingle(),
         progressPromise,
         getSiteSettings(['test_mode_polling_enabled', 'virtual_keyboard_toggle_enabled']),
+        // Check if student is a test participant
+        supabase
+            .from('collection_test_participants')
+            .select('student_id')
+            .eq('collection_id', collectionId)
+            .eq('student_id', user.id)
+            .maybeSingle(),
     ])
 
     const { data: classroom } = classroomResult
     const { data: bypass } = bypassResult
     const progressData = progressResult.data || []
+
+    // Determine if student is a test participant
+    // If no participant rows exist at all for this collection, treat everyone as participant (backward compat)
+    let initialIsTestParticipant = true
+    if (collection.test_mode_ends_at && new Date(collection.test_mode_ends_at) > new Date()) {
+        const { count } = await supabase
+            .from('collection_test_participants')
+            .select('student_id', { count: 'exact', head: true })
+            .eq('collection_id', collectionId)
+
+        if (count && count > 0) {
+            initialIsTestParticipant = !!participationResult.data
+        }
+    }
 
     const collectionForPlayer = {
         ...collection,
@@ -361,6 +384,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 allAssignmentsMeta={allAssignmentsMeta}
                 testModePollingEnabled={testModePollingEnabled}
                 showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
+                initialIsTestParticipant={initialIsTestParticipant}
             />
         </Suspense>
     )

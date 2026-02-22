@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -13,10 +13,20 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Timer, Loader2, Play } from "lucide-react"
-import { startTestCollection } from "../../../../actions"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Timer, Loader2, Play, CheckCircle2, Award, Users } from "lucide-react"
+import { startTestCollection, getStudentsForTestDialog } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+
+interface StudentForTest {
+    id: string
+    firstName: string | null
+    lastName: string | null
+    hasCompleted: boolean
+    earnedPoints: number
+    maxPoints: number
+}
 
 interface StartTestButtonProps {
     collectionId: string
@@ -27,12 +37,55 @@ interface StartTestButtonProps {
 export function StartTestButton({ collectionId, classroomId, hasPointedExercises }: StartTestButtonProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [loadingStudents, setLoadingStudents] = useState(false)
     const [duration, setDuration] = useState(5) // Default 5 minutes
+    const [students, setStudents] = useState<StudentForTest[]>([])
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const router = useRouter()
 
     if (!hasPointedExercises) {
         return null
     }
+
+    const loadStudents = async () => {
+        setLoadingStudents(true)
+        try {
+            const result = await getStudentsForTestDialog(classroomId, collectionId)
+            if (result.success && result.students) {
+                setStudents(result.students)
+                // Select all by default
+                setSelectedIds(new Set(result.students.map(s => s.id)))
+            } else {
+                toast.error(result.error || "Nepavyko gauti mokinių sąrašo")
+            }
+        } catch {
+            toast.error("Įvyko klaida gaunant mokinių sąrašą")
+        } finally {
+            setLoadingStudents(false)
+        }
+    }
+
+    const handleOpenChange = (isOpen: boolean) => {
+        setOpen(isOpen)
+        if (isOpen) {
+            loadStudents()
+        }
+    }
+
+    const toggleStudent = (studentId: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev)
+            if (next.has(studentId)) {
+                next.delete(studentId)
+            } else {
+                next.add(studentId)
+            }
+            return next
+        })
+    }
+
+    const selectAll = () => setSelectedIds(new Set(students.map(s => s.id)))
+    const deselectAll = () => setSelectedIds(new Set())
 
     const handleStartTest = async () => {
         if (duration < 1) {
@@ -40,11 +93,16 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
             return
         }
 
+        if (selectedIds.size === 0) {
+            toast.error("Pasirinkite bent vieną mokinį")
+            return
+        }
+
         setLoading(true)
         try {
-            const result = await startTestCollection(collectionId, classroomId, duration)
+            const result = await startTestCollection(collectionId, classroomId, duration, Array.from(selectedIds))
             if (result.success) {
-                toast.success(`Testas pradėtas! Trukmė: ${duration} min.`)
+                toast.success(`Testas pradėtas! Trukmė: ${duration} min. Mokiniai: ${selectedIds.size}`)
                 setOpen(false)
                 router.refresh()
             } else {
@@ -58,26 +116,29 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
         }
     }
 
+    const selectedWithPriorResults = students.filter(s => selectedIds.has(s.id) && s.hasCompleted)
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700">
                     <Play className="mr-2 h-4 w-4" />
                     Pradėti testą
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Timer className="h-5 w-5 text-amber-600" />
                         Pradėti testą
                     </DialogTitle>
                     <DialogDescription>
-                        Nustatykite testo trukmę. Kai paspausite „Pradėti", visi mokiniai bus perkelti į pirmą užduotį su taškais, o laikmatis bus paleistas.
+                        Nustatykite testo trukmę ir pasirinkite mokinius.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4">
+                <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
+                    {/* Duration */}
                     <div className="space-y-2">
                         <Label htmlFor="test-duration">Trukmė (minutėmis)</Label>
                         <Input
@@ -91,9 +152,93 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
                         />
                     </div>
 
+                    {/* Student List */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="flex items-center gap-1.5">
+                                <Users className="h-4 w-4" />
+                                Mokiniai ({selectedIds.size}/{students.length})
+                            </Label>
+                            <div className="flex gap-1">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-7 px-2"
+                                    onClick={selectAll}
+                                    disabled={loading || loadingStudents}
+                                >
+                                    Visi
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-7 px-2"
+                                    onClick={deselectAll}
+                                    disabled={loading || loadingStudents}
+                                >
+                                    Joks
+                                </Button>
+                            </div>
+                        </div>
+
+                        {loadingStudents ? (
+                            <div className="flex items-center justify-center py-6">
+                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : students.length === 0 ? (
+                            <p className="text-sm text-muted-foreground italic py-4 text-center">
+                                Nėra prisijungusių mokinių.
+                            </p>
+                        ) : (
+                            <div className="border rounded-md divide-y max-h-60 overflow-y-auto">
+                                {students.map((student) => {
+                                    const name = [student.firstName, student.lastName].filter(Boolean).join(' ') || 'Unnamed'
+                                    const isSelected = selectedIds.has(student.id)
+                                    return (
+                                        <label
+                                            key={student.id}
+                                            className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-accent/50 transition-colors ${isSelected ? '' : 'opacity-60'}`}
+                                        >
+                                            <div className="flex items-center gap-2.5">
+                                                <Checkbox
+                                                    checked={isSelected}
+                                                    onCheckedChange={() => toggleStudent(student.id)}
+                                                    disabled={loading}
+                                                />
+                                                <span className="text-sm font-medium">{name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                {student.hasCompleted ? (
+                                                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                                        <CheckCircle2 className="h-3 w-3" />
+                                                        {student.earnedPoints}/{student.maxPoints} tšk.
+                                                    </span>
+                                                ) : student.earnedPoints > 0 ? (
+                                                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                                                        <Award className="h-3 w-3" />
+                                                        {student.earnedPoints}/{student.maxPoints} tšk.
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        </label>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Warning if restarting for students with results */}
+                    {selectedWithPriorResults.length > 0 && (
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2.5">
+                            <strong>⚠️ Dėmesio:</strong> {selectedWithPriorResults.length} mokin{selectedWithPriorResults.length === 1 ? 'io' : 'ių'} ankstesni rezultatai bus ištrinti pradėjus testą.
+                        </div>
+                    )}
+
                     <div className="text-sm text-muted-foreground space-y-1">
                         <p>• Visos užduotys su taškais bus atrakintos (paskelbtos).</p>
-                        <p>• Mokiniai matys laikmatį viršuje.</p>
+                        <p>• Tik pasirinkti mokiniai matys laikmatį ir galės pateikti atsakymus.</p>
                         <p>• Pasibaigus laikui, tušti atsakymai bus automatiškai pateikti.</p>
                         <p>• Po testo užduotys vėl bus užrakintos.</p>
                     </div>
@@ -103,9 +248,9 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
                     <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
                         Atšaukti
                     </Button>
-                    <Button onClick={handleStartTest} disabled={loading} className="bg-amber-600 hover:bg-amber-700">
+                    <Button onClick={handleStartTest} disabled={loading || loadingStudents || selectedIds.size === 0} className="bg-amber-600 hover:bg-amber-700">
                         {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Pradėti
+                        Pradėti ({selectedIds.size})
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -320,6 +320,7 @@ export async function getCollectionRuntimeStatus(
     isRestricted: boolean
     studentIp?: string
     testModeEndsAt?: string | null
+    isTestParticipant?: boolean
     error?: string
 }> {
     const supabase = await createClient()
@@ -370,13 +371,43 @@ export async function getCollectionRuntimeStatus(
         }
     }
 
+    // Check if student is a test participant
+    let isTestParticipant = true // default true for backward compat (if no participants table rows exist)
+    const testModeEndsAt = collection?.test_mode_ends_at || null
+    if (testModeEndsAt && user) {
+        const endTime = new Date(testModeEndsAt).getTime()
+        const now = Date.now()
+        if (endTime > now) {
+            // Test is active — check participation
+            const { data: participation } = await supabase
+                .from('collection_test_participants')
+                .select('student_id')
+                .eq('collection_id', collectionId)
+                .eq('student_id', user.id)
+                .maybeSingle()
+
+            // If the table has rows for this collection but student is not in them, they're not a participant
+            // If the table has NO rows at all for this collection, treat everyone as a participant (backward compat)
+            const { count } = await supabase
+                .from('collection_test_participants')
+                .select('student_id', { count: 'exact', head: true })
+                .eq('collection_id', collectionId)
+
+            if (count && count > 0) {
+                isTestParticipant = !!participation
+            }
+        }
+    }
+
     return {
         success: true,
         isRestricted,
         studentIp,
-        testModeEndsAt: collection?.test_mode_ends_at || null
+        testModeEndsAt,
+        isTestParticipant,
     }
 }
+
 
 export async function checkAssignmentPublished(assignmentId: string): Promise<{ isPublished: boolean, assignment?: any }> {
     const supabase = await createClient()
@@ -644,6 +675,24 @@ export async function autoSubmitCollectionPointsAnswers(collectionId: string): P
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
+
+    // Check if student is a test participant (if participant rows exist)
+    const { data: participation } = await supabase
+        .from('collection_test_participants')
+        .select('student_id')
+        .eq('collection_id', collectionId)
+        .eq('student_id', user.id)
+        .maybeSingle()
+
+    const { count } = await supabase
+        .from('collection_test_participants')
+        .select('student_id', { count: 'exact', head: true })
+        .eq('collection_id', collectionId)
+
+    // If participant rows exist but student is not in them, skip auto-submit
+    if (count && count > 0 && !participation) {
+        return { success: true } // Not a participant, nothing to submit
+    }
 
     // Fetch all PUBLISHED assignments in collection with points enabled
     // IMPORTANT: Only process published assignments to avoid pre-submitting for unpublished exercises
