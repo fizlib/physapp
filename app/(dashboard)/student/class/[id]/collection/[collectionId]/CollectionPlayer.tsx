@@ -215,9 +215,9 @@ export function CollectionPlayer({
     // Loading state for points results
     const [isLoadingResults, setIsLoadingResults] = useState(false)
 
-    // Fetch points results when completed
+    // Fetch points results when completed (but not when test mode expired - that's handled by the countdown tick)
     useEffect(() => {
-        if (isCompleted && isClasswork) {
+        if (isCompleted && isClasswork && !testModeExpired) {
             setIsLoadingResults(true)
             getCollectionResults(collection.id).then(res => {
                 if (res.success && res.results) {
@@ -227,7 +227,7 @@ export function CollectionPlayer({
                 setIsLoadingResults(false)
             })
         }
-    }, [isCompleted, isClasswork, collection.id])
+    }, [isCompleted, isClasswork, collection.id, testModeExpired])
 
     // Fetch results on mount if test mode has expired (for showing points in locked exercise view)
     useEffect(() => {
@@ -469,17 +469,18 @@ export function CollectionPlayer({
             const remaining = Math.max(0, Math.floor((endTime - now) / 1000))
 
             if (remaining <= 0) {
-                // Time is up - auto-submit all answers and show results
+                // Time is up - show results screen immediately, then auto-submit in background
                 setTestModeRemainingSeconds(null)
-                await autoSubmitCollectionPointsAnswers(collection.id)
-                // Set both testModeExpired and isCompleted to redirect to finish screen with points
                 setTestModeExpired(true)
                 setIsCompleted(true)
-                // Fetch results to display on the finish screen
+                setIsLoadingResults(true)
+                // Auto-submit and fetch results async (UI already shows loading screen)
+                await autoSubmitCollectionPointsAnswers(collection.id)
                 const res = await getCollectionResults(collection.id)
                 if (res.success && res.results) {
                     setPointsResults(res.results)
                 }
+                setIsLoadingResults(false)
                 return
             }
 
