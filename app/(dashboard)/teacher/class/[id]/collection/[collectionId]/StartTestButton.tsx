@@ -84,8 +84,13 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
         })
     }
 
-    const selectAll = () => setSelectedIds(new Set(students.map(s => s.id)))
-    const deselectAll = () => setSelectedIds(new Set())
+    const toggleAll = () => {
+        if (selectedIds.size === students.length && students.length > 0) {
+            setSelectedIds(new Set())
+        } else {
+            setSelectedIds(new Set(students.map(s => s.id)))
+        }
+    }
 
     const handleStartTest = async () => {
         if (duration < 1) {
@@ -159,27 +164,13 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
                                 <Users className="h-4 w-4" />
                                 Mokiniai ({selectedIds.size}/{students.length})
                             </Label>
-                            <div className="flex gap-1">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs h-7 px-2"
-                                    onClick={selectAll}
-                                    disabled={loading || loadingStudents}
-                                >
-                                    Visi
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs h-7 px-2"
-                                    onClick={deselectAll}
-                                    disabled={loading || loadingStudents}
-                                >
-                                    Joks
-                                </Button>
+                            <div className="flex items-center gap-2 pr-1">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Visi</span>
+                                <Checkbox
+                                    checked={students.length > 0 && selectedIds.size === students.length}
+                                    onCheckedChange={toggleAll}
+                                    disabled={loading || loadingStudents || students.length === 0}
+                                />
                             </div>
                         </div>
 

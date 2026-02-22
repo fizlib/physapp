@@ -35,6 +35,7 @@ interface CollectionSettingsDialogProps {
     currentSlidesUrl?: string | null
     lessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
+    currentTabMonitoringEnabled?: boolean
 }
 
 export function CollectionSettingsDialog({
@@ -46,7 +47,8 @@ export function CollectionSettingsDialog({
     currentScheduledEndAt,
     currentSlidesUrl,
     lessonSchedule,
-    trigger
+    trigger,
+    currentTabMonitoringEnabled
 }: CollectionSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -65,6 +67,7 @@ export function CollectionSettingsDialog({
     const [fetchingLibrary, setFetchingLibrary] = useState(false)
     const [deleteExercises, setDeleteExercises] = useState(false)
     const [useScheduling, setUseScheduling] = useState(!!currentScheduledDate)
+    const [tabMonitoringEnabled, setTabMonitoringEnabled] = useState(!!currentTabMonitoringEnabled)
 
     const router = useRouter()
 
@@ -99,8 +102,9 @@ export function CollectionSettingsDialog({
             }
             setUseScheduling(!!currentScheduledDate)
             setSlidesUrl(currentSlidesUrl || null)
+            setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
         }
-    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl])
+    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl, currentTabMonitoringEnabled])
 
     const handleSave = async () => {
         setLoading(true)
@@ -122,7 +126,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -173,6 +177,7 @@ export function CollectionSettingsDialog({
                 || (selectedTime !== (currentScheduledDate ? new Date(currentScheduledDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
                 || (selectedEndTime !== (currentScheduledEndAt ? new Date(currentScheduledEndAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
             ))
+        || tabMonitoringEnabled !== !!currentTabMonitoringEnabled
 
 
     return (
@@ -379,6 +384,26 @@ export function CollectionSettingsDialog({
                                         </div>
                                     )}
                                 </div>
+                            )}
+                        </div>
+                    )}
+
+                    {category === 'classwork' && (
+                        <div className="space-y-4 pt-2 border-t text-sm">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="enable-tab-monitoring"
+                                    checked={tabMonitoringEnabled}
+                                    onCheckedChange={(checked) => setTabMonitoringEnabled(!!checked)}
+                                />
+                                <Label htmlFor="enable-tab-monitoring" className="font-medium cursor-pointer">
+                                    Stebėti skirtukų perjungimą
+                                </Label>
+                            </div>
+                            {tabMonitoringEnabled && (
+                                <p className="text-xs text-muted-foreground ml-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    Mokiniai bus užblokuoti, jei perjungs skirtuką arba sumažins naršyklę.
+                                </p>
                             )}
                         </div>
                     )}

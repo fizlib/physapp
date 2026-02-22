@@ -702,6 +702,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   ` : exerciseType === 'multiple_choice' ? `
   - FORCED TYPE: Multiple choice.
   - If the image is a numerical problem, create 4 plausible multiple-choice options (A, B, C, D).
+  - IMPORTANT: The "options" array MUST contain ONLY the answer text. DO NOT include prefixes like "A)", "B)", "C)", "D)" or "A. ", "B. ", etc. inside the options.
   ${answersInSvg ? '- ANSWERS AS ILLUSTRATIONS: Each option MUST be a full <svg> string.' : ''}
   ` : '- TYPE DETECTION: Auto-detect (numerical or multiple_choice).'}
 
@@ -1124,7 +1125,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1149,6 +1150,10 @@ export async function updateCollection(classroomId: string, collectionId: string
         category: category,
         scheduled_date: scheduledDate || null,
         scheduled_end_at: scheduledEndDate || null
+    }
+
+    if (tabMonitoringEnabled !== undefined) {
+        updateData.tab_monitoring_enabled = tabMonitoringEnabled
     }
 
     if (slidesUrl !== undefined) {
@@ -2809,4 +2814,183 @@ export async function getStudentsForTestDialog(
     })
 
     return { success: true, students }
+}
+
+export async function getBlockedStudents(classroomId: string): Promise<{ success: boolean, blockedStudentIds?: string[], error?: string }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Get all collections with tab monitoring enabled in this classroom
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('classroom_id', classroomId)
+        .eq('tab_monitoring_enabled', true)
+
+    if (!collections || collections.length === 0) {
+        return { success: true, blockedStudentIds: [] }
+    }
+
+    const collectionIds = collections.map(c => c.id)
+
+    // Get all blocked violations
+    const { data: violations, error } = await supabase
+        .from('tab_monitoring_violations')
+        .select('student_id')
+        .in('collection_id', collectionIds)
+        .eq('blocked', true)
+
+    if (error) {
+        console.error("Error fetching blocked students:", error)
+        return { success: false, error: "Failed to fetch blocked students" }
+    }
+
+    const blockedStudentIds = [...new Set(violations?.map(v => v.student_id) || [])]
+    return { success: true, blockedStudentIds }
+}
+
+export async function unblockStudent(collectionId: string, studentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom via collection
+    const { data: collection } = await supabase
+        .from('collections')
+        .select('classroom_id, classrooms(teacher_id)')
+        .eq('id', collectionId)
+        .single()
+
+    if (!collection) return { success: false, error: "Collection not found" }
+
+    const classroom: any = Array.isArray(collection.classrooms) ? collection.classrooms[0] : collection.classrooms
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    const { error } = await supabase
+        .from('tab_monitoring_violations')
+        .update({
+            blocked: false,
+            unblocked_at: new Date().toISOString()
+        })
+        .eq('collection_id', collectionId)
+        .eq('student_id', studentId)
+
+    if (error) {
+        console.error("Error unblocking student:", error)
+        return { success: false, error: "Failed to unblock student" }
+    }
+
+    revalidatePath(`/teacher/class/${collection.classroom_id}`)
+    return { success: true }
+}
+
+export async function unblockStudentFromClassroom(classroomId: string, studentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Get all monitored collections in this classroom
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('classroom_id', classroomId)
+        .eq('tab_monitoring_enabled', true)
+
+    if (!collections || collections.length === 0) {
+        return { success: true }
+    }
+
+    const collectionIds = collections.map(c => c.id)
+
+    // Unblock the student from all monitored collections
+    const { error } = await supabase
+        .from('tab_monitoring_violations')
+        .update({
+            blocked: false,
+            unblocked_at: new Date().toISOString()
+        })
+        .in('collection_id', collectionIds)
+        .eq('student_id', studentId)
+
+    if (error) {
+        console.error("Error unblocking student from classroom:", error)
+        return { success: false, error: "Failed to unblock student" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
+}
+
+export async function unblockAllStudentsInClassroom(classroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('classroom_id', classroomId)
+        .eq('tab_monitoring_enabled', true)
+
+    if (!collections || collections.length === 0) {
+        return { success: true }
+    }
+
+    const collectionIds = collections.map(c => c.id)
+
+    const { error } = await supabase
+        .from('tab_monitoring_violations')
+        .update({
+            blocked: false,
+            unblocked_at: new Date().toISOString()
+        })
+        .in('collection_id', collectionIds)
+        .eq('blocked', true)
+
+    if (error) {
+        console.error("Error unblocking all students:", error)
+        return { success: false, error: "Failed to unblock students" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
 }

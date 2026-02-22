@@ -4,9 +4,9 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ChevronDown, ChevronUp, ShieldOff } from "lucide-react"
 import Link from "next/link"
-import { getUnassignedStudents, enrollStudent } from "../../actions"
+import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
 import { StudentProgressPanel } from "./StudentProgressPanel"
@@ -38,6 +38,7 @@ interface StudentManagerProps {
     initialEnrollments: Enrollment[]
     isTeacherAdmin: boolean
     studentPointsById: Record<string, { earned: number, max: number }>
+    blockedStudentIds?: string[]
 }
 
 function formatPoints(value: number): string {
@@ -46,7 +47,7 @@ function formatPoints(value: number): string {
     return value.toFixed(2).replace(/\.?0+$/, "")
 }
 
-export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById }: StudentManagerProps) {
+export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [] }: StudentManagerProps) {
     const router = useRouter()
     const [view, setView] = useState<'list' | 'add' | 'detail'>('list')
     const [pointsSortDirection, setPointsSortDirection] = useState<PointsSortDirection>('desc')
@@ -55,6 +56,9 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     const [searchQuery, setSearchQuery] = useState("")
     const [addingId, setAddingId] = useState<string | null>(null)
     const [selectedStudent, setSelectedStudent] = useState<{ id: string, name: string } | null>(null)
+    const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set(initialBlockedIds))
+    const [unblockingId, setUnblockingId] = useState<string | null>(null)
+    const [unblockingAll, setUnblockingAll] = useState(false)
 
     const fetchUnassignedStudents = async () => {
         setIsLoading(true)
@@ -113,6 +117,11 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
         )
 
         return [...initialEnrollments].sort((a, b) => {
+            // Blocked students always at top
+            const aBlocked = blockedIds.has(a.student_id) ? 1 : 0
+            const bBlocked = blockedIds.has(b.student_id) ? 1 : 0
+            if (aBlocked !== bBlocked) return bBlocked - aBlocked
+
             const aEarned = Number(studentPointsById[a.student_id]?.earned) || 0
             const bEarned = Number(studentPointsById[b.student_id]?.earned) || 0
 
@@ -122,7 +131,7 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
 
             return getDisplayName(a).localeCompare(getDisplayName(b))
         })
-    }, [initialEnrollments, studentPointsById, pointsSortDirection])
+    }, [initialEnrollments, studentPointsById, pointsSortDirection, blockedIds])
 
     if (view === 'add') {
         return (
@@ -233,10 +242,41 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
         <div className="space-y-6 animate-fade-in-up">
             <div className="flex items-center justify-between">
                 <h2 className="font-serif text-xl font-semibold tracking-tight">Enrolled Students</h2>
-                <Button size="sm" onClick={handleSwitchToAdd}>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Add Student
-                </Button>
+                <div className="flex items-center gap-2">
+                    {blockedIds.size > 0 && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                            disabled={unblockingAll}
+                            onClick={async () => {
+                                setUnblockingAll(true)
+                                try {
+                                    const result = await unblockAllStudentsInClassroom(classroomId)
+                                    if (result.success) {
+                                        setBlockedIds(new Set())
+                                        router.refresh()
+                                    }
+                                } catch (err) {
+                                    console.error('Failed to unblock all:', err)
+                                } finally {
+                                    setUnblockingAll(false)
+                                }
+                            }}
+                        >
+                            {unblockingAll ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <ShieldOff className="mr-2 h-4 w-4" />
+                            )}
+                            Unblock All ({blockedIds.size})
+                        </Button>
+                    )}
+                    <Button size="sm" onClick={handleSwitchToAdd}>
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Add Student
+                    </Button>
+                </div>
             </div>
 
             <div className="rounded-md border border-border/40 bg-background shadow-sm">
@@ -282,8 +322,11 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                                     : enrollment.profiles?.email?.charAt(0).toUpperCase() || "?"}
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-foreground">
+                                                <span className="text-sm font-medium text-foreground flex items-center gap-2">
                                                     {name}
+                                                    {blockedIds.has(enrollment.student_id) && (
+                                                        <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-semibold">Blocked</span>
+                                                    )}
                                                 </span>
                                                 <span className="font-mono text-[10px] text-muted-foreground opacity-70">
                                                     {enrollment.profiles?.email}
@@ -296,6 +339,43 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                            {blockedIds.has(enrollment.student_id) && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                                    disabled={unblockingId === enrollment.student_id}
+                                                    onClick={async () => {
+                                                        setUnblockingId(enrollment.student_id)
+                                                        try {
+                                                            const result = await unblockStudentFromClassroom(classroomId, enrollment.student_id)
+                                                            if (result.success) {
+                                                                setBlockedIds(prev => {
+                                                                    const next = new Set(prev)
+                                                                    next.delete(enrollment.student_id)
+                                                                    return next
+                                                                })
+                                                                router.refresh()
+                                                            } else {
+                                                                console.error('Failed to unblock:', result.error)
+                                                            }
+                                                        } catch (err) {
+                                                            console.error('Failed to unblock student:', err)
+                                                        } finally {
+                                                            setUnblockingId(null)
+                                                        }
+                                                    }}
+                                                >
+                                                    {unblockingId === enrollment.student_id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <>
+                                                            <ShieldOff className="mr-1 h-3.5 w-3.5" />
+                                                            Unblock
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            )}
                                             {isTeacherAdmin && (
                                                 <Button variant="ghost" size="sm" asChild className="text-muted-foreground hover:text-primary">
                                                     <Link href={`/admin/users?id=${enrollment.student_id}`}>

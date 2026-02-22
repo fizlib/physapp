@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award, Timer } from "lucide-react"
+import { ArrowLeft, Layers, ChevronDown, Loader2, Lock, Award, Timer, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { StudentAssignmentInterface } from "../../assignment/[assignmentId]/StudentAssignmentInterface"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,7 +22,8 @@ import {
     autoSubmitCollectionPointsAnswers,
     getCollectionProgress,
     getCollectionRuntimeStatus,
-    getAssignmentPublishStatus
+    getAssignmentPublishStatus,
+    reportTabViolation
 } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -43,6 +44,7 @@ interface CollectionPlayerProps {
     testModePollingEnabled?: boolean // Admin setting to enable/disable test mode polling
     showVirtualKeyboardToggle?: boolean // Admin setting to show/hide student virtual keyboard toggle button
     initialIsTestParticipant?: boolean // Whether the student is a participant in the current test
+    tabMonitoringEnabled?: boolean // Whether tab monitoring is enabled for this collection
 }
 
 export function CollectionPlayer({
@@ -52,7 +54,8 @@ export function CollectionPlayer({
     allAssignmentsMeta: initialAllAssignmentsMeta = [],
     testModePollingEnabled = true,
     showVirtualKeyboardToggle = true,
-    initialIsTestParticipant = true
+    initialIsTestParticipant = true,
+    tabMonitoringEnabled = false
 }: CollectionPlayerProps) {
     // Determine if this is classwork (all published accessible) or homework (sequential unlock)
     const isClasswork = collection.category === 'classwork'
@@ -177,6 +180,29 @@ export function CollectionPlayer({
         }
         return false
     })
+
+    // Tab monitoring state
+    const [tabBlocked, setTabBlocked] = useState(false)
+
+    // Tab monitoring: Page Visibility API listener
+    useEffect(() => {
+        if (!tabMonitoringEnabled || !isClasswork) return
+
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // Student switched tab or minimized
+                setTabBlocked(true)
+                reportTabViolation(collection.id).catch(err => {
+                    console.error('Failed to report tab violation:', err)
+                })
+            }
+        }
+
+        document.addEventListener('visibilitychange', handleVisibilityChange)
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange)
+        }
+    }, [tabMonitoringEnabled, isClasswork, collection.id])
 
     // Function to refresh progress data from server
     const refreshProgress = async () => {
@@ -337,6 +363,11 @@ export function CollectionPlayer({
             if (status.success && status.isRestricted) {
                 setRestrictionData({ isRestricted: true, studentIp: status.studentIp })
                 return
+            }
+
+            // Check tab blocked status from server
+            if (status.success && status.tabBlocked) {
+                setTabBlocked(true)
             }
 
             // Test Mode Check - only when NOT already active and polling is enabled
@@ -543,6 +574,31 @@ export function CollectionPlayer({
                         <h1 className="text-2xl font-bold tracking-tight">Pamokos laikas baigėsi</h1>
                         <p className="text-muted-foreground">
                             Jūsų pateikti atsakymai išsaugoti.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={`/student/class/${classroomId}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į klasę
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    if (tabBlocked) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                        <EyeOff className="h-10 w-10 text-red-600" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Prieiga užblokuota</h1>
+                        <p className="text-muted-foreground">
+                            Jūsų prieiga buvo užblokuota, nes perjungėte skirtuką arba sumažinote naršyklę.
+                            Kreipkitės į mokytoją, kad atblokuotų prieigą.
                         </p>
                     </div>
                     <Button asChild variant="outline" className="w-full">

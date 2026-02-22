@@ -84,6 +84,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 currentScheduledEndAt={collection.scheduled_end_at}
                                 currentSlidesUrl={collection.slides_url}
                                 lessonSchedule={classroom?.lesson_schedule}
+                                currentTabMonitoringEnabled={collection.tab_monitoring_enabled}
                             />
                             <Button variant="outline" size="sm" asChild>
                                 <Link href={`/teacher/class/${id}/collection/${collectionId}/statistics`}>

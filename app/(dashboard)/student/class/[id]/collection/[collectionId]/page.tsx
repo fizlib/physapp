@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
 import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
-import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
+import { ShieldAlert, ArrowLeft, Loader2, Lock, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
@@ -17,6 +17,7 @@ interface CollectionData {
     slides_url: string | null
     scheduled_end_at: string | null
     test_mode_ends_at: string | null
+    tab_monitoring_enabled: boolean | null
 }
 
 interface AssignmentMetaRow {
@@ -74,7 +75,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 category,
                 slides_url,
                 scheduled_end_at,
-                test_mode_ends_at
+                test_mode_ends_at,
+                tab_monitoring_enabled
             `)
             .eq('id', collectionId)
             .eq('classroom_id', id)
@@ -243,7 +245,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             }[] | null
         })
 
-    const [classroomResult, bypassResult, progressResult, settings, participationResult] = await Promise.all([
+    const [classroomResult, bypassResult, progressResult, settings, participationResult, tabViolationResult] = await Promise.all([
         supabase
             .from('classrooms')
             .select('allowed_ip, ip_check_enabled')
@@ -265,6 +267,29 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             .eq('collection_id', collectionId)
             .eq('student_id', user.id)
             .maybeSingle(),
+        // Check if student is blocked by tab monitoring (classroom-wide)
+        (async () => {
+            // Get all monitored collections in this classroom
+            const { data: monitoredCollections } = await supabase
+                .from('collections')
+                .select('id')
+                .eq('classroom_id', id)
+                .eq('tab_monitoring_enabled', true)
+
+            if (!monitoredCollections || monitoredCollections.length === 0) {
+                return { data: null, error: null }
+            }
+
+            const monitoredIds = monitoredCollections.map(c => c.id)
+            return supabase
+                .from('tab_monitoring_violations')
+                .select('blocked')
+                .in('collection_id', monitoredIds)
+                .eq('student_id', user.id)
+                .eq('blocked', true)
+                .limit(1)
+                .maybeSingle()
+        })(),
     ])
 
     const { data: classroom } = classroomResult
@@ -300,6 +325,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     const isTimeUp = collection.category === 'classwork' &&
         collection.scheduled_end_at &&
         new Date() > new Date(collection.scheduled_end_at)
+
+    const isTabBlocked = !!tabViolationResult.data
 
     if (isRestricted) {
 
@@ -351,6 +378,31 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         )
     }
 
+    if (isTabBlocked) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                        <EyeOff className="h-10 w-10 text-red-600" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Prieiga užblokuota</h1>
+                        <p className="text-muted-foreground">
+                            Jūsų prieiga buvo užblokuota, nes perjungėte skirtuką arba sumažinote naršyklę.
+                            Kreipkitės į mokytoją, kad atblokuotų prieigą.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={`/student/class/${id}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į klasę
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
     if (assignmentLoadError) {
         return (
             <div className="min-h-screen flex items-center justify-center p-6 bg-background">
@@ -375,6 +427,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     const testModePollingEnabled = (settings.test_mode_polling_enabled ?? 'true').toLowerCase() === 'true'
     const virtualKeyboardToggleEnabled = (settings.virtual_keyboard_toggle_enabled ?? 'true').toLowerCase() === 'true'
+    const tabMonitoringEnabled = !!collection.tab_monitoring_enabled
 
     return (
         <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
@@ -386,6 +439,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 testModePollingEnabled={testModePollingEnabled}
                 showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
                 initialIsTestParticipant={initialIsTestParticipant}
+                tabMonitoringEnabled={tabMonitoringEnabled}
             />
         </Suspense>
     )

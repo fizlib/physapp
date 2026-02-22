@@ -321,6 +321,7 @@ export async function getCollectionRuntimeStatus(
     studentIp?: string
     testModeEndsAt?: string | null
     isTestParticipant?: boolean
+    tabBlocked?: boolean
     error?: string
 }> {
     const supabase = await createClient()
@@ -400,12 +401,38 @@ export async function getCollectionRuntimeStatus(
         }
     }
 
+    // Check tab monitoring violation (classroom-wide)
+    let tabBlocked = false
+    if (user) {
+        // Get all monitored collections in this classroom
+        const { data: monitoredCollections } = await supabase
+            .from('collections')
+            .select('id')
+            .eq('classroom_id', classroomId)
+            .eq('tab_monitoring_enabled', true)
+
+        if (monitoredCollections && monitoredCollections.length > 0) {
+            const monitoredIds = monitoredCollections.map(c => c.id)
+            const { data: violation } = await supabase
+                .from('tab_monitoring_violations')
+                .select('blocked')
+                .in('collection_id', monitoredIds)
+                .eq('student_id', user.id)
+                .eq('blocked', true)
+                .limit(1)
+                .maybeSingle()
+
+            tabBlocked = !!violation
+        }
+    }
+
     return {
         success: true,
         isRestricted,
         studentIp,
         testModeEndsAt,
         isTestParticipant,
+        tabBlocked,
     }
 }
 
@@ -945,4 +972,43 @@ export async function getStudentDashboardStats(): Promise<{
     })
 
     return { success: true, stats }
+}
+
+export async function reportTabViolation(collectionId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify the collection has tab monitoring enabled
+    const { data: collection } = await supabase
+        .from('collections')
+        .select('tab_monitoring_enabled')
+        .eq('id', collectionId)
+        .single()
+
+    if (!collection || !collection.tab_monitoring_enabled) {
+        return { success: false, error: "Tab monitoring is not enabled for this collection" }
+    }
+
+    // Upsert violation using admin client — student RLS only allows INSERT,
+    // not UPDATE, so re-blocking after an unblock would silently fail
+    const { error } = await createAdminClient()
+        .from('tab_monitoring_violations')
+        .upsert({
+            collection_id: collectionId,
+            student_id: user.id,
+            blocked: true,
+            violated_at: new Date().toISOString(),
+            unblocked_at: null
+        }, {
+            onConflict: 'collection_id, student_id'
+        })
+
+    if (error) {
+        console.error("Error reporting tab violation:", error)
+        return { success: false, error: "Failed to report violation" }
+    }
+
+    return { success: true }
 }

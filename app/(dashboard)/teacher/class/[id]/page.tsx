@@ -176,6 +176,27 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
         }
     }
 
+    // Fetch blocked students from tab monitoring violations
+    let blockedStudentIds: string[] = []
+    if (currentView === 'students') {
+        const { data: monitoredCollections } = await supabase
+            .from('collections')
+            .select('id')
+            .eq('classroom_id', id)
+            .eq('tab_monitoring_enabled', true)
+
+        if (monitoredCollections && monitoredCollections.length > 0) {
+            const collectionIds = monitoredCollections.map(c => c.id)
+            const { data: violations } = await supabase
+                .from('tab_monitoring_violations')
+                .select('student_id, collection_id')
+                .in('collection_id', collectionIds)
+                .eq('blocked', true)
+
+            blockedStudentIds = [...new Set(violations?.map(v => v.student_id) || [])]
+        }
+    }
+
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
             <TeacherIpSync classroomId={id} />
@@ -298,6 +319,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                             initialEnrollments={enrollmentsList}
                             isTeacherAdmin={isTeacherAdmin}
                             studentPointsById={studentPointsById}
+                            blockedStudentIds={blockedStudentIds}
                         />
                     )}
 

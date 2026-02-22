@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
+import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert, EyeOff } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -99,6 +99,55 @@ export default async function StudentClassroomPage({ params }: { params: Promise
     if (!classroom) notFound()
 
     const isIpRestricted = classroom.ip_check_enabled && classroom.allowed_ip && studentIp !== classroom.allowed_ip
+
+    // Check if student is blocked by tab monitoring (classroom-wide)
+    let isTabBlocked = false
+    {
+        const { data: monitoredCollections } = await supabase
+            .from('collections')
+            .select('id')
+            .eq('classroom_id', id)
+            .eq('tab_monitoring_enabled', true)
+
+        if (monitoredCollections && monitoredCollections.length > 0) {
+            const monitoredIds = monitoredCollections.map(c => c.id)
+            const { data: violation } = await supabase
+                .from('tab_monitoring_violations')
+                .select('blocked')
+                .in('collection_id', monitoredIds)
+                .eq('student_id', user.id)
+                .eq('blocked', true)
+                .limit(1)
+                .maybeSingle()
+
+            isTabBlocked = !!violation
+        }
+    }
+
+    if (isTabBlocked) {
+        return (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                        <EyeOff className="h-10 w-10 text-red-600" />
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Prieiga užblokuota</h1>
+                        <p className="text-muted-foreground">
+                            Jūsų prieiga buvo užblokuota, nes perjungėte skirtuką arba sumažinote naršyklę.
+                            Kreipkitės į mokytoją, kad atblokuotų prieigą.
+                        </p>
+                    </div>
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href="/student">
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į pagrindinį
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
