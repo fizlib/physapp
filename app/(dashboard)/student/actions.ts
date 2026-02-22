@@ -388,7 +388,8 @@ export async function getCollectionRuntimeStatus(
 
             // If the table has rows for this collection but student is not in them, they're not a participant
             // If the table has NO rows at all for this collection, treat everyone as a participant (backward compat)
-            const { count } = await supabase
+            // IMPORTANT: Use admin client for counting because RLS only exposes own rows to students
+            const { count } = await createAdminClient()
                 .from('collection_test_participants')
                 .select('student_id', { count: 'exact', head: true })
                 .eq('collection_id', collectionId)
@@ -684,7 +685,8 @@ export async function autoSubmitCollectionPointsAnswers(collectionId: string): P
         .eq('student_id', user.id)
         .maybeSingle()
 
-    const { count } = await supabase
+    // IMPORTANT: Use admin client for counting because RLS only exposes own rows to students
+    const { count } = await createAdminClient()
         .from('collection_test_participants')
         .select('student_id', { count: 'exact', head: true })
         .eq('collection_id', collectionId)

@@ -273,9 +273,10 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     // Determine if student is a test participant
     // If no participant rows exist at all for this collection, treat everyone as participant (backward compat)
+    // IMPORTANT: Use admin client for counting because RLS only exposes own rows to students
     let initialIsTestParticipant = true
     if (collection.test_mode_ends_at && new Date(collection.test_mode_ends_at) > new Date()) {
-        const { count } = await supabase
+        const { count } = await createAdminClient()
             .from('collection_test_participants')
             .select('student_id', { count: 'exact', head: true })
             .eq('collection_id', collectionId)
