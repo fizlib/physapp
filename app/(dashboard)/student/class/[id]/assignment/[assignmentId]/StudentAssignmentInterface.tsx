@@ -658,7 +658,7 @@ export function StudentAssignmentInterface({
                                             }
                                         }}
 
-                                        disabled={!canProceed}
+                                        disabled={!canProceed || (pointsEnabled && isVariationMode && !isCurrentQuestionLocked)}
                                         className="gap-2"
                                     >
                                         {isVariationMode ? "Kita užduotis" : "Kitas klausimas"}
