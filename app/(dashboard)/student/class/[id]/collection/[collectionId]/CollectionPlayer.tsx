@@ -771,40 +771,40 @@ export function CollectionPlayer({
                                 {sortedAllAssignmentsMeta.length > 0 ? (
                                     // Show all assignments including unpublished ones
                                     sortedAllAssignmentsMeta.map((assignment: AssignmentMeta, index: number) => {
-                                            const isPublished = assignment.published
-                                            const publishedIndex = assignments.findIndex((a: any) => a.id === assignment.id)
-                                            const isCurrent = assignment.id === currentAssignment?.id
-                                            // For classwork: locked if not published OR (pointed exercise when test expired AND no submissions)
-                                            // For homework: locked if not published OR beyond maxReachedIndex
-                                            // Check if student has submitted answers for this exercise
-                                            const assignmentProgress = progressMap.get(assignment.id)
-                                            const hasSubmissions = assignmentProgress?.submitted_answers && Object.keys(assignmentProgress.submitted_answers).length > 0
-                                            const isPointedAndTestExpiredNoSubmissions = testModeExpired && assignment.points_enabled && !hasSubmissions
-                                            const isLocked = isClasswork
-                                                ? (!isPublished || isPointedAndTestExpiredNoSubmissions)
-                                                : (!isPublished || publishedIndex > maxReachedIndex)
-                                            return (
-                                                <DropdownMenuItem
-                                                    key={assignment.id}
-                                                    disabled={isLocked}
-                                                    onClick={() => !isLocked && publishedIndex >= 0 && handleJumpToExercise(publishedIndex)}
-                                                    className={isCurrent ? "bg-accent" : ""}
-                                                >
-                                                    <span className="flex items-center gap-2">
-                                                        Užduotis {index + 1}
-                                                        {assignment.points_enabled && (
-                                                            <Award className="h-3.5 w-3.5 text-amber-500" />
-                                                        )}
-                                                        {isLocked && (
-                                                            <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
-                                                                <Lock className="h-3 w-3" />
-                                                                (Locked)
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </DropdownMenuItem>
-                                            )
-                                        })
+                                        const isPublished = assignment.published
+                                        const publishedIndex = assignments.findIndex((a: any) => a.id === assignment.id)
+                                        const isCurrent = assignment.id === currentAssignment?.id
+                                        // For classwork: locked if not published OR (pointed exercise locked by default unless test active or has submissions)
+                                        // For homework: locked if not published OR beyond maxReachedIndex
+                                        // Check if student has submitted answers for this exercise
+                                        const assignmentProgress = progressMap.get(assignment.id)
+                                        const hasSubmissions = assignmentProgress?.submitted_answers && Object.keys(assignmentProgress.submitted_answers).length > 0
+                                        const isPointedAndLocked = assignment.points_enabled && !isTestModeActive && !hasSubmissions
+                                        const isLocked = isClasswork
+                                            ? (!isPublished || isPointedAndLocked)
+                                            : (!isPublished || publishedIndex > maxReachedIndex)
+                                        return (
+                                            <DropdownMenuItem
+                                                key={assignment.id}
+                                                disabled={isLocked}
+                                                onClick={() => !isLocked && publishedIndex >= 0 && handleJumpToExercise(publishedIndex)}
+                                                className={isCurrent ? "bg-accent" : ""}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    Užduotis {index + 1}
+                                                    {assignment.points_enabled && (
+                                                        <Award className="h-3.5 w-3.5 text-amber-500" />
+                                                    )}
+                                                    {isLocked && (
+                                                        <span className="flex items-center gap-1 text-muted-foreground text-[10px]">
+                                                            <Lock className="h-3 w-3" />
+                                                            (Locked)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </DropdownMenuItem>
+                                        )
+                                    })
                                 ) : (
                                     // Fallback to published assignments only (for homework, respect maxReachedIndex)
                                     assignments.map((_: any, index: number) => {
@@ -864,10 +864,10 @@ export function CollectionPlayer({
 
                 {/* Current Assignment Interface */}
                 {/* We use key to force re-mount when assignment changes */}
-                {/* Block access to pointed exercises after test mode expires ONLY if student has no submissions */}
+                {/* Pointed exercises are locked by default; unlocked only during active test or if student has submissions */}
                 {(() => {
                     const currentHasSubmissions = currentProgress?.submitted_answers && Object.keys(currentProgress.submitted_answers).length > 0
-                    const shouldBlockPointed = testModeExpired && currentAssignment.points_enabled && !currentHasSubmissions
+                    const shouldBlockPointed = currentAssignment.points_enabled && !isTestModeActive && !currentHasSubmissions
                     return shouldBlockPointed
                 })() ? (
                     <Card className="max-w-md mx-auto border-2 border-amber-200 bg-card/50">
@@ -878,7 +878,7 @@ export function CollectionPlayer({
                             <div className="space-y-2">
                                 <h2 className="text-xl font-bold">Užduotis užrakinta</h2>
                                 <p className="text-muted-foreground text-sm">
-                                    Ši užduotis buvo prieinama testo metu. Testo laikas baigėsi.
+                                    {testModeExpired ? 'Ši užduotis buvo prieinama testo metu. Testo laikas baigėsi.' : 'Ši užduotis bus prieinama testo metu.'}
                                 </p>
                             </div>
                             {/* Show earned points if available */}
