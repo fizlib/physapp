@@ -923,6 +923,8 @@ export function CollectionPlayer({
                         initialEarnedPointsPerPart={currentEarnedPointsPerPart}
                         // Last exercise in collection - show "Finish" instead of "Next Exercise"
                         isLastExercise={!getNextAssignmentFromAllAssignments()}
+                        // Hide correctness feedback during active test (show only after finishing)
+                        hideCorrectness={isTestModeActive && !isCompleted && !testModeExpired && !isReviewing}
                         onProgressUpdate={refreshProgress}
                     />
                 )}

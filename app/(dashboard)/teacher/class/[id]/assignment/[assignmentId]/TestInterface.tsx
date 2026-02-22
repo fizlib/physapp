@@ -145,9 +145,11 @@ export function TestInterface({
         const correctMcqLetter = !isNumerical ? question.correct_answer?.trim().toUpperCase() : null
         const correctMcqOption = !isNumerical && correctMcqLetter ? question.options?.[['A', 'B', 'C', 'D'].indexOf(correctMcqLetter)] : null
         const showCorrectAnswer = submittedIsCorrect === false
-        const statusStyles = submittedIsCorrect
-            ? 'bg-green-100 text-green-700 border border-green-200'
-            : 'bg-red-100 text-red-700 border border-red-200'
+        const statusStyles = submittedIsCorrect === undefined
+            ? 'bg-zinc-100 text-zinc-600 border border-zinc-200'
+            : submittedIsCorrect
+                ? 'bg-green-100 text-green-700 border border-green-200'
+                : 'bg-red-100 text-red-700 border border-red-200'
 
         return (
             <div className="rounded-lg border border-zinc-200/70 bg-zinc-50/80 p-3 space-y-3">

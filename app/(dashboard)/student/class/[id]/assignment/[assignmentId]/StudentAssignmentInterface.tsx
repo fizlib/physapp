@@ -34,6 +34,7 @@ export function StudentAssignmentInterface({
     initialEarnedPointsPerPart = {},
     isLastExercise = false,
     showVirtualKeyboardToggle = true,
+    hideCorrectness = false,
     onProgressUpdate
 }: {
     assignment: any,
@@ -55,6 +56,7 @@ export function StudentAssignmentInterface({
     initialEarnedPointsPerPart?: Record<string, number>,
     isLastExercise?: boolean,
     showVirtualKeyboardToggle?: boolean,
+    hideCorrectness?: boolean,
     onProgressUpdate?: () => void
 }) {
     const questions = assignment.questions || []
@@ -355,11 +357,13 @@ export function StudentAssignmentInterface({
                         const isCorrect = completedIndices.has(index)
                         const pointsStatus = getPointsQuestionStatus(q.id)
                         const cardStateClasses = pointsEnabled
-                            ? (pointsStatus === 'correct'
-                                ? 'border-green-500/40 bg-green-50/10'
-                                : pointsStatus === 'incorrect'
-                                    ? 'border-red-500/40 bg-red-50/10'
-                                    : 'border-amber-500/30')
+                            ? (hideCorrectness
+                                ? (pointsStatus === 'unsubmitted' ? 'border-amber-500/30' : 'border-zinc-300')
+                                : (pointsStatus === 'correct'
+                                    ? 'border-green-500/40 bg-green-50/10'
+                                    : pointsStatus === 'incorrect'
+                                        ? 'border-red-500/40 bg-red-50/10'
+                                        : 'border-amber-500/30'))
                             : (isCorrect ? 'border-green-500/40 bg-green-50/10' : '')
                         return (
                             <Card key={index} className={`transition-all ${cardStateClasses}`}>
@@ -418,22 +422,22 @@ export function StudentAssignmentInterface({
                                             )}
 
                                             <div className={`pt-2 ${revealedIndices.has(index) ? "pointer-events-none" : ""}`}>
-                                                    <TestInterface
-                                                        key={q.id || index}
-                                                        question={q}
-                                                        showVirtualKeyboardToggle={showVirtualKeyboardToggle}
-                                                        questionId={q.id}
-                                                        questionPoints={q.points || 1}
-                                                        pointsMode={pointsEnabled}
-                                                        disabled={lockedQuestionIds.has(q.id)}
-                                                        submittedAnswer={submittedAnswers[q.id]}
-                                                        submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[q.id] : undefined}
-                                                        onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
-                                                            handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, index)
-                                                        }
-                                                        onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
-                                                        isRevealed={revealedIndices.has(index)}
-                                                    />
+                                                <TestInterface
+                                                    key={q.id || index}
+                                                    question={q}
+                                                    showVirtualKeyboardToggle={showVirtualKeyboardToggle}
+                                                    questionId={q.id}
+                                                    questionPoints={q.points || 1}
+                                                    pointsMode={pointsEnabled}
+                                                    disabled={lockedQuestionIds.has(q.id)}
+                                                    submittedAnswer={submittedAnswers[q.id]}
+                                                    submittedIsCorrect={pointsEnabled && !hideCorrectness ? pointsCorrectnessByQuestionId[q.id] : undefined}
+                                                    onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
+                                                        handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, index)
+                                                    }
+                                                    onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
+                                                    isRevealed={revealedIndices.has(index)}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -516,11 +520,13 @@ export function StudentAssignmentInterface({
             ) : (
                 /* Paginated View */
                 <Card className={`transition-all ${pointsEnabled
-                    ? (currentPointsStatus === 'correct'
-                        ? 'border-green-500/40 bg-green-50/10'
-                        : currentPointsStatus === 'incorrect'
-                            ? 'border-red-500/40 bg-red-50/10'
-                            : 'border-amber-500/30')
+                    ? (hideCorrectness
+                        ? (currentPointsStatus === 'unsubmitted' ? 'border-amber-500/30' : 'border-zinc-300')
+                        : (currentPointsStatus === 'correct'
+                            ? 'border-green-500/40 bg-green-50/10'
+                            : currentPointsStatus === 'incorrect'
+                                ? 'border-red-500/40 bg-red-50/10'
+                                : 'border-amber-500/30'))
                     : (canProceed ? 'border-green-500/40 bg-green-50/10' : '')}`}>
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
@@ -595,7 +601,7 @@ export function StudentAssignmentInterface({
                                     pointsMode={pointsEnabled}
                                     disabled={lockedQuestionIds.has(questions[currentIndex].id)}
                                     submittedAnswer={submittedAnswers[questions[currentIndex].id]}
-                                    submittedIsCorrect={pointsEnabled ? pointsCorrectnessByQuestionId[questions[currentIndex].id] : undefined}
+                                    submittedIsCorrect={pointsEnabled && !hideCorrectness ? pointsCorrectnessByQuestionId[questions[currentIndex].id] : undefined}
                                     onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
                                         handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, currentIndex)
                                     }
