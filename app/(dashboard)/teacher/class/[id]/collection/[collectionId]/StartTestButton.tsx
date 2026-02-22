@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -14,8 +14,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Timer, Loader2, Play, CheckCircle2, Award, Users } from "lucide-react"
-import { startTestCollection, getStudentsForTestDialog } from "../../../../actions"
+import { Timer, Loader2, Play, CheckCircle2, Award, Users, Square } from "lucide-react"
+import { startTestCollection, getStudentsForTestDialog, getCollectionTestEndTime, autoSubmitForAllTestParticipants, endTestCollection } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -34,6 +34,12 @@ interface StartTestButtonProps {
     hasPointedExercises: boolean
 }
 
+function formatTime(totalSeconds: number): string {
+    const m = Math.floor(totalSeconds / 60)
+    const s = totalSeconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
+}
+
 export function StartTestButton({ collectionId, classroomId, hasPointedExercises }: StartTestButtonProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -43,8 +49,100 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const router = useRouter()
 
+    // Active test timer state
+    const [testEndTime, setTestEndTime] = useState<Date | null>(null)
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
+    const [isEnding, setIsEnding] = useState(false)
+    const isEndingRef = useRef(false)
+
     if (!hasPointedExercises) {
         return null
+    }
+
+    // Check for active test on mount
+    useEffect(() => {
+        let cancelled = false
+        const checkActiveTest = async () => {
+            const result = await getCollectionTestEndTime(collectionId, classroomId)
+            if (cancelled) return
+            if (result.success && result.testModeEndsAt) {
+                const endTime = new Date(result.testModeEndsAt)
+                if (endTime > new Date()) {
+                    setTestEndTime(endTime)
+                }
+            }
+        }
+        checkActiveTest()
+        return () => { cancelled = true }
+    }, [collectionId, classroomId])
+
+    // Countdown ticker
+    useEffect(() => {
+        if (!testEndTime) {
+            setRemainingSeconds(null)
+            return
+        }
+
+        const tick = () => {
+            const now = Date.now()
+            const remaining = Math.max(0, Math.floor((testEndTime.getTime() - now) / 1000))
+            setRemainingSeconds(remaining)
+
+            if (remaining <= 0 && !isEndingRef.current) {
+                // Timer expired — trigger server-side auto-submit
+                handleTimerExpired()
+            }
+        }
+
+        tick()
+        const interval = setInterval(tick, 1000)
+        return () => clearInterval(interval)
+    }, [testEndTime])
+
+    const handleTimerExpired = useCallback(async () => {
+        if (isEndingRef.current) return
+        isEndingRef.current = true
+        setIsEnding(true)
+
+        try {
+            // 1. Auto-submit empty answers for all participants
+            await autoSubmitForAllTestParticipants(collectionId, classroomId)
+            // 2. End the test (clear timer)
+            await endTestCollection(collectionId, classroomId)
+
+            toast.success("Testas baigtas! Visi atsakymai pateikti.")
+            setTestEndTime(null)
+            setRemainingSeconds(null)
+            router.refresh()
+        } catch (err) {
+            console.error("Error ending test:", err)
+            toast.error("Klaida baigiant testą")
+        } finally {
+            setIsEnding(false)
+            isEndingRef.current = false
+        }
+    }, [collectionId, classroomId, router])
+
+    const handleEndTestEarly = async () => {
+        if (isEndingRef.current) return
+        isEndingRef.current = true
+        setIsEnding(true)
+
+        try {
+            await autoSubmitForAllTestParticipants(collectionId, classroomId)
+            await endTestCollection(collectionId, classroomId)
+
+            toast.success("Testas baigtas anksčiau! Visi atsakymai pateikti.")
+            setTestEndTime(null)
+            setRemainingSeconds(null)
+            router.refresh()
+        } catch (err) {
+            console.error("Error ending test early:", err)
+            toast.error("Klaida baigiant testą")
+        } finally {
+            setIsEnding(false)
+            isEndingRef.current = false
+        }
     }
 
     const loadStudents = async () => {
@@ -109,6 +207,10 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
             if (result.success) {
                 toast.success(`Testas pradėtas! Trukmė: ${duration} min. Mokiniai: ${selectedIds.size}`)
                 setOpen(false)
+                // Set the test end time for the countdown
+                const endTime = new Date()
+                endTime.setMinutes(endTime.getMinutes() + duration)
+                setTestEndTime(endTime)
                 router.refresh()
             } else {
                 toast.error(result.error || "Nepavyko pradėti testo")
@@ -122,6 +224,43 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
     }
 
     const selectedWithPriorResults = students.filter(s => selectedIds.has(s.id) && s.hasCompleted)
+
+    // If a test is active, show the countdown timer + end button
+    if (testEndTime && remainingSeconds !== null) {
+        const isExpired = remainingSeconds <= 0
+        const isLowTime = remainingSeconds <= 60 && remainingSeconds > 0
+
+        return (
+            <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg font-mono text-lg font-bold ${isExpired
+                    ? 'bg-red-100 text-red-700'
+                    : isLowTime
+                        ? 'bg-amber-100 text-amber-700 animate-pulse'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}>
+                    <Timer className="h-5 w-5" />
+                    {isExpired ? (
+                        <span>Laikas baigėsi</span>
+                    ) : (
+                        <span>{formatTime(remainingSeconds)}</span>
+                    )}
+                </div>
+                <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleEndTestEarly}
+                    disabled={isEnding}
+                >
+                    {isEnding ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Square className="mr-2 h-4 w-4" />
+                    )}
+                    {isEnding ? 'Baigiama...' : 'Baigti testą'}
+                </Button>
+            </div>
+        )
+    }
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>

@@ -2673,20 +2673,152 @@ export async function endTestCollection(
         return { success: false, error: "Failed to end test mode" }
     }
 
-    // Unpublish all assignments in collection that have points_enabled = true
-    const { error: assignmentError } = await supabase
-        .from('assignments')
-        .update({ published: false })
-        .eq('collection_id', collectionId)
-        .eq('points_enabled', true)
-
-    if (assignmentError) {
-        console.error("Assignment unpublish error:", assignmentError)
-        return { success: false, error: "Failed to unpublish pointed exercises" }
-    }
+    // Pointed exercises remain published - access control is handled client-side:
+    // Students who haven't taken the test see them as locked (isPointedAndLocked),
+    // while students who completed the test can review their answers.
 
     revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
     revalidatePath(`/student/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
+// Get the test_mode_ends_at for a collection (lightweight poll for teacher timer)
+export async function getCollectionTestEndTime(
+    collectionId: string,
+    classroomId: string
+): Promise<{ success: boolean, testModeEndsAt?: string | null, error?: string }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data: collection } = await supabase
+        .from('collections')
+        .select('test_mode_ends_at')
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+        .single()
+
+    if (!collection) return { success: false, error: "Collection not found" }
+
+    return { success: true, testModeEndsAt: collection.test_mode_ends_at || null }
+}
+
+// Auto-submit empty answers for ALL test participants (server-side, uses admin client)
+// This ensures offline students also get their answers submitted when the timer expires.
+export async function autoSubmitForAllTestParticipants(
+    collectionId: string,
+    classroomId: string
+): Promise<ActionState> {
+    const supabase = await createClient()
+    const supabaseAdmin = createAdminClient()
+
+    // Verify Auth
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Fetch all test participants for this collection
+    const { data: participants } = await supabaseAdmin
+        .from('collection_test_participants')
+        .select('student_id')
+        .eq('collection_id', collectionId)
+
+    if (!participants || participants.length === 0) {
+        return { success: true } // No participants
+    }
+
+    const studentIds = participants.map(p => p.student_id)
+
+    // Fetch all PUBLISHED assignments in collection with points enabled
+    const { data: assignments } = await supabaseAdmin
+        .from('assignments')
+        .select('id, points_enabled, questions(id, points)')
+        .eq('collection_id', collectionId)
+        .eq('points_enabled', true)
+        .eq('published', true)
+
+    if (!assignments || assignments.length === 0) {
+        return { success: true } // No points-enabled exercises
+    }
+
+    const assignmentIds = assignments.map(a => a.id)
+
+    // Fetch existing progress for ALL participants on these assignments
+    const { data: allProgress } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('student_id, assignment_id, submitted_answers, earned_points_per_part')
+        .in('assignment_id', assignmentIds)
+        .in('student_id', studentIds)
+
+    // Build a lookup: studentId -> assignmentId -> progress
+    const progressLookup = new Map<string, Map<string, any>>()
+    allProgress?.forEach(p => {
+        if (!progressLookup.has(p.student_id)) {
+            progressLookup.set(p.student_id, new Map())
+        }
+        progressLookup.get(p.student_id)!.set(p.assignment_id, p)
+    })
+
+    // Process each student × assignment combination
+    for (const studentId of studentIds) {
+        const studentProgress = progressLookup.get(studentId) || new Map()
+
+        for (const assignment of assignments) {
+            const questions = (assignment as any).questions || []
+            if (questions.length === 0) continue
+
+            const progress = studentProgress.get(assignment.id)
+            const submittedAnswers: Record<string, string> = progress?.submitted_answers || {}
+            const earnedPointsPerPart: Record<string, number> = progress?.earned_points_per_part || {}
+
+            let hasNewSubmissions = false
+
+            // Submit empty answers for unanswered questions
+            for (const question of questions) {
+                if (submittedAnswers[question.id] === undefined) {
+                    submittedAnswers[question.id] = ''
+                    earnedPointsPerPart[question.id] = 0
+                    hasNewSubmissions = true
+                }
+            }
+
+            if (hasNewSubmissions) {
+                // Calculate total earned points
+                const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
+
+                // Upsert using admin client (bypasses RLS)
+                const { error } = await supabaseAdmin
+                    .from('assignment_progress')
+                    .upsert({
+                        student_id: studentId,
+                        assignment_id: assignment.id,
+                        submitted_answers: submittedAnswers,
+                        earned_points_per_part: earnedPointsPerPart,
+                        earned_points: totalEarnedPoints,
+                        is_completed: true,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'student_id, assignment_id'
+                    })
+
+                if (error) {
+                    console.error("Auto-submit error for student", studentId, "assignment", assignment.id, error)
+                }
+            }
+        }
+    }
+
     return { success: true }
 }
 
