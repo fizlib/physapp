@@ -188,6 +188,10 @@ export function CollectionPlayer({
 
     // Tab monitoring state — initialized from server-side check
     const [tabBlocked, setTabBlocked] = useState(initialTabBlocked)
+    // Tracks whether a local tab violation report is in-flight.
+    // While true, the general polling must NOT override tabBlocked to false
+    // (the server may not yet have the violation row).
+    const tabViolationInFlightRef = useRef(false)
 
     // Tab monitoring: Page Visibility API listener
     useEffect(() => {
@@ -197,9 +201,15 @@ export function CollectionPlayer({
             if (document.hidden) {
                 // Student switched tab or minimized
                 setTabBlocked(true)
-                reportTabViolation(collection.id).catch(err => {
-                    console.error('Failed to report tab violation:', err)
-                })
+                tabViolationInFlightRef.current = true
+                reportTabViolation(collection.id)
+                    .then(() => {
+                        tabViolationInFlightRef.current = false
+                    })
+                    .catch(err => {
+                        console.error('Failed to report tab violation:', err)
+                        tabViolationInFlightRef.current = false
+                    })
             }
         }
 
@@ -405,8 +415,10 @@ export function CollectionPlayer({
                 return
             }
 
-            // Check tab blocked status from server
-            if (status.success) {
+            // Check tab blocked status from server — but only override local state
+            // when there is NO in-flight local violation report (avoids race condition
+            // where the poll reads stale state before reportTabViolation() write lands).
+            if (status.success && !tabViolationInFlightRef.current) {
                 if (status.tabBlocked) {
                     setTabBlocked(true)
                 } else {
@@ -650,9 +662,9 @@ export function CollectionPlayer({
                         <span className="text-sm">Laukiama...</span>
                     </div>
                     <Button asChild variant="outline" className="w-full">
-                        <Link href={`/student/class/${classroomId}`}>
+                        <Link href="/student">
                             <ArrowLeft className="mr-2 h-4 w-4" />
-                            Grįžti į klasę
+                            Grįžti į pagrindinį
                         </Link>
                     </Button>
                 </div>
