@@ -1125,7 +1125,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1154,6 +1154,10 @@ export async function updateCollection(classroomId: string, collectionId: string
 
     if (tabMonitoringEnabled !== undefined) {
         updateData.tab_monitoring_enabled = tabMonitoringEnabled
+    }
+
+    if (autoDisableTabMonitoringAfterTest !== undefined) {
+        updateData.auto_disable_tab_monitoring_after_test = autoDisableTabMonitoringAfterTest
     }
 
     if (slidesUrl !== undefined) {
@@ -2694,10 +2698,23 @@ export async function endTestCollection(
         return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
-    // Clear test_mode_ends_at
+    // Check if we need to auto-disable tab monitoring
+    const { data: collectionData } = await supabase
+        .from('collections')
+        .select('auto_disable_tab_monitoring_after_test, tab_monitoring_enabled')
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+        .single()
+
+    const updateFields: any = { test_mode_ends_at: null }
+    if (collectionData?.auto_disable_tab_monitoring_after_test && collectionData?.tab_monitoring_enabled) {
+        updateFields.tab_monitoring_enabled = false
+    }
+
+    // Clear test_mode_ends_at (and optionally disable tab monitoring)
     const { error: collectionError } = await supabase
         .from('collections')
-        .update({ test_mode_ends_at: null })
+        .update(updateFields)
         .eq('id', collectionId)
         .eq('classroom_id', classroomId)
 

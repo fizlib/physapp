@@ -36,6 +36,7 @@ interface CollectionSettingsDialogProps {
     lessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
     currentTabMonitoringEnabled?: boolean
+    currentAutoDisableTabMonitoring?: boolean
 }
 
 export function CollectionSettingsDialog({
@@ -48,7 +49,8 @@ export function CollectionSettingsDialog({
     currentSlidesUrl,
     lessonSchedule,
     trigger,
-    currentTabMonitoringEnabled
+    currentTabMonitoringEnabled,
+    currentAutoDisableTabMonitoring
 }: CollectionSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -68,6 +70,7 @@ export function CollectionSettingsDialog({
     const [deleteExercises, setDeleteExercises] = useState(false)
     const [useScheduling, setUseScheduling] = useState(!!currentScheduledDate)
     const [tabMonitoringEnabled, setTabMonitoringEnabled] = useState(!!currentTabMonitoringEnabled)
+    const [autoDisableTabMonitoring, setAutoDisableTabMonitoring] = useState(currentAutoDisableTabMonitoring !== false)
 
     const router = useRouter()
 
@@ -103,8 +106,9 @@ export function CollectionSettingsDialog({
             setUseScheduling(!!currentScheduledDate)
             setSlidesUrl(currentSlidesUrl || null)
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
+            setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
-    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl, currentTabMonitoringEnabled])
+    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl, currentTabMonitoringEnabled, currentAutoDisableTabMonitoring])
 
     const handleSave = async () => {
         setLoading(true)
@@ -126,7 +130,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -178,6 +182,7 @@ export function CollectionSettingsDialog({
                 || (selectedEndTime !== (currentScheduledEndAt ? new Date(currentScheduledEndAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
             ))
         || tabMonitoringEnabled !== !!currentTabMonitoringEnabled
+        || autoDisableTabMonitoring !== (currentAutoDisableTabMonitoring !== false)
 
 
     return (
@@ -401,9 +406,21 @@ export function CollectionSettingsDialog({
                                 </Label>
                             </div>
                             {tabMonitoringEnabled && (
-                                <p className="text-xs text-muted-foreground ml-6 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    Mokiniai bus užblokuoti, jei perjungs skirtuką arba sumažins naršyklę.
-                                </p>
+                                <div className="ml-6 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <p className="text-xs text-muted-foreground">
+                                        Mokiniai bus užblokuoti, jei perjungs skirtuką arba sumažins naršyklę.
+                                    </p>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="auto-disable-tab-monitoring"
+                                            checked={autoDisableTabMonitoring}
+                                            onCheckedChange={(checked) => setAutoDisableTabMonitoring(!!checked)}
+                                        />
+                                        <Label htmlFor="auto-disable-tab-monitoring" className="text-xs font-normal cursor-pointer">
+                                            Automatiškai išjungti stebėjimą pasibaigus testui
+                                        </Label>
+                                    </div>
+                                </div>
                             )}
                         </div>
                     )}
