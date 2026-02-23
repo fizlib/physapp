@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
 import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
-import { ShieldAlert, ArrowLeft, Loader2, Lock, EyeOff } from "lucide-react"
+import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
@@ -259,7 +259,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             .gt('expires_at', nowIso)
             .maybeSingle(),
         progressPromise,
-        getSiteSettings(['test_mode_polling_enabled', 'virtual_keyboard_toggle_enabled']),
+        getSiteSettings(['test_mode_polling_enabled', 'virtual_keyboard_toggle_enabled', 'tab_block_polling_enabled']),
         // Check if student is a test participant
         supabase
             .from('collection_test_participants')
@@ -328,6 +328,9 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     const isTabBlocked = !!tabViolationResult.data
 
+    // For IP restriction and time-up: render static block pages (no polling needed)
+    // For tab blocking: pass to client component so it can poll for unblock
+
     if (isRestricted) {
 
         return (
@@ -378,30 +381,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         )
     }
 
-    if (isTabBlocked) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
-                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
-                        <EyeOff className="h-10 w-10 text-red-600" />
-                    </div>
-                    <div className="space-y-2">
-                        <h1 className="text-2xl font-bold tracking-tight">Prieiga užblokuota</h1>
-                        <p className="text-muted-foreground">
-                            Jūsų prieiga buvo užblokuota, nes perjungėte skirtuką arba sumažinote naršyklę.
-                            Kreipkitės į mokytoją, kad atblokuotų prieigą.
-                        </p>
-                    </div>
-                    <Button asChild variant="outline" className="w-full">
-                        <Link href={`/student/class/${id}`}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Grįžti į klasę
-                        </Link>
-                    </Button>
-                </div>
-            </div>
-        )
-    }
+
 
     if (assignmentLoadError) {
         return (
@@ -427,6 +407,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     const testModePollingEnabled = (settings.test_mode_polling_enabled ?? 'true').toLowerCase() === 'true'
     const virtualKeyboardToggleEnabled = (settings.virtual_keyboard_toggle_enabled ?? 'true').toLowerCase() === 'true'
+    const tabBlockPollingEnabled = (settings.tab_block_polling_enabled ?? 'true').toLowerCase() === 'true'
     const tabMonitoringEnabled = !!collection.tab_monitoring_enabled
 
     return (
@@ -440,6 +421,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 showVirtualKeyboardToggle={virtualKeyboardToggleEnabled}
                 initialIsTestParticipant={initialIsTestParticipant}
                 tabMonitoringEnabled={tabMonitoringEnabled}
+                initialTabBlocked={isTabBlocked}
+                tabBlockPollingEnabled={tabBlockPollingEnabled}
             />
         </Suspense>
     )

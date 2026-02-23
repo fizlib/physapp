@@ -1012,3 +1012,39 @@ export async function reportTabViolation(collectionId: string): Promise<ActionSt
 
     return { success: true }
 }
+
+// Lightweight check for whether the student is currently tab-blocked in a classroom.
+// Used for polling on the blocked screen — much cheaper than getCollectionRuntimeStatus.
+export async function checkTabBlockStatus(classroomId: string): Promise<{
+    success: boolean
+    blocked: boolean
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, blocked: false, error: "Unauthorized" }
+
+    // Get all monitored collections in this classroom
+    const { data: monitoredCollections } = await supabase
+        .from('collections')
+        .select('id')
+        .eq('classroom_id', classroomId)
+        .eq('tab_monitoring_enabled', true)
+
+    if (!monitoredCollections || monitoredCollections.length === 0) {
+        return { success: true, blocked: false }
+    }
+
+    const monitoredIds = monitoredCollections.map(c => c.id)
+    const { data: violation } = await supabase
+        .from('tab_monitoring_violations')
+        .select('blocked')
+        .in('collection_id', monitoredIds)
+        .eq('student_id', user.id)
+        .eq('blocked', true)
+        .limit(1)
+        .maybeSingle()
+
+    return { success: true, blocked: !!violation }
+}

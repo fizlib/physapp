@@ -23,7 +23,8 @@ import {
     getCollectionProgress,
     getCollectionRuntimeStatus,
     getAssignmentPublishStatus,
-    reportTabViolation
+    reportTabViolation,
+    checkTabBlockStatus
 } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -45,6 +46,8 @@ interface CollectionPlayerProps {
     showVirtualKeyboardToggle?: boolean // Admin setting to show/hide student virtual keyboard toggle button
     initialIsTestParticipant?: boolean // Whether the student is a participant in the current test
     tabMonitoringEnabled?: boolean // Whether tab monitoring is enabled for this collection
+    initialTabBlocked?: boolean // Whether the student is currently tab-blocked (from server)
+    tabBlockPollingEnabled?: boolean // Admin setting: whether to poll for unblock
 }
 
 export function CollectionPlayer({
@@ -55,7 +58,9 @@ export function CollectionPlayer({
     testModePollingEnabled = true,
     showVirtualKeyboardToggle = true,
     initialIsTestParticipant = true,
-    tabMonitoringEnabled = false
+    tabMonitoringEnabled = false,
+    initialTabBlocked = false,
+    tabBlockPollingEnabled = true
 }: CollectionPlayerProps) {
     // Determine if this is classwork (all published accessible) or homework (sequential unlock)
     const isClasswork = collection.category === 'classwork'
@@ -181,8 +186,8 @@ export function CollectionPlayer({
         return false
     })
 
-    // Tab monitoring state
-    const [tabBlocked, setTabBlocked] = useState(false)
+    // Tab monitoring state — initialized from server-side check
+    const [tabBlocked, setTabBlocked] = useState(initialTabBlocked)
 
     // Tab monitoring: Page Visibility API listener
     useEffect(() => {
@@ -203,6 +208,41 @@ export function CollectionPlayer({
             document.removeEventListener('visibilitychange', handleVisibilityChange)
         }
     }, [tabMonitoringEnabled, isClasswork, collection.id])
+
+    // Dedicated polling for unblock: runs only when tabBlocked is true
+    useEffect(() => {
+        if (!tabBlocked || !tabBlockPollingEnabled) return
+
+        let cancelled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
+
+        const INITIAL_POLL_MS = 5000
+        const MAX_POLL_MS = 12000
+        let currentDelayMs = INITIAL_POLL_MS
+
+        const checkUnblock = async () => {
+            const result = await checkTabBlockStatus(classroomId)
+            if (cancelled) return
+
+            if (result.success && !result.blocked) {
+                setTabBlocked(false)
+                return
+            }
+
+            if (!cancelled) {
+                const delay = currentDelayMs
+                currentDelayMs = Math.min(MAX_POLL_MS, Math.floor(currentDelayMs * 1.5))
+                timeout = setTimeout(checkUnblock, delay)
+            }
+        }
+
+        // Start polling after initial delay
+        timeout = setTimeout(checkUnblock, INITIAL_POLL_MS)
+        return () => {
+            cancelled = true
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [tabBlocked, tabBlockPollingEnabled, classroomId])
 
     // Function to refresh progress data from server
     const refreshProgress = async () => {
@@ -366,8 +406,12 @@ export function CollectionPlayer({
             }
 
             // Check tab blocked status from server
-            if (status.success && status.tabBlocked) {
-                setTabBlocked(true)
+            if (status.success) {
+                if (status.tabBlocked) {
+                    setTabBlocked(true)
+                } else {
+                    setTabBlocked(false)
+                }
             }
 
             // Test Mode Check - only when NOT already active and polling is enabled
@@ -591,7 +635,7 @@ export function CollectionPlayer({
         return (
             <div className="min-h-screen flex items-center justify-center p-6 bg-background">
                 <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
-                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center relative">
                         <EyeOff className="h-10 w-10 text-red-600" />
                     </div>
                     <div className="space-y-2">
@@ -600,6 +644,10 @@ export function CollectionPlayer({
                             Jūsų prieiga buvo užblokuota, nes perjungėte skirtuką arba sumažinote naršyklę.
                             Kreipkitės į mokytoją, kad atblokuotų prieigą.
                         </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span className="text-sm">Laukiama...</span>
                     </div>
                     <Button asChild variant="outline" className="w-full">
                         <Link href={`/student/class/${classroomId}`}>

@@ -13,6 +13,8 @@ export default async function AdminSettingsPage() {
     const testModePollingEnabled = (testModePollingEnabledStr ?? 'true').toLowerCase() === 'true'
     const virtualKeyboardToggleEnabledStr = await getSiteSetting('virtual_keyboard_toggle_enabled')
     const virtualKeyboardToggleEnabled = (virtualKeyboardToggleEnabledStr ?? 'true').toLowerCase() === 'true'
+    const tabBlockPollingEnabledStr = await getSiteSetting('tab_block_polling_enabled')
+    const tabBlockPollingEnabled = (tabBlockPollingEnabledStr ?? 'true').toLowerCase() === 'true'
 
     return (
         <div className="p-8 max-w-7xl mx-auto">
@@ -35,6 +37,7 @@ export default async function AdminSettingsPage() {
                     initialRegistrationEnabled={registrationEnabled}
                     initialTestModePollingEnabled={testModePollingEnabled}
                     initialVirtualKeyboardToggleEnabled={virtualKeyboardToggleEnabled}
+                    initialTabBlockPollingEnabled={tabBlockPollingEnabled}
                 />
                 <GeminiKeysManager initialKeys={await getGeminiKeys()} />
             </div>

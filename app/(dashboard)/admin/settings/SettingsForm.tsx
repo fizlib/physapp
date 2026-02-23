@@ -11,16 +11,19 @@ interface SettingsFormProps {
     initialRegistrationEnabled: boolean
     initialTestModePollingEnabled: boolean
     initialVirtualKeyboardToggleEnabled: boolean
+    initialTabBlockPollingEnabled: boolean
 }
 
 export function SettingsForm({
     initialRegistrationEnabled,
     initialTestModePollingEnabled,
-    initialVirtualKeyboardToggleEnabled
+    initialVirtualKeyboardToggleEnabled,
+    initialTabBlockPollingEnabled
 }: SettingsFormProps) {
     const [registrationEnabled, setRegistrationEnabled] = useState(initialRegistrationEnabled)
     const [testModePollingEnabled, setTestModePollingEnabled] = useState(initialTestModePollingEnabled)
     const [virtualKeyboardToggleEnabled, setVirtualKeyboardToggleEnabled] = useState(initialVirtualKeyboardToggleEnabled)
+    const [tabBlockPollingEnabled, setTabBlockPollingEnabled] = useState(initialTabBlockPollingEnabled)
     const [isLoading, setIsLoading] = useState(false)
 
     const handleRegistrationToggle = async (checked: boolean) => {
@@ -64,6 +67,21 @@ export function SettingsForm({
             toast.error("Error", { description: "Failed to update setting." })
         } else {
             toast.success("Success", { description: `Virtual keyboard toggle is now ${checked ? 'enabled' : 'disabled'} for students.` })
+        }
+        setIsLoading(false)
+    }
+
+    const handleTabBlockPollingToggle = async (checked: boolean) => {
+        setIsLoading(true)
+        setTabBlockPollingEnabled(checked)
+
+        const result = await updateSiteSetting('tab_block_polling_enabled', String(checked))
+
+        if (result?.error) {
+            setTabBlockPollingEnabled(!checked)
+            toast.error("Error", { description: "Failed to update setting." })
+        } else {
+            toast.success("Success", { description: `Tab block polling is now ${checked ? 'enabled' : 'disabled'}.` })
         }
         setIsLoading(false)
     }
@@ -125,6 +143,27 @@ export function SettingsForm({
                             disabled={isLoading}
                         />
                         <Label htmlFor="virtual-keyboard-toggle">Show Virtual Keyboard Toggle in Student Inputs</Label>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Tab Block Polling</CardTitle>
+                    <CardDescription>
+                        When enabled, blocked students automatically poll for unblock status.
+                        When disabled, students must refresh the page after being unblocked.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch
+                            id="tab-block-polling"
+                            checked={tabBlockPollingEnabled}
+                            onCheckedChange={handleTabBlockPollingToggle}
+                            disabled={isLoading}
+                        />
+                        <Label htmlFor="tab-block-polling">Enable Tab Block Polling</Label>
                     </div>
                 </CardContent>
             </Card>
