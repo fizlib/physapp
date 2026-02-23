@@ -1176,6 +1176,39 @@ export async function updateCollection(classroomId: string, collectionId: string
     return { success: true }
 }
 
+export async function toggleTabMonitoring(classroomId: string, collectionId: string, enabled: boolean): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { error } = await supabase
+        .from('collections')
+        .update({ tab_monitoring_enabled: enabled })
+        .eq('id', collectionId)
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error(error)
+        return { success: false, error: 'Failed to toggle tab monitoring' }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath(`/teacher/class/${classroomId}/collection/${collectionId}`)
+    return { success: true }
+}
+
 export async function uploadCollectionSlides(formData: FormData): Promise<{ success: boolean, url?: string, error?: string }> {
     const supabase = await createClient()
 

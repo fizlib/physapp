@@ -12,6 +12,7 @@ import { CreateCollectionDialog } from "./CreateCollectionDialog"
 import { ImportCollectionDialog } from "./ImportCollectionDialog"
 import { ClassSettingsDialog } from "./ClassSettingsDialog"
 import { DeleteCollectionButton } from "./DeleteCollectionButton"
+import { TabMonitoringToggle } from "./TabMonitoringToggle"
 import { TeacherIpSync } from "../../TeacherIpSync"
 
 interface StudentPointsSummary {
@@ -55,6 +56,7 @@ interface ClassroomCollection {
     assignments?: Array<{ id: string }> | null
     scheduled_date?: string | null
     scheduled_end_at?: string | null
+    tab_monitoring_enabled?: boolean | null
     created_at: string
 }
 
@@ -375,6 +377,13 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                                     Created {new Date(collection.created_at).toLocaleDateString()}
                                                                 </div>
                                                             )}
+                                                            <div className="relative z-10 pointer-events-auto pt-1">
+                                                                <TabMonitoringToggle
+                                                                    classroomId={id}
+                                                                    collectionId={collection.id}
+                                                                    initialEnabled={!!collection.tab_monitoring_enabled}
+                                                                />
+                                                            </div>
                                                         </CardContent>
                                                     </Card>
                                                 ))}
