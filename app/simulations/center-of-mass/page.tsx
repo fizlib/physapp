@@ -65,12 +65,12 @@ export default function CenterOfMassSimulation() {
             // Full view, large blocks for easy building/selecting pin
             transStr = `translate(${padX}px, ${padY}px) scale(1) rotate(0deg) translate(0px, 0px)`;
         } else {
-            // Hung shape shrinks to have enough room to rotate 360 without bounds clipping
+            // Hung shape kept at scale 1 (no longer scales down)
             const pinScreenX = SVG_WIDTH / 2;
             const pinScreenY = SVG_HEIGHT / 3;
             const pxLocal = pin.x * CELL_SIZE + CELL_SIZE / 2;
             const pyLocal = pin.y * CELL_SIZE + CELL_SIZE / 2;
-            transStr = `translate(${pinScreenX}px, ${pinScreenY}px) scale(0.55) rotate(${rotDeg}deg) translate(${-pxLocal}px, ${-pyLocal}px)`;
+            transStr = `translate(${pinScreenX}px, ${pinScreenY}px) scale(1) rotate(${rotDeg}deg) translate(${-pxLocal}px, ${-pyLocal}px)`;
         }
 
         return { transformStr: transStr };
