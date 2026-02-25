@@ -142,6 +142,17 @@ export default function CenterOfMassSimulation() {
         return () => window.removeEventListener('pointerup', handleGlobalMouseUp);
     }, []);
 
+    // Prevent scrolling while dragging on the grid
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+        const handleTouchMove = (e: TouchEvent) => {
+            if (isDragging) e.preventDefault();
+        };
+        svg.addEventListener('touchmove', handleTouchMove, { passive: false });
+        return () => svg.removeEventListener('touchmove', handleTouchMove);
+    }, [isDragging]);
+
     // Check if user is a teacher
     useEffect(() => {
         const checkRole = async () => {
