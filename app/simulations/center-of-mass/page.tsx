@@ -42,17 +42,27 @@ export default function CenterOfMassSimulation() {
     const [attachedHole, setAttachedHole] = useState<number | null>(null);
     const shapeDragOffsetRef = useRef({ x: 0, y: 0 });
 
+    const [usedHoles, setUsedHoles] = useState<Set<number>>(new Set());
+    const [savedPlumbLines, setSavedPlumbLines] = useState<{ holeId: number; angle: number }[]>([]);
+
     const LEVEL_4_SHAPE_BLOCKS = useMemo(() => [
-        { x: 0, y: 0, m: 2 }, { x: 1, y: 0, m: 1 }, { x: 2, y: 0, m: 1 }, { x: 3, y: 0, m: 1 },
-        { x: 1, y: 1, m: 1 }, { x: 2, y: 1, m: 1 },
-        { x: 1, y: 2, m: 1 },
-        { x: 1, y: 3, m: 2 }
+        // Top section
+        { x: 3, y: 0, m: 2 }, { x: 4, y: 0, m: 1 }, { x: 5, y: 0, m: 1 },
+        { x: 3, y: 1, m: 1 }, { x: 4, y: 1, m: 1 }, { x: 5, y: 1, m: 2 },
+        // Middle wide section
+        { x: 0, y: 2, m: 1 }, { x: 1, y: 2, m: 1 }, { x: 2, y: 2, m: 1 }, { x: 3, y: 2, m: 1 }, { x: 4, y: 2, m: 1 }, { x: 5, y: 2, m: 1 }, { x: 6, y: 2, m: 1 },
+        { x: 0, y: 3, m: 1 }, { x: 1, y: 3, m: 2 }, { x: 2, y: 3, m: 1 }, { x: 3, y: 3, m: 1 }, { x: 4, y: 3, m: 1 }, { x: 5, y: 3, m: 1 }, { x: 6, y: 3, m: 1 },
+        // Bottom extension
+        { x: 2, y: 4, m: 1 }, { x: 3, y: 4, m: 1 }, { x: 4, y: 4, m: 2 },
+        { x: 2, y: 5, m: 1 }, { x: 3, y: 5, m: 1 }, { x: 4, y: 5, m: 1 },
+        { x: 2, y: 6, m: 2 }, { x: 3, y: 6, m: 1 }, { x: 4, y: 6, m: 1 },
     ], []);
 
     const LEVEL_4_HOLES = useMemo(() => [
-        { id: 0, x: 0.5, y: 0.5 },
-        { id: 1, x: 3.5, y: 0.5 },
-        { id: 2, x: 1.5, y: 3.5 }
+        { id: 0, x: 5.5, y: 0.5 }, // Top right
+        { id: 1, x: 0.5, y: 2.5 }, // Mid left
+        { id: 2, x: 6.5, y: 3.5 }, // Mid right
+        { id: 3, x: 2.5, y: 6.5 }, // Bottom left
     ], []);
 
     const LEVEL_4_COM = useMemo(() => {
@@ -244,6 +254,15 @@ export default function CenterOfMassSimulation() {
                 const vecAngle = Math.atan2(dy, dx);
                 let targetAngleDeg = ((Math.PI / 2 - vecAngle) * 180) / Math.PI;
                 setShapeAngle(targetAngleDeg);
+
+                // Record the used hole and plumb line relative to the shape
+                setUsedHoles(prev => new Set(prev).add(closestHole!.id));
+                setSavedPlumbLines(prev => {
+                    if (prev.some(pl => pl.holeId === closestHole!.id)) return prev;
+                    // The plumb line goes straight down from the hole. In the shape's local coordinates,
+                    // "straight down" corresponds to an angle of -targetAngleDeg + 90 degrees
+                    return [...prev, { holeId: closestHole!.id, angle: -targetAngleDeg + 90 }];
+                });
             }
         }
         prevDragging.current = isDragging;
@@ -287,6 +306,8 @@ export default function CenterOfMassSimulation() {
             setShapePos({ x: 8, y: 8 });
             setShapeAngle(0);
             setAttachedHole(null);
+            setUsedHoles(new Set());
+            setSavedPlumbLines([]);
         } else {
             setBlocks({});
         }
@@ -297,7 +318,7 @@ export default function CenterOfMassSimulation() {
         return weights.has(1) && weights.has(2);
     }, [blocks]);
 
-    const canProceed = level === 4 ? attachedHole !== null : totalMass > 0 && (level !== 2 || isComOutside) && (level !== 3 || hasBothWeights);
+    const canProceed = level === 4 ? usedHoles.size === LEVEL_4_HOLES.length : totalMass > 0 && (level !== 2 || isComOutside) && (level !== 3 || hasBothWeights);
 
     return (
         <div className="flex flex-col h-screen min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20">
@@ -343,6 +364,8 @@ export default function CenterOfMassSimulation() {
                                                     setShapePos({ x: 8, y: 8 });
                                                     setShapeAngle(0);
                                                     setAttachedHole(null);
+                                                    setUsedHoles(new Set());
+                                                    setSavedPlumbLines([]);
                                                 }
                                                 setFeedback(null);
                                                 setSelectedWeight(1);
@@ -382,7 +405,7 @@ export default function CenterOfMassSimulation() {
                 )}
                 {level === 4 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">Level 4:</span> Drag the shape and hang it on the pin to find its center of mass
+                        <span className="font-semibold text-foreground">Level 4:</span> Drag the shape and hang it on all {LEVEL_4_HOLES.length} predefined holes to accurately find its center of mass
                     </p>
                 )}
                 {feedback && (
@@ -482,20 +505,6 @@ export default function CenterOfMassSimulation() {
                         {/* Plumb Line and Empty Pin in Level 4 */}
                         {level === 4 && (
                             <g>
-                                {/* Plumb Line (when attached) drawn behind shape */}
-                                {attachedHole !== null && (
-                                    <line
-                                        x1={PIN_POS.x * CELL_SIZE}
-                                        y1={PIN_POS.y * CELL_SIZE}
-                                        x2={PIN_POS.x * CELL_SIZE}
-                                        y2={(PIN_POS.y + 15) * CELL_SIZE}
-                                        stroke="var(--foreground)"
-                                        strokeWidth={1.5}
-                                        strokeDasharray="4,4"
-                                        className="opacity-50"
-                                    />
-                                )}
-
                                 {/* Empty Pin on the board (when NOT attached) */}
                                 {attachedHole === null && (
                                     <g transform={`translate(${PIN_POS.x * CELL_SIZE}, ${PIN_POS.y * CELL_SIZE})`}>
@@ -552,8 +561,32 @@ export default function CenterOfMassSimulation() {
                                         />
                                     ))}
 
-                                    {/* CoM Indicator (only visible when attached) */}
-                                    {attachedHole !== null && !isDragging && (
+                                    {/* Plumb Lines (drawn over shape) */}
+                                    {savedPlumbLines.map(({ holeId, angle }) => {
+                                        const hole = LEVEL_4_HOLES.find(h => h.id === holeId)!;
+                                        // Draw a long line starting from the hole
+                                        const length = 20 * CELL_SIZE;
+                                        const rad = (angle * Math.PI) / 180;
+                                        const endX = hole.x * CELL_SIZE + Math.cos(rad) * length;
+                                        const endY = hole.y * CELL_SIZE + Math.sin(rad) * length;
+
+                                        return (
+                                            <line
+                                                key={`plumb-${holeId}`}
+                                                x1={hole.x * CELL_SIZE}
+                                                y1={hole.y * CELL_SIZE}
+                                                x2={endX}
+                                                y2={endY}
+                                                stroke="var(--foreground)"
+                                                strokeWidth={2}
+                                                strokeDasharray="6,6"
+                                                className="opacity-80"
+                                            />
+                                        );
+                                    })}
+
+                                    {/* CoM Indicator (only visible when attached and ALL holes used) */}
+                                    {usedHoles.size === LEVEL_4_HOLES.length && !isDragging && (
                                         <g transform={`translate(${LEVEL_4_COM.x * CELL_SIZE}, ${LEVEL_4_COM.y * CELL_SIZE})`}>
                                             <circle r="12" fill="var(--destructive)" />
                                             <circle r="6" fill="var(--background)" />
@@ -652,6 +685,8 @@ export default function CenterOfMassSimulation() {
                                 setShapePos({ x: 8, y: 8 });
                                 setShapeAngle(0);
                                 setAttachedHole(null);
+                                setUsedHoles(new Set());
+                                setSavedPlumbLines([]);
                             }
                             setSelectedWeight(1);
                             setLevel(prev => prev + 1);
