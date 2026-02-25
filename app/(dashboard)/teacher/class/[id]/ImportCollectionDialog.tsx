@@ -187,7 +187,7 @@ export function ImportCollectionDialog({ classroomId }: ImportCollectionDialogPr
                                 htmlFor="import-published"
                                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                             >
-                                Import all exercises as published (except pointed exercises)
+                                Import all exercises as published
                             </Label>
                         </div>
                     )}

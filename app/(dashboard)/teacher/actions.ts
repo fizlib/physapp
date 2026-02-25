@@ -2314,7 +2314,7 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
         // 5. Copy Assignments and Questions
         if (sourceAssignments && sourceAssignments.length > 0) {
             for (const sourceAss of sourceAssignments) {
-                const shouldPublishAssignment = publish && !sourceAss.points_enabled
+                const shouldPublishAssignment = publish
 
                 // Copy Assignment
                 const { data: newAss, error: newAssError } = await supabase
