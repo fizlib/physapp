@@ -30,16 +30,46 @@ export default function CenterOfMassSimulation() {
     const [selectedWeight, setSelectedWeight] = useState(1);
     const [zoom, setZoom] = useState(1);
 
-    const MAX_LEVEL = 3;
+    const MAX_LEVEL = 4;
+    const PIN_POS = { x: 10, y: 3 };
 
     const [isDragging, setIsDragging] = useState(false);
     const [dragAction, setDragAction] = useState<'adding' | 'removing'>('adding');
+
+    // Level 4 state
+    const [shapePos, setShapePos] = useState({ x: 8, y: 8 });
+    const [shapeAngle, setShapeAngle] = useState(0);
+    const [attachedHole, setAttachedHole] = useState<number | null>(null);
+    const shapeDragOffsetRef = useRef({ x: 0, y: 0 });
+
+    const LEVEL_4_SHAPE_BLOCKS = useMemo(() => [
+        { x: 0, y: 0, m: 2 }, { x: 1, y: 0, m: 1 }, { x: 2, y: 0, m: 1 }, { x: 3, y: 0, m: 1 },
+        { x: 1, y: 1, m: 1 }, { x: 2, y: 1, m: 1 },
+        { x: 1, y: 2, m: 1 },
+        { x: 1, y: 3, m: 2 }
+    ], []);
+
+    const LEVEL_4_HOLES = useMemo(() => [
+        { id: 0, x: 0.5, y: 0.5 },
+        { id: 1, x: 3.5, y: 0.5 },
+        { id: 2, x: 1.5, y: 3.5 }
+    ], []);
+
+    const LEVEL_4_COM = useMemo(() => {
+        let cx = 0, cy = 0, totalM = 0;
+        LEVEL_4_SHAPE_BLOCKS.forEach(b => {
+            cx += (b.x + 0.5) * b.m; // block centers are at x+0.5, y+0.5
+            cy += (b.y + 0.5) * b.m;
+            totalM += b.m;
+        });
+        return { x: cx / totalM, y: cy / totalM };
+    }, [LEVEL_4_SHAPE_BLOCKS]);
 
     const svgRef = useRef<SVGSVGElement>(null);
     const gridGroupRef = useRef<SVGGElement>(null);
 
     // Reset selected weight when changing levels
-    const hasWeightSelector = level >= 3;
+    const hasWeightSelector = level === 3;
 
     // Compute Center of Mass (weighted)
     const { comX, comY, totalMass } = useMemo(() => {
@@ -97,7 +127,35 @@ export default function CenterOfMassSimulation() {
         return null;
     };
 
+    const handleShapePointerDown = (e: React.PointerEvent) => {
+        if (level !== 4) return;
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (!svgRef.current || !gridGroupRef.current) return;
+
+        let pt = svgRef.current.createSVGPoint();
+        pt.x = e.clientX;
+        pt.y = e.clientY;
+        const ctm = gridGroupRef.current.getScreenCTM();
+        if (!ctm) return;
+        const localPt = pt.matrixTransform(ctm.inverse());
+
+        const rawX = localPt.x / CELL_SIZE;
+        const rawY = localPt.y / CELL_SIZE;
+
+        setIsDragging(true);
+        setAttachedHole(null);
+        setShapeAngle(0);
+
+        shapeDragOffsetRef.current = {
+            x: rawX - shapePos.x,
+            y: rawY - shapePos.y
+        };
+    };
+
     const handlePointerDown = (e: React.PointerEvent) => {
+        if (level === 4) return;
         const coords = getCoordinates(e);
         if (!coords) return;
 
@@ -116,6 +174,26 @@ export default function CenterOfMassSimulation() {
 
     const handlePointerMove = (e: React.PointerEvent) => {
         if (!isDragging) return;
+
+        if (level === 4) {
+            if (!svgRef.current || !gridGroupRef.current) return;
+            let pt = svgRef.current.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const ctm = gridGroupRef.current.getScreenCTM();
+            if (!ctm) return;
+            const localPt = pt.matrixTransform(ctm.inverse());
+
+            const rawX = localPt.x / CELL_SIZE;
+            const rawY = localPt.y / CELL_SIZE;
+
+            setShapePos({
+                x: rawX - shapeDragOffsetRef.current.x,
+                y: rawY - shapeDragOffsetRef.current.y
+            });
+            return;
+        }
+
         const coords = getCoordinates(e);
         if (!coords) return;
 
@@ -135,6 +213,41 @@ export default function CenterOfMassSimulation() {
     };
 
     const handlePointerUp = () => setIsDragging(false);
+
+    const prevDragging = useRef(isDragging);
+    useEffect(() => {
+        if (prevDragging.current && !isDragging && level === 4) {
+            let closestHole: { id: number; x: number; y: number } | null = null;
+            let minDistance = Infinity;
+
+            for (const hole of LEVEL_4_HOLES) {
+                const hx = shapePos.x + hole.x;
+                const hy = shapePos.y + hole.y;
+                const dist = Math.sqrt(Math.pow(hx - PIN_POS.x, 2) + Math.pow(hy - PIN_POS.y, 2));
+                if (dist < 2.0) { // Snapping distance
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestHole = hole;
+                    }
+                }
+            }
+
+            if (closestHole) {
+                setAttachedHole(closestHole.id);
+                const newShapeX = PIN_POS.x - closestHole.x;
+                const newShapeY = PIN_POS.y - closestHole.y;
+                setShapePos({ x: newShapeX, y: newShapeY });
+
+                const dx = LEVEL_4_COM.x - closestHole.x;
+                const dy = LEVEL_4_COM.y - closestHole.y;
+
+                const vecAngle = Math.atan2(dy, dx);
+                let targetAngleDeg = ((Math.PI / 2 - vecAngle) * 180) / Math.PI;
+                setShapeAngle(targetAngleDeg);
+            }
+        }
+        prevDragging.current = isDragging;
+    }, [isDragging, level, shapePos, LEVEL_4_HOLES, LEVEL_4_COM]);
 
     useEffect(() => {
         const handleGlobalMouseUp = () => setIsDragging(false);
@@ -170,10 +283,21 @@ export default function CenterOfMassSimulation() {
     }, []);
 
     const clearAll = () => {
-        setBlocks({});
+        if (level === 4) {
+            setShapePos({ x: 8, y: 8 });
+            setShapeAngle(0);
+            setAttachedHole(null);
+        } else {
+            setBlocks({});
+        }
     };
 
-    const canProceed = totalMass > 0 && (level !== 2 || isComOutside);
+    const hasBothWeights = useMemo(() => {
+        const weights = new Set(Object.values(blocks));
+        return weights.has(1) && weights.has(2);
+    }, [blocks]);
+
+    const canProceed = level === 4 ? attachedHole !== null : totalMass > 0 && (level !== 2 || isComOutside) && (level !== 3 || hasBothWeights);
 
     return (
         <div className="flex flex-col h-screen min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20">
@@ -215,6 +339,11 @@ export default function CenterOfMassSimulation() {
                                             onClick={() => {
                                                 setLevel(i + 1);
                                                 setBlocks({});
+                                                if (i + 1 === 4) {
+                                                    setShapePos({ x: 8, y: 8 });
+                                                    setShapeAngle(0);
+                                                    setAttachedHole(null);
+                                                }
                                                 setFeedback(null);
                                                 setSelectedWeight(1);
                                                 setLevelDropdownOpen(false);
@@ -249,6 +378,11 @@ export default function CenterOfMassSimulation() {
                 {level === 3 && (
                     <p className="text-sm text-muted-foreground">
                         <span className="font-semibold text-foreground">Level 3:</span> Draw any shape using both 1 kg and 2 kg blocks
+                    </p>
+                )}
+                {level === 4 && (
+                    <p className="text-sm text-muted-foreground">
+                        <span className="font-semibold text-foreground">Level 4:</span> Drag the shape and hang it on the pin to find its center of mass
                     </p>
                 )}
                 {feedback && (
@@ -309,10 +443,140 @@ export default function CenterOfMassSimulation() {
                     <g ref={gridGroupRef} style={{ transform: `translate(5px, 5px) scale(1)` }}>
 
                         {/* Grid Background */}
-                        <rect width={GRID_COLS * CELL_SIZE} height={GRID_ROWS * CELL_SIZE} fill="url(#grid)" />
+                        {level !== 4 && (
+                            <rect width={GRID_COLS * CELL_SIZE} height={GRID_ROWS * CELL_SIZE} fill="url(#grid)" />
+                        )}
 
-                        {/* Draw blocks */}
-                        {Array.from({ length: GRID_ROWS }).map((_, y) => (
+                        {/* Level 4 Pinboard Background */}
+                        {level === 4 && (
+                            <g>
+                                {/* Wooden Frame */}
+                                <rect
+                                    x="-12" y="-12"
+                                    width={GRID_COLS * CELL_SIZE + 24}
+                                    height={GRID_ROWS * CELL_SIZE + 24}
+                                    fill="#8B5A2B"
+                                    rx="10"
+                                    filter="url(#shadow)"
+                                />
+                                {/* Cork Area */}
+                                <rect
+                                    width={GRID_COLS * CELL_SIZE}
+                                    height={GRID_ROWS * CELL_SIZE}
+                                    fill="#D4A373"
+                                    rx="4"
+                                />
+                                {/* Inner depth border */}
+                                <rect
+                                    x="4" y="4"
+                                    width={GRID_COLS * CELL_SIZE - 8}
+                                    height={GRID_ROWS * CELL_SIZE - 8}
+                                    fill="none"
+                                    stroke="#C18B56"
+                                    strokeWidth="2"
+                                    rx="2"
+                                />
+                            </g>
+                        )}
+
+                        {/* Plumb Line and Empty Pin in Level 4 */}
+                        {level === 4 && (
+                            <g>
+                                {/* Plumb Line (when attached) drawn behind shape */}
+                                {attachedHole !== null && (
+                                    <line
+                                        x1={PIN_POS.x * CELL_SIZE}
+                                        y1={PIN_POS.y * CELL_SIZE}
+                                        x2={PIN_POS.x * CELL_SIZE}
+                                        y2={(PIN_POS.y + 15) * CELL_SIZE}
+                                        stroke="var(--foreground)"
+                                        strokeWidth={1.5}
+                                        strokeDasharray="4,4"
+                                        className="opacity-50"
+                                    />
+                                )}
+
+                                {/* Empty Pin on the board (when NOT attached) */}
+                                {attachedHole === null && (
+                                    <g transform={`translate(${PIN_POS.x * CELL_SIZE}, ${PIN_POS.y * CELL_SIZE})`}>
+                                        <circle cx="1.5" cy="2.5" r="7" fill="rgba(0,0,0,0.3)" filter="url(#shadow)" />
+                                        <circle cx="0" cy="0" r="8" fill="#E63946" stroke="#9B2226" strokeWidth="1" />
+                                        <circle cx="-2.5" cy="-2.5" r="2.5" fill="rgba(255,255,255,0.6)" />
+                                        <circle cx="0" cy="0" r="3.5" fill="#C1121F" />
+                                    </g>
+                                )}
+                            </g>
+                        )}
+
+                        {/* Level 4 Preset Shape */}
+                        {level === 4 && (
+                            <g
+                                transform={`translate(${shapePos.x * CELL_SIZE}, ${shapePos.y * CELL_SIZE})`}
+                                onPointerDown={handleShapePointerDown}
+                                className={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+                            >
+                                <g style={{
+                                    transformOrigin: attachedHole !== null
+                                        ? `${LEVEL_4_HOLES[attachedHole].x * CELL_SIZE}px ${LEVEL_4_HOLES[attachedHole].y * CELL_SIZE}px`
+                                        : 'center',
+                                    transform: `rotate(${shapeAngle}deg)`,
+                                    transition: (isDragging || attachedHole === null) ? 'none' : 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                                }}>
+                                    {LEVEL_4_SHAPE_BLOCKS.map((b, i) => (
+                                        <rect
+                                            key={`l4-${i}`}
+                                            x={b.x * CELL_SIZE}
+                                            y={b.y * CELL_SIZE}
+                                            width={CELL_SIZE}
+                                            height={CELL_SIZE}
+                                            style={{
+                                                fill: BLOCK_COLORS[b.m],
+                                                stroke: 'var(--background)'
+                                            }}
+                                            strokeWidth="2"
+                                            filter="url(#shadow)"
+                                        />
+                                    ))}
+
+                                    {/* Holes */}
+                                    {LEVEL_4_HOLES.map((hole) => (
+                                        <circle
+                                            key={`hole-${hole.id}`}
+                                            cx={hole.x * CELL_SIZE}
+                                            cy={hole.y * CELL_SIZE}
+                                            r={7}
+                                            fill="#D4A373"
+                                            stroke="var(--foreground)"
+                                            strokeWidth="1.5"
+                                            strokeOpacity="0.5"
+                                        />
+                                    ))}
+
+                                    {/* CoM Indicator (only visible when attached) */}
+                                    {attachedHole !== null && !isDragging && (
+                                        <g transform={`translate(${LEVEL_4_COM.x * CELL_SIZE}, ${LEVEL_4_COM.y * CELL_SIZE})`}>
+                                            <circle r="12" fill="var(--destructive)" />
+                                            <circle r="6" fill="var(--background)" />
+                                            <line x1="-20" y1="0" x2="20" y2="0" stroke="var(--destructive)" strokeWidth="3" />
+                                            <line x1="0" y1="-20" x2="0" y2="20" stroke="var(--destructive)" strokeWidth="3" />
+                                        </g>
+                                    )}
+                                </g>
+                            </g>
+                        )}
+
+                        {/* Inserted Pin (when attached) drawn on top of everything */}
+                        {level === 4 && attachedHole !== null && (
+                            <g transform={`translate(${PIN_POS.x * CELL_SIZE}, ${PIN_POS.y * CELL_SIZE})`} style={{ pointerEvents: 'none' }}>
+                                <circle cx="0.5" cy="1.5" r="7" fill="rgba(0,0,0,0.3)" />
+                                <circle cx="0" cy="0" r="8" fill="#E63946" stroke="#9B2226" strokeWidth="1" />
+                                <circle cx="-2.5" cy="-2.5" r="2.5" fill="rgba(255,255,255,0.6)" />
+                                <circle cx="0" cy="0" r="3.5" fill="#C1121F" />
+                            </g>
+                        )}
+
+                        {/* Draw blocks (levels 1-3) */}
+                        {level !== 4 && Array.from({ length: GRID_ROWS }).map((_, y) => (
                             Array.from({ length: GRID_COLS }).map((_, x) => {
                                 const blockMass = blocks[`${x},${y}`];
                                 const isSolid = !!blockMass;
@@ -336,7 +600,7 @@ export default function CenterOfMassSimulation() {
                         ))}
 
                         {/* Always show Center of Mass when blocks exist */}
-                        {totalMass > 0 && (
+                        {level !== 4 && totalMass > 0 && (
                             <g transform={`translate(${comX * CELL_SIZE + CELL_SIZE / 2}, ${comY * CELL_SIZE + CELL_SIZE / 2})`}>
                                 <circle r="12" fill="var(--destructive)" />
                                 <circle r="6" fill="var(--background)" />
@@ -384,14 +648,19 @@ export default function CenterOfMassSimulation() {
                         onClick={() => {
                             setFeedback(null);
                             setBlocks({});
+                            if (level + 1 === 4) {
+                                setShapePos({ x: 8, y: 8 });
+                                setShapeAngle(0);
+                                setAttachedHole(null);
+                            }
                             setSelectedWeight(1);
                             setLevel(prev => prev + 1);
                         }}
-                        disabled={!canProceed}
-                        className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition duration-200 ${canProceed ? 'bg-primary text-primary-foreground shadow-md hover:opacity-90' : 'bg-secondary text-muted-foreground opacity-50 cursor-not-allowed'}`}
+                        disabled={!canProceed || level === MAX_LEVEL}
+                        className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition duration-200 ${(canProceed && level !== MAX_LEVEL) ? 'bg-primary text-primary-foreground shadow-md hover:opacity-90' : 'bg-secondary text-muted-foreground opacity-50 cursor-not-allowed'}`}
                     >
-                        Next Level
-                        <ArrowRight className="w-4 h-4" />
+                        {level === MAX_LEVEL ? 'Finished!' : 'Next Level'}
+                        {level !== MAX_LEVEL && <ArrowRight className="w-4 h-4" />}
                     </button>
                 </div>
             </div>
