@@ -270,7 +270,7 @@ export default function CenterOfMassSimulation() {
             )}
 
             {/* Canvas Area */}
-            <div className="flex-1 relative bg-secondary/30 w-full overflow-hidden flex items-center justify-center shadow-inner min-h-[60vh]">
+            <div className="flex-1 min-h-0 relative bg-secondary/30 w-full overflow-hidden flex items-center justify-center shadow-inner">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
