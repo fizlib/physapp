@@ -164,7 +164,7 @@ export default function CenterOfMassSimulation() {
     const canProceed = totalMass > 0 && (level !== 2 || isComOutside);
 
     return (
-        <div className="flex flex-col h-screen min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20 overflow-hidden">
+        <div className="flex flex-col h-screen min-h-[100dvh] bg-background text-foreground font-sans selection:bg-primary/20">
 
             {/* Legend Bar */}
             <div className="flex-none bg-card/80 backdrop-blur-sm px-4 py-3 border-b border-border/50 z-10">
@@ -276,7 +276,7 @@ export default function CenterOfMassSimulation() {
                     ref={svgRef}
                     viewBox={`${(SVG_WIDTH - SVG_WIDTH / zoom) / 2} ${(SVG_HEIGHT - SVG_HEIGHT / zoom) / 2} ${SVG_WIDTH / zoom} ${SVG_HEIGHT / zoom}`}
                     preserveAspectRatio="xMidYMid meet"
-                    className="w-full h-full cursor-crosshair touch-none select-none max-w-[800px] max-h-[800px]"
+                    className="w-full h-full cursor-crosshair touch-none select-none max-w-[800px]"
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
