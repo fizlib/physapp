@@ -1978,11 +1978,6 @@ export async function submitTeacherManualPointsAnswer(
         ? existingProgress.completed_question_indices
         : []
 
-    const existingAnswer = submittedAnswers[payload.questionId]
-    if (typeof existingAnswer === 'string' && existingAnswer.trim().length > 0) {
-        return { success: false, error: "This variation already has a submitted answer" }
-    }
-
     submittedAnswers[payload.questionId] = payload.submittedAnswer
 
     const pointsPerPart = selectedQuestion.points || 1

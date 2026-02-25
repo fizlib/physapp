@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle2 } from "lucide-react"
+import { Loader2, CheckCircle2, Pencil } from "lucide-react"
 import {
     getStudentClassroomProgress,
     getStudentAssignmentSubmissionForTeacher,
@@ -424,6 +424,7 @@ function ExerciseReviewPanel({
 }) {
     const [selectedManualQuestionId, setSelectedManualQuestionId] = useState<string | null>(null)
     const [isSubmittingManualAnswer, setIsSubmittingManualAnswer] = useState(false)
+    const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
 
     const statusPill = selection.status === 'correct'
         ? { label: 'Correct', className: 'bg-green-100 text-green-700' }
@@ -525,6 +526,7 @@ function ExerciseReviewPanel({
                 isCompleted: result.isCompleted
             })
 
+            setEditingQuestionId(null)
             toast.success("Manual answer submitted")
         } catch (submitError) {
             console.error(submitError)
@@ -662,10 +664,53 @@ function ExerciseReviewPanel({
                                     diagramImageUrl={question.diagram_image_url}
                                 />
                                 <div className="border-t pt-3 space-y-2">
-                                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Student answer
-                                    </p>
-                                    {hasSubmittedAnswer ? (
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                            Student answer
+                                        </p>
+                                        {hasSubmittedAnswer && data.assignment.points_enabled && editingQuestionId !== question.id && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                                onClick={() => setEditingQuestionId(question.id)}
+                                            >
+                                                <Pencil className="h-3 w-3" />
+                                                Edit
+                                            </Button>
+                                        )}
+                                    </div>
+                                    {editingQuestionId === question.id ? (
+                                        <div className="rounded-md border border-amber-300/60 bg-amber-50/50 p-3 space-y-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">
+                                                    Edit Answer
+                                                </p>
+                                                <div className="flex items-center gap-2">
+                                                    {isSubmittingManualAnswer && (
+                                                        <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                                                    )}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 text-xs"
+                                                        disabled={isSubmittingManualAnswer}
+                                                        onClick={() => setEditingQuestionId(null)}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <TestInterface
+                                                question={question}
+                                                questionId={question.id}
+                                                questionPoints={question.points || 1}
+                                                pointsMode={true}
+                                                disabled={isSubmittingManualAnswer}
+                                                onPointsSubmit={handleManualPointsSubmit}
+                                            />
+                                        </div>
+                                    ) : hasSubmittedAnswer ? (
                                         <TestInterface
                                             question={question}
                                             disabled={true}
