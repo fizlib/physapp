@@ -12,8 +12,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor } from "lucide-react"
-import { generateExerciseFromImage, createAssignmentWithQuestion } from "../../actions"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor, PenLine } from "lucide-react"
+import { generateExerciseFromImage, createAssignmentWithQuestion, uploadIllustration } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SIMULATIONS } from "@/lib/simulations"
@@ -134,8 +134,12 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [open, setOpen] = useState(false)
     const [step, setStep] = useState<'upload' | 'edit'>('upload')
     const [loading, setLoading] = useState(false)
-    const [exerciseMode, setExerciseMode] = useState<'ai' | 'simulation'>('ai')
+    const [exerciseMode, setExerciseMode] = useState<'ai' | 'simulation' | 'manual'>('ai')
     const [selectedSimulation, setSelectedSimulation] = useState<string>(SIMULATIONS.filter(s => s.available)[0]?.id || '')
+    const [manualExerciseType, setManualExerciseType] = useState<'numerical' | 'multiple_choice'>('numerical')
+    const [manualImageFile, setManualImageFile] = useState<File | null>(null)
+    const [manualImagePreview, setManualImagePreview] = useState<string | null>(null)
+    const manualImageInputRef = useRef<HTMLInputElement>(null)
     const [data, setData] = useState<ExerciseData>({
         title: '',
         // category: 'homework',
@@ -364,11 +368,66 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
         }
     }
 
+    const handleManualCreate = () => {
+        const defaultQuestion: QuestionData = {
+            ...DEFAULT_QUESTION,
+            type: manualExerciseType,
+            options: manualExerciseType === 'multiple_choice' ? ['', '', '', ''] : null,
+            correct_answer: manualExerciseType === 'multiple_choice' ? 'A' : null,
+            correct_value: manualExerciseType === 'numerical' ? 0 : null,
+            tolerance: manualExerciseType === 'numerical' ? 5 : null,
+        }
+        setData({
+            title: '',
+            questions: [defaultQuestion],
+            show_all_questions: true
+        })
+        setStep('edit')
+    }
+
+    const handleManualImageSelection = (file: File) => {
+        setManualImageFile(file)
+        const reader = new FileReader()
+        reader.onloadend = () => {
+            setManualImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+    }
+
     const handleSave = async () => {
         setLoading(true)
         try {
+            // If manual mode with image, upload it first
+            let manualImageUrl: string | null = null
+            if (exerciseMode === 'manual' && manualImageFile) {
+                try {
+                    const compressedBlob = await compressImage(manualImageFile)
+                    const formData = new FormData()
+                    formData.append('image', compressedBlob, 'illustration.jpg')
+                    const uploadResult = await uploadIllustration(formData)
+                    if (uploadResult.success && uploadResult.url) {
+                        manualImageUrl = uploadResult.url
+                    } else {
+                        toast.error(uploadResult.error || 'Failed to upload image')
+                        setLoading(false)
+                        return
+                    }
+                } catch (err) {
+                    console.error('Image upload error:', err)
+                    toast.error('Failed to upload image')
+                    setLoading(false)
+                    return
+                }
+            }
+
+            // Apply manual image URL to all questions
+            const questionsWithImage = manualImageUrl
+                ? data.questions.map(q => ({ ...q, diagram_image_url: manualImageUrl }))
+                : data.questions
+
             const exerciseData: ExerciseData = {
                 ...data,
+                questions: questionsWithImage,
                 points_enabled: isClasswork ? pointsEnabled : false,
                 // Total points is sum of all question points
                 points: pointsEnabled ? data.questions.reduce((sum, q) => sum + (q.points || 1), 0) : undefined
@@ -381,6 +440,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                 setStep('upload')
                 setImagePreview(null)
                 setSelectedFile(null)
+                setManualImageFile(null)
+                setManualImagePreview(null)
                 setData({
                     title: '',
                     // category: 'homework',
@@ -420,19 +481,30 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                             type="button"
                             onClick={() => setExerciseMode('ai')}
                             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${exerciseMode === 'ai'
-                                    ? 'border-primary bg-primary/10 text-primary'
-                                    : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:border-primary/40'
                                 }`}
                         >
                             <Sparkles className="h-4 w-4" />
-                            AI Exercise
+                            AI
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setExerciseMode('manual')}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${exerciseMode === 'manual'
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                }`}
+                        >
+                            <PenLine className="h-4 w-4" />
+                            Manual
                         </button>
                         <button
                             type="button"
                             onClick={() => setExerciseMode('simulation')}
                             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${exerciseMode === 'simulation'
-                                    ? 'border-primary bg-primary/10 text-primary'
-                                    : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:border-primary/40'
                                 }`}
                         >
                             <Monitor className="h-4 w-4" />
@@ -497,6 +569,123 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         Create Exercise
                                     </>
                                 )}
+                            </Button>
+                        </div>
+                    </div>
+                ) : step === 'upload' && exerciseMode === 'manual' ? (
+                    <div className="flex flex-col items-center justify-center space-y-6 py-8">
+                        <div className="flex flex-col items-center gap-4 text-center">
+                            <div className="p-4 bg-emerald-500/10 rounded-full">
+                                <PenLine className="w-8 h-8 text-emerald-500" />
+                            </div>
+                            <h3 className="font-semibold text-lg">Manual Exercise</h3>
+                            <p className="text-sm text-muted-foreground max-w-sm">
+                                Create an exercise by hand. Choose the type, write questions, and optionally attach an image.
+                            </p>
+                        </div>
+
+                        <div className="w-full max-w-sm space-y-4">
+                            {/* Exercise Type */}
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold block">Exercise Type</Label>
+                                <div className="flex flex-col gap-2 pl-2">
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="radio"
+                                            id="manual-type-numerical"
+                                            name="manualExerciseType"
+                                            value="numerical"
+                                            checked={manualExerciseType === 'numerical'}
+                                            onChange={() => setManualExerciseType('numerical')}
+                                            className="accent-primary h-4 w-4"
+                                        />
+                                        <Label htmlFor="manual-type-numerical" className="text-sm font-normal cursor-pointer">
+                                            Numerical <span className="text-xs text-muted-foreground ml-1">(Calculation answer)</span>
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="radio"
+                                            id="manual-type-mc"
+                                            name="manualExerciseType"
+                                            value="multiple_choice"
+                                            checked={manualExerciseType === 'multiple_choice'}
+                                            onChange={() => setManualExerciseType('multiple_choice')}
+                                            className="accent-primary h-4 w-4"
+                                        />
+                                        <Label htmlFor="manual-type-mc" className="text-sm font-normal cursor-pointer">
+                                            Multiple Choice <span className="text-xs text-muted-foreground ml-1">(Options A–D)</span>
+                                        </Label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Image Upload (optional) */}
+                            <div className="space-y-3 pt-2 border-t border-dashed">
+                                <Label className="text-sm font-semibold block">Image (Optional)</Label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    ref={manualImageInputRef}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleManualImageSelection(file)
+                                    }}
+                                />
+                                {!manualImagePreview ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-dashed"
+                                        onClick={() => manualImageInputRef.current?.click()}
+                                    >
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Upload Image
+                                    </Button>
+                                ) : (
+                                    <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                        <img
+                                            src={manualImagePreview}
+                                            alt="Manual exercise image"
+                                            className="max-w-full max-h-full object-contain"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => manualImageInputRef.current?.click()}
+                                            >
+                                                Change
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setManualImageFile(null)
+                                                    setManualImagePreview(null)
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                                <p className="text-[10px] text-muted-foreground">
+                                    This image will be shown alongside every question as an illustration.
+                                </p>
+                            </div>
+
+                            <Button
+                                type="button"
+                                className="w-full"
+                                onClick={handleManualCreate}
+                            >
+                                <PenLine className="mr-2 h-4 w-4" />
+                                Create Exercise
                             </Button>
                         </div>
                     </div>
