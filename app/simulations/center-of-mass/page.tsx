@@ -101,6 +101,7 @@ export default function CenterOfMassSimulation() {
         const coords = getCoordinates(e);
         if (!coords) return;
 
+        e.preventDefault();
         setIsDragging(true);
         const key = `${coords.x},${coords.y}`;
         const isRemoving = !!blocks[key];
@@ -276,13 +277,13 @@ export default function CenterOfMassSimulation() {
                     ref={svgRef}
                     viewBox={`${(SVG_WIDTH - SVG_WIDTH / zoom) / 2} ${(SVG_HEIGHT - SVG_HEIGHT / zoom) / 2} ${SVG_WIDTH / zoom} ${SVG_HEIGHT / zoom}`}
                     preserveAspectRatio="xMidYMid meet"
-                    className="w-full h-full cursor-crosshair touch-none select-none max-w-[800px]"
+                    className="w-full h-full cursor-crosshair select-none max-w-[800px]"
                     onPointerDown={handlePointerDown}
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerUp}
                     onPointerLeave={handlePointerUp}
-                    style={{ userSelect: 'none', touchAction: 'none' }}
+                    style={{ userSelect: 'none' }}
                 >
                     <defs>
                         <pattern id="grid" width={CELL_SIZE} height={CELL_SIZE} patternUnits="userSpaceOnUse">
@@ -336,7 +337,7 @@ export default function CenterOfMassSimulation() {
                 </svg>
 
                 {/* Zoom Controls */}
-                <div className="absolute bottom-3 right-3 flex flex-col gap-1.5 z-10">
+                <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
                     <button
                         onClick={() => setZoom(z => Math.min(z + 0.25, 2.5))}
                         className="w-9 h-9 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-md hover:bg-card transition duration-150"
@@ -355,7 +356,7 @@ export default function CenterOfMassSimulation() {
             </div>
 
             {/* Bottom Toolbar Area */}
-            <div className="flex-none bg-card border-t border-border shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-20 pb-4 md:pb-6">
+            <div className="flex-none sticky bottom-0 bg-card border-t border-border shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-20 pb-4 md:pb-6">
                 <div className="max-w-4xl mx-auto flex items-center gap-3 p-4">
                     <button
                         onClick={clearAll}
