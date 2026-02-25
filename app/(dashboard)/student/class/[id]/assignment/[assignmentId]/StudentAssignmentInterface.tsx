@@ -7,7 +7,7 @@ import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2, ExternalLink, Monitor } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { logSolutionRevealClick, upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
@@ -317,6 +317,93 @@ export function StudentAssignmentInterface({
         return pointsCorrectnessByQuestionId[questionId] ? 'correct' : 'incorrect'
     }
     const currentPointsStatus = getPointsQuestionStatus(questions[currentIndex]?.id)
+
+    // Simulation exercise — render a simple card with "Open Simulation" button
+    if (assignment.simulation_url) {
+        return (
+            <div className="space-y-8 max-w-3xl mx-auto">
+                {!compact && (
+                    <div className="flex items-center justify-between">
+                        <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                            <Link href={`/student/class/${classId}`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Grįžti į klasę
+                            </Link>
+                        </Button>
+                    </div>
+                )}
+
+                <Card className="border-blue-500/30 bg-gradient-to-br from-blue-50/50 to-indigo-50/30">
+                    <CardHeader className="text-center pb-2">
+                        <div className="flex justify-center mb-4">
+                            <div className="p-4 bg-blue-500/10 rounded-full">
+                                <Monitor className="w-10 h-10 text-blue-500" />
+                            </div>
+                        </div>
+                        <CardTitle className="text-2xl">{assignment.title}</CardTitle>
+                        <CardDescription className="text-base mt-2">
+                            Atidarykite simuliaciją ir atlikite užduotį
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center gap-4 pt-4 pb-8">
+                        <Button
+                            size="lg"
+                            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg px-8"
+                            onClick={() => window.open(assignment.simulation_url, '_blank')}
+                        >
+                            <ExternalLink className="h-5 w-5" />
+                            Atidaryti simuliaciją
+                        </Button>
+
+                        <div className={`mt-4 flex ${onPrevious ? 'justify-between w-full' : 'justify-center'}`}>
+                            {onPrevious && (
+                                <Button variant="outline" className="gap-2" onClick={onPrevious}>
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Ankstesnė užduotis
+                                </Button>
+                            )}
+                            <Button
+                                disabled={isFinishing}
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                                onClick={async () => {
+                                    if (isFinishing) return
+                                    setIsFinishing(true)
+                                    try {
+                                        await upsertAssignmentProgress(
+                                            assignment.id,
+                                            [],
+                                            true,
+                                            0,
+                                            [],
+                                            {}
+                                        )
+                                        if (onFinish) {
+                                            onFinish()
+                                        } else {
+                                            router.push(`/student/class/${classId}`)
+                                        }
+                                    } catch (error) {
+                                        console.error("Failed to finish simulation exercise:", error)
+                                        setIsFinishing(false)
+                                    }
+                                }}
+                            >
+                                {isFinishing ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <>
+                                        {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
+                                        <CheckCircle2 className="h-4 w-4" />
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-8 max-w-3xl mx-auto">

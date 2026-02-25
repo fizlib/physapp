@@ -49,6 +49,7 @@ interface PublishedAssignmentRow extends AssignmentMetaRow {
     points: number | null
     required_variations_count: number | null
     show_all_questions: boolean | null
+    simulation_url: string | null
     questions: AssignmentQuestionRow[] | null
 }
 

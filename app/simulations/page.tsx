@@ -12,19 +12,25 @@ import {
     CircleDot,
     Lightbulb
 } from 'lucide-react';
+import { SIMULATIONS as SIMULATION_DATA } from '@/lib/simulations';
 
-const SIMULATIONS = [
-    {
-        id: 'center-of-mass',
-        title: 'Masės centras',
-        description: 'Tyrinėkite masės pasiskirstymą ir jo įtaką objekto svorio centrui bei pusiausvyrai.',
-        icon: <Target className="w-8 h-8 text-blue-500" />,
-        href: '/simulations/center-of-mass',
+const ICON_MAP: Record<string, React.ReactNode> = {
+    'center-of-mass': <Target className="w-8 h-8 text-blue-500" />,
+};
+
+const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
+    'center-of-mass': {
         gradient: 'from-blue-500/20 to-indigo-500/20',
         borderColor: 'group-hover:border-blue-500/50',
-        available: true
-    }
-];
+    },
+};
+
+const SIMULATIONS = SIMULATION_DATA.map(sim => ({
+    ...sim,
+    icon: ICON_MAP[sim.id] || <Atom className="w-8 h-8 text-blue-500" />,
+    gradient: STYLE_MAP[sim.id]?.gradient || 'from-blue-500/20 to-indigo-500/20',
+    borderColor: STYLE_MAP[sim.id]?.borderColor || 'group-hover:border-blue-500/50',
+}));
 
 export default function SimulationsPage() {
     return (

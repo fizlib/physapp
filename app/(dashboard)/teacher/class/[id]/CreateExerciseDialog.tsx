@@ -12,10 +12,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown } from "lucide-react"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SIMULATIONS } from "@/lib/simulations"
 
 interface QuestionData {
     type: 'numerical' | 'multiple_choice'
@@ -133,6 +134,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [open, setOpen] = useState(false)
     const [step, setStep] = useState<'upload' | 'edit'>('upload')
     const [loading, setLoading] = useState(false)
+    const [exerciseMode, setExerciseMode] = useState<'ai' | 'simulation'>('ai')
+    const [selectedSimulation, setSelectedSimulation] = useState<string>(SIMULATIONS.filter(s => s.available)[0]?.id || '')
     const [data, setData] = useState<ExerciseData>({
         title: '',
         // category: 'homework',
@@ -329,6 +332,38 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
         setData({ ...data, questions: newQuestions })
     }
 
+    const handleCreateSimulation = async () => {
+        const sim = SIMULATIONS.find(s => s.id === selectedSimulation)
+        if (!sim) {
+            toast.error("Please select a simulation")
+            return
+        }
+
+        setLoading(true)
+        try {
+            const exerciseData = {
+                title: sim.title,
+                questions: [],
+                show_all_questions: true,
+                simulation_url: sim.href
+            }
+            const result = await createAssignmentWithQuestion(classroomId, exerciseData, collectionId)
+            if (result.success) {
+                toast.success("Simulation exercise created!")
+                setOpen(false)
+                setExerciseMode('ai')
+                setSelectedSimulation(SIMULATIONS.filter(s => s.available)[0]?.id || '')
+            } else {
+                toast.error(result.error || "Failed to create simulation exercise")
+            }
+        } catch (err) {
+            console.error(err)
+            toast.error("Something went wrong")
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const handleSave = async () => {
         setLoading(true)
         try {
@@ -378,7 +413,94 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                     <DialogTitle>Create New Exercise</DialogTitle>
                 </DialogHeader>
 
-                {step === 'upload' ? (
+                {/* Exercise Mode Selector */}
+                {step === 'upload' && (
+                    <div className="flex gap-2 mb-2">
+                        <button
+                            type="button"
+                            onClick={() => setExerciseMode('ai')}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${exerciseMode === 'ai'
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                }`}
+                        >
+                            <Sparkles className="h-4 w-4" />
+                            AI Exercise
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setExerciseMode('simulation')}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium ${exerciseMode === 'simulation'
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                                }`}
+                        >
+                            <Monitor className="h-4 w-4" />
+                            Simulation
+                        </button>
+                    </div>
+                )}
+
+                {/* Simulation Mode */}
+                {step === 'upload' && exerciseMode === 'simulation' ? (
+                    <div className="flex flex-col items-center justify-center space-y-6 py-8">
+                        <div className="flex flex-col items-center gap-4 text-center">
+                            <div className="p-4 bg-blue-500/10 rounded-full">
+                                <Monitor className="w-8 h-8 text-blue-500" />
+                            </div>
+                            <h3 className="font-semibold text-lg">Simulation Exercise</h3>
+                            <p className="text-sm text-muted-foreground max-w-sm">
+                                Pick a simulation. Students will see a button to open it in a new tab.
+                            </p>
+                        </div>
+
+                        <div className="w-full max-w-sm space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="simulation-select">Choose Simulation</Label>
+                                <select
+                                    id="simulation-select"
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 appearance-none"
+                                    value={selectedSimulation}
+                                    onChange={(e) => setSelectedSimulation(e.target.value)}
+                                >
+                                    {SIMULATIONS.filter(s => s.available).map(sim => (
+                                        <option key={sim.id} value={sim.id}>{sim.title}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedSimulation && (
+                                <div className="p-4 rounded-lg border bg-muted/30 space-y-2">
+                                    <p className="text-sm font-medium">
+                                        {SIMULATIONS.find(s => s.id === selectedSimulation)?.title}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {SIMULATIONS.find(s => s.id === selectedSimulation)?.description}
+                                    </p>
+                                </div>
+                            )}
+
+                            <Button
+                                type="button"
+                                className="w-full"
+                                disabled={!selectedSimulation || loading}
+                                onClick={handleCreateSimulation}
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="mr-2 h-4 w-4" />
+                                        Create Exercise
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                ) : step === 'upload' ? (
                     <div className="flex flex-col items-center justify-center space-y-6 py-8">
                         <div className="flex flex-col items-center gap-4 text-center">
                             <div className="p-4 bg-primary/10 rounded-full">

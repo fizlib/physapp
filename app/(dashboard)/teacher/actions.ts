@@ -128,7 +128,8 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
             show_all_questions: data.show_all_questions || false,
             points_enabled: data.points_enabled || false,
             points: data.points_enabled ? (data.points || 1) : null,
-            required_variations_count: data.required_variations_count || null
+            required_variations_count: data.required_variations_count || null,
+            simulation_url: data.simulation_url || null
         })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
@@ -443,11 +444,12 @@ const ExerciseSchema = z.object({
     // Category is now handled at the collection level, but keeping optional for backward compat if needed, or just removing.
     // We'll default to 'homework' for the DB constraint but it won't be used for logic.
     category: z.enum(['homework', 'classwork']).default('homework').optional(),
-    questions: z.array(QuestionSchema),
+    questions: z.array(QuestionSchema).optional().default([]),
     show_all_questions: z.boolean().default(false).optional(),
     required_variations_count: z.number().nullable().optional(),
     points_enabled: z.boolean().default(false).optional(),
-    points: z.number().min(1).default(1).optional()
+    points: z.number().min(1).default(1).optional(),
+    simulation_url: z.string().nullable().optional()
 })
 
 export async function uploadIllustration(formData: FormData): Promise<{ success: boolean, url?: string, error?: string }> {
@@ -854,7 +856,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             show_all_questions: data.show_all_questions || false,
             required_variations_count: data.required_variations_count || null,
             points_enabled: data.points_enabled || false,
-            points: data.points_enabled ? (data.points || 1) : null
+            points: data.points_enabled ? (data.points || 1) : null,
+            simulation_url: data.simulation_url || null
         })
         .select()
         .single()
@@ -864,32 +867,34 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         return { success: false, error: "Failed to create assignment" }
     }
 
-    // 4. Create Questions
-    const questionsToInsert = data.questions.map((q, index) => ({
-        assignment_id: assignment.id,
-        latex_text: q.latex_text,
-        question_type: q.type,
-        correct_value: q.type === 'numerical' ? q.correct_value : null,
-        tolerance_percent: q.type === 'numerical' ? q.tolerance : null,
-        // @ts-ignore
-        options: q.type === 'multiple_choice' ? q.options : null,
-        // @ts-ignore
-        correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
-        // Save diagram for all questions/variations
-        diagram_type: q.diagram_type || null,
-        diagram_svg: q.diagram_svg || null,
-        diagram_image_url: q.diagram_image_url || null,
-        solution_text: q.solution_text || null,
-        points: q.points || 1
-    }))
+    // 4. Create Questions (skip for simulation exercises)
+    if (!data.simulation_url && data.questions && data.questions.length > 0) {
+        const questionsToInsert = data.questions.map((q, index) => ({
+            assignment_id: assignment.id,
+            latex_text: q.latex_text,
+            question_type: q.type,
+            correct_value: q.type === 'numerical' ? q.correct_value : null,
+            tolerance_percent: q.type === 'numerical' ? q.tolerance : null,
+            // @ts-ignore
+            options: q.type === 'multiple_choice' ? q.options : null,
+            // @ts-ignore
+            correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
+            // Save diagram for all questions/variations
+            diagram_type: q.diagram_type || null,
+            diagram_svg: q.diagram_svg || null,
+            diagram_image_url: q.diagram_image_url || null,
+            solution_text: q.solution_text || null,
+            points: q.points || 1
+        }))
 
-    const { error: questionError } = await supabase
-        .from('questions')
-        .insert(questionsToInsert)
+        const { error: questionError } = await supabase
+            .from('questions')
+            .insert(questionsToInsert)
 
-    if (questionError) {
-        console.error("Question Error", questionError)
-        return { success: false, error: "Failed to create question" }
+        if (questionError) {
+            console.error("Question Error", questionError)
+            return { success: false, error: "Failed to create question" }
+        }
     }
 
     revalidatePath(`/teacher/class/${classroomId}`)

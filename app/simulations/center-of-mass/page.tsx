@@ -1,8 +1,17 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Trash2, ArrowRight, ChevronDown, ZoomIn, ZoomOut } from 'lucide-react';
+import { Trash2, ArrowRight, ChevronDown, ZoomIn, ZoomOut, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 const GRID_COLS = 20;
 const GRID_ROWS = 20;
@@ -44,6 +53,7 @@ export default function CenterOfMassSimulation() {
 
     const [usedHoles, setUsedHoles] = useState<Set<number>>(new Set());
     const [savedPlumbLines, setSavedPlumbLines] = useState<{ holeId: number; angle: number }[]>([]);
+    const [showCompletionDialog, setShowCompletionDialog] = useState(false);
 
     const LEVEL_4_SHAPE_BLOCKS = useMemo(() => [
         // Top section
@@ -339,7 +349,7 @@ export default function CenterOfMassSimulation() {
                             <line x1="4" y1="12" x2="20" y2="12" stroke="var(--destructive)" strokeWidth="2" />
                             <line x1="12" y1="4" x2="12" y2="20" stroke="var(--destructive)" strokeWidth="2" />
                         </svg>
-                        <span className="text-sm font-medium text-foreground">= Center of Mass</span>
+                        <span className="text-sm font-medium text-foreground">= Masės centras</span>
                     </div>
 
                     {/* Teacher Level Switcher */}
@@ -349,7 +359,7 @@ export default function CenterOfMassSimulation() {
                                 onClick={() => setLevelDropdownOpen(prev => !prev)}
                                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/60 border border-border/50 text-sm font-medium text-foreground hover:bg-secondary transition duration-150"
                             >
-                                Level {level}
+                                {level} lygis
                                 <ChevronDown className={`w-4 h-4 transition-transform duration-150 ${levelDropdownOpen ? 'rotate-180' : ''}`} />
                             </button>
                             {levelDropdownOpen && (
@@ -376,7 +386,7 @@ export default function CenterOfMassSimulation() {
                                                 : 'text-foreground hover:bg-secondary/60'
                                                 }`}
                                         >
-                                            Level {i + 1}
+                                            {i + 1} lygis
                                         </button>
                                     ))}
                                 </div>
@@ -390,22 +400,22 @@ export default function CenterOfMassSimulation() {
             <div className="flex-none text-center py-2 px-4 bg-secondary/40 border-b border-border/30">
                 {level === 1 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">Level 1:</span> Draw any shape using the 1 kg blocks
+                        <span className="font-semibold text-foreground">1 lygis:</span> nupieškite bet kokią figūrą naudodami 1 kg blokus
                     </p>
                 )}
                 {level === 2 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">Level 2:</span> Draw a shape whose center of mass is <span className="font-semibold text-destructive">outside</span> the object
+                        <span className="font-semibold text-foreground">2 lygis:</span> nupieškite figūrą, kurios masės centras yra <span className="font-semibold text-destructive">už objekto ribų</span>
                     </p>
                 )}
                 {level === 3 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">Level 3:</span> Draw any shape using both 1 kg and 2 kg blocks
+                        <span className="font-semibold text-foreground">3 lygis:</span> nupieškite bet kokią figūrą naudodami tiek 1 kg, tiek 2 kg blokus
                     </p>
                 )}
                 {level === 4 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">Level 4:</span> Drag the shape and hang it on all {LEVEL_4_HOLES.length} predefined holes to accurately find its center of mass
+                        <span className="font-semibold text-foreground">4 lygis:</span> vilkite figūrą ir pakabinkite ją ant visų {LEVEL_4_HOLES.length} skylių, kad tiksliai rastumėte jos masės centrą
                     </p>
                 )}
                 {feedback && (
@@ -649,14 +659,14 @@ export default function CenterOfMassSimulation() {
                     <button
                         onClick={() => setZoom(z => Math.min(z + 0.25, 2.5))}
                         className="w-9 h-9 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-md hover:bg-card transition duration-150"
-                        title="Zoom In"
+                        title="Padidinti"
                     >
                         <ZoomIn className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}
                         className="w-9 h-9 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-md hover:bg-card transition duration-150"
-                        title="Zoom Out"
+                        title="Sumažinti"
                     >
                         <ZoomOut className="w-4 h-4" />
                     </button>
@@ -669,16 +679,20 @@ export default function CenterOfMassSimulation() {
                     <button
                         onClick={clearAll}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border text-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition duration-200 font-medium"
-                        title="Clear All"
+                        title="Išvalyti viską"
                     >
                         <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Clear All</span>
+                        <span className="hidden sm:inline">Išvalyti viską</span>
                     </button>
 
                     <div className="flex-1" />
 
                     <button
                         onClick={() => {
+                            if (level === MAX_LEVEL) {
+                                setShowCompletionDialog(true);
+                                return;
+                            }
                             setFeedback(null);
                             setBlocks({});
                             if (level + 1 === 4) {
@@ -691,15 +705,41 @@ export default function CenterOfMassSimulation() {
                             setSelectedWeight(1);
                             setLevel(prev => prev + 1);
                         }}
-                        disabled={!canProceed || level === MAX_LEVEL}
-                        className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition duration-200 ${(canProceed && level !== MAX_LEVEL) ? 'bg-primary text-primary-foreground shadow-md hover:opacity-90' : 'bg-secondary text-muted-foreground opacity-50 cursor-not-allowed'}`}
+                        disabled={!canProceed}
+                        className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold transition duration-200 ${canProceed ? 'bg-primary text-primary-foreground shadow-md hover:opacity-90' : 'bg-secondary text-muted-foreground opacity-50 cursor-not-allowed'}`}
                     >
-                        {level === MAX_LEVEL ? 'Finished!' : 'Next Level'}
+                        {level === MAX_LEVEL ? 'Baigta' : 'Kitas lygis'}
                         {level !== MAX_LEVEL && <ArrowRight className="w-4 h-4" />}
+                        {level === MAX_LEVEL && <CheckCircle2 className="w-4 h-4" />}
                     </button>
                 </div>
             </div>
 
+
+            <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <CheckCircle2 className="w-6 h-6 text-primary" />
+                            Simuliacija baigta!
+                        </DialogTitle>
+                        <DialogDescription className="text-base pt-2">
+                            Puiku! Jūs sėkmingai atlikote visas užduotis ir radote objekto masės centrą.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 text-muted-foreground">
+                        Dabar galite uždaryti šį skirtuką ir grįžti į platformą tęsti kitų darbų.
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            onClick={() => setShowCompletionDialog(false)}
+                            className="w-full sm:w-auto"
+                        >
+                            Supratau
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
