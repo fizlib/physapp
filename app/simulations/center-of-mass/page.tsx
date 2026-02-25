@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase/client';
 const GRID_COLS = 20;
 const GRID_ROWS = 20;
 const CELL_SIZE = 40;
-const SVG_WIDTH = 880;
-const SVG_HEIGHT = 880;
+const SVG_WIDTH = 810;
+const SVG_HEIGHT = 810;
 
 const BLOCK_COLORS: Record<number, string> = {
     1: 'hsl(221, 83%, 53%)',  // Blue for 1 kg
@@ -294,7 +294,7 @@ export default function CenterOfMassSimulation() {
                     </defs>
 
                     {/* Object Layer */}
-                    <g ref={gridGroupRef} style={{ transform: `translate(40px, 40px) scale(1)` }}>
+                    <g ref={gridGroupRef} style={{ transform: `translate(5px, 5px) scale(1)` }}>
 
                         {/* Grid Background */}
                         <rect width={GRID_COLS * CELL_SIZE} height={GRID_ROWS * CELL_SIZE} fill="url(#grid)" />
