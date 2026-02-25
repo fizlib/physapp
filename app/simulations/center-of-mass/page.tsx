@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Trash2, ArrowRight, ChevronDown } from 'lucide-react';
+import { Trash2, ArrowRight, ChevronDown, ZoomIn, ZoomOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const GRID_COLS = 20;
@@ -28,6 +28,7 @@ export default function CenterOfMassSimulation() {
     const [isTeacher, setIsTeacher] = useState(false);
     const [levelDropdownOpen, setLevelDropdownOpen] = useState(false);
     const [selectedWeight, setSelectedWeight] = useState(1);
+    const [zoom, setZoom] = useState(1);
 
     const MAX_LEVEL = 3;
 
@@ -273,7 +274,7 @@ export default function CenterOfMassSimulation() {
             <div className="flex-1 min-h-0 relative bg-secondary/30 w-full overflow-hidden flex items-center justify-center shadow-inner">
                 <svg
                     ref={svgRef}
-                    viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+                    viewBox={`${(SVG_WIDTH - SVG_WIDTH / zoom) / 2} ${(SVG_HEIGHT - SVG_HEIGHT / zoom) / 2} ${SVG_WIDTH / zoom} ${SVG_HEIGHT / zoom}`}
                     preserveAspectRatio="xMidYMid meet"
                     className="w-full h-full cursor-crosshair touch-none select-none max-w-[800px] max-h-[800px]"
                     onPointerDown={handlePointerDown}
@@ -333,6 +334,24 @@ export default function CenterOfMassSimulation() {
                         )}
                     </g>
                 </svg>
+
+                {/* Zoom Controls */}
+                <div className="absolute bottom-3 right-3 flex flex-col gap-1.5 z-10">
+                    <button
+                        onClick={() => setZoom(z => Math.min(z + 0.25, 2.5))}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-md hover:bg-card transition duration-150"
+                        title="Zoom In"
+                    >
+                        <ZoomIn className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setZoom(z => Math.max(z - 0.25, 0.5))}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg bg-card/90 border border-border shadow-md hover:bg-card transition duration-150"
+                        title="Zoom Out"
+                    >
+                        <ZoomOut className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             {/* Bottom Toolbar Area */}
