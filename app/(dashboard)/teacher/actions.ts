@@ -3176,3 +3176,170 @@ export async function unblockAllStudentsInClassroom(classroomId: string): Promis
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
 }
+
+// Get all student submissions for a specific exercise (used in collection statistics drill-down)
+export async function getExerciseSubmissions(
+    classroomId: string,
+    assignmentId: string
+): Promise<{
+    success: boolean
+    error?: string
+    assignment?: {
+        id: string
+        title: string
+        required_variations_count: number | null
+        questions: Array<{
+            id: string
+            question_type: 'numerical' | 'multiple_choice'
+            latex_text: string | null
+            correct_value: number | null
+            tolerance_percent: number | null
+            correct_answer: string | null
+        }>
+    }
+    students?: Array<{
+        id: string
+        firstName: string | null
+        lastName: string | null
+        submittedAnswers: Record<string, string>
+        results: Record<string, boolean>
+    }>
+}> {
+    const supabase = await createClient()
+    const supabaseAdmin = createAdminClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Fetch assignment with questions
+    const { data: assignment } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            title,
+            required_variations_count,
+            questions(
+                id,
+                created_at,
+                question_type,
+                latex_text,
+                correct_value,
+                tolerance_percent,
+                correct_answer
+            )
+        `)
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+        .single()
+
+    if (!assignment) return { success: false, error: "Assignment not found" }
+
+    // Sort questions by created_at
+    const orderedQuestions = [...(assignment.questions || [])].sort((a: any, b: any) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
+        return aTime - bTime
+    })
+
+    // Fetch enrolled students
+    const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('student_id, profiles:student_id(id, first_name, last_name)')
+        .eq('classroom_id', classroomId)
+
+    if (!enrollments) return { success: false, error: "Failed to fetch students" }
+
+    const studentIds = enrollments
+        .map((e: any) => e.profiles?.id || e.student_id)
+        .filter((id: unknown): id is string => typeof id === 'string')
+
+    // Fetch all progress rows for this assignment using admin client (bypasses RLS)
+    const { data: progressRows } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('student_id, submitted_answers')
+        .eq('assignment_id', assignmentId)
+        .in('student_id', studentIds)
+
+    // Build lookup for progress
+    const progressByStudent = new Map<string, Record<string, string>>()
+    progressRows?.forEach((p: any) => {
+        if (p.submitted_answers && typeof p.submitted_answers === 'object' && Object.keys(p.submitted_answers).length > 0) {
+            progressByStudent.set(p.student_id, p.submitted_answers)
+        }
+    })
+
+    // Build student results
+    const students = enrollments
+        .filter((e: any) => {
+            const sid = e.profiles?.id || e.student_id
+            return progressByStudent.has(sid)
+        })
+        .map((e: any) => {
+            const profile = e.profiles
+            const studentId = profile?.id || e.student_id
+            const submittedAnswers = progressByStudent.get(studentId) || {}
+
+            // Compute correctness per question
+            const results: Record<string, boolean> = {}
+            for (const question of orderedQuestions) {
+                const answer = submittedAnswers[question.id]
+                if (answer === undefined || answer === '') continue
+
+                if (question.question_type === 'numerical') {
+                    const numAnswer = parseFloat(answer)
+                    const correctValue = question.correct_value
+                    const tolerancePercent = question.tolerance_percent ?? 0
+                    if (correctValue !== null && !isNaN(numAnswer)) {
+                        const tolerance = Math.abs(correctValue) * (tolerancePercent / 100)
+                        results[question.id] = Math.abs(numAnswer - correctValue) <= tolerance
+                    } else {
+                        results[question.id] = false
+                    }
+                } else if (question.question_type === 'multiple_choice') {
+                    results[question.id] = answer === question.correct_answer
+                }
+            }
+
+            return {
+                id: studentId,
+                firstName: profile?.first_name || null,
+                lastName: profile?.last_name || null,
+                submittedAnswers,
+                results
+            }
+        })
+
+    // Sort by last name
+    students.sort((a, b) => {
+        const aName = (a.lastName || '').toLowerCase()
+        const bName = (b.lastName || '').toLowerCase()
+        return aName.localeCompare(bName)
+    })
+
+    return {
+        success: true,
+        assignment: {
+            ...assignment,
+            questions: orderedQuestions.map((q: any) => ({
+                id: q.id,
+                question_type: q.question_type,
+                latex_text: q.latex_text,
+                correct_value: q.correct_value,
+                tolerance_percent: q.tolerance_percent,
+                correct_answer: q.correct_answer
+            }))
+        },
+        students
+    }
+}
