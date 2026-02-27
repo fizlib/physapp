@@ -903,6 +903,7 @@ export async function getStudentDashboardStats(): Promise<{
         .from('enrollments')
         .select(`
             classroom_id,
+            bonus_points,
             classrooms (
                 id,
                 type
@@ -968,6 +969,15 @@ export async function getStudentDashboardStats(): Promise<{
             const earned = progressMap.get(a.id) || 0
             stats[cid].totalPoints += max
             stats[cid].earnedPoints += earned
+        }
+    })
+
+    // Add bonus points from enrollments
+    enrollments.forEach((e: any) => {
+        const cid = e.classroom_id
+        const bonus = e.bonus_points || 0
+        if (bonus > 0 && stats[cid]) {
+            stats[cid].earnedPoints += bonus
         }
     })
 

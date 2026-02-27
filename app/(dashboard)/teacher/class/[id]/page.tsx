@@ -75,7 +75,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             .single(),
         supabase
             .from('enrollments')
-            .select('*, profiles:student_id(id, role, first_name, last_name, email, created_at)')
+            .select('*, bonus_points, profiles:student_id(id, role, first_name, last_name, email, created_at)')
             .eq('classroom_id', id)
             .order('created_at', { ascending: false }),
         supabase
@@ -177,6 +177,15 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             })
         }
     }
+
+    // Add bonus points from enrollments
+    enrollmentsList.forEach((enrollment) => {
+        const studentId = enrollment.student_id
+        const bonus = (enrollment as any).bonus_points || 0
+        if (bonus > 0 && studentPointsById[studentId]) {
+            studentPointsById[studentId].earned += bonus
+        }
+    })
 
     // Fetch blocked students from tab monitoring violations
     let blockedStudentIds: string[] = []

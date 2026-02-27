@@ -1595,6 +1595,17 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
         }
     })
 
+    // Add bonus points from enrollment
+    const { data: enrollment } = await supabaseAdmin
+        .from('enrollments')
+        .select('bonus_points')
+        .eq('classroom_id', classroomId)
+        .eq('student_id', studentId)
+        .maybeSingle()
+
+    const bonusPoints = enrollment?.bonus_points || 0
+    classroomEarnedPoints += bonusPoints
+
     return {
         collections: collectionsWithProgress,
         totalPoints: classroomTotalPoints,
@@ -3462,4 +3473,66 @@ export async function getExerciseSubmissions(
         },
         students
     }
+}
+
+export async function addBonusPointsToAll(
+    classroomId: string,
+    amount: number
+): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    if (!Number.isFinite(amount) || amount < 1) {
+        return { success: false, error: "Amount must be at least 1" }
+    }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    // Fetch current enrollments, increment bonus_points
+    const supabaseAdmin = createAdminClient()
+    const { data: enrollments, error: fetchError } = await supabaseAdmin
+        .from('enrollments')
+        .select('id, bonus_points')
+        .eq('classroom_id', classroomId)
+
+    if (fetchError) {
+        console.error(fetchError)
+        return { success: false, error: "Failed to fetch enrollments" }
+    }
+
+    if (!enrollments || enrollments.length === 0) {
+        return { success: false, error: "No students enrolled in this classroom" }
+    }
+
+    // Update each enrollment's bonus_points
+    const updates = enrollments.map((enrollment) => ({
+        id: enrollment.id,
+        bonus_points: (enrollment.bonus_points || 0) + amount
+    }))
+
+    for (const update of updates) {
+        const { error: updateError } = await supabaseAdmin
+            .from('enrollments')
+            .update({ bonus_points: update.bonus_points })
+            .eq('id', update.id)
+
+        if (updateError) {
+            console.error(updateError)
+            return { success: false, error: "Failed to update bonus points" }
+        }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true }
 }

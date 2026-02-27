@@ -10,6 +10,7 @@ import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unbl
 import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
 import { StudentProgressPanel } from "./StudentProgressPanel"
+import { AddBonusPointsDialog } from "./AddBonusPointsDialog"
 
 interface Student {
     id: string
@@ -272,6 +273,7 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                             Unblock All ({blockedIds.size})
                         </Button>
                     )}
+                    <AddBonusPointsDialog classroomId={classroomId} />
                     <Button size="sm" onClick={handleSwitchToAdd}>
                         <UserPlus className="mr-2 h-4 w-4" />
                         Add Student
