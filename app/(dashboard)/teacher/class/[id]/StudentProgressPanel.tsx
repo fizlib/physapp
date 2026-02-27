@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle2, Pencil } from "lucide-react"
+import { Loader2, CheckCircle2, Pencil, ShieldCheck } from "lucide-react"
 import {
     getStudentClassroomProgress,
     getStudentAssignmentSubmissionForTeacher,
-    submitTeacherManualPointsAnswer
+    submitTeacherManualPointsAnswer,
+    overrideAnswerCorrectness
 } from "../../actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
 import MathDisplay from "@/components/MathDisplay"
@@ -38,6 +39,7 @@ interface ExerciseReviewData {
         questions: ExerciseQuestion[]
     }
     submittedAnswers: Record<string, string>
+    earnedPointsPerPart: Record<string, number>
     earnedPoints: number
     isCompleted: boolean
 }
@@ -58,6 +60,7 @@ interface ExerciseQuestion {
 
 interface ManualSubmissionUpdate {
     submittedAnswers: Record<string, string>
+    earnedPointsPerPart?: Record<string, number>
     earnedPoints: number
     isCompleted: boolean
 }
@@ -169,6 +172,7 @@ export function StudentProgressPanel({ classroomId, student }: StudentProgressPa
             return {
                 ...prev,
                 submittedAnswers: update.submittedAnswers,
+                earnedPointsPerPart: update.earnedPointsPerPart ?? prev.earnedPointsPerPart,
                 earnedPoints: update.earnedPoints,
                 isCompleted: update.isCompleted
             }
@@ -425,6 +429,7 @@ function ExerciseReviewPanel({
     const [selectedManualQuestionId, setSelectedManualQuestionId] = useState<string | null>(null)
     const [isSubmittingManualAnswer, setIsSubmittingManualAnswer] = useState(false)
     const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+    const [isOverriding, setIsOverriding] = useState<string | null>(null)
 
     const statusPill = selection.status === 'correct'
         ? { label: 'Correct', className: 'bg-green-100 text-green-700' }
@@ -649,6 +654,41 @@ function ExerciseReviewPanel({
                     {questionsToRender.map((question, index: number) => {
                         const hasSubmittedAnswer = Object.prototype.hasOwnProperty.call(data.submittedAnswers || {}, question.id)
                         const submittedAnswer = hasSubmittedAnswer ? String(data.submittedAnswers[question.id] ?? '') : undefined
+                        const questionPoints = question.points || 1
+                        const earnedForQuestion = data.earnedPointsPerPart?.[question.id]
+                        const isQuestionCorrect = hasSubmittedAnswer && earnedForQuestion != null
+                            ? earnedForQuestion >= questionPoints
+                            : undefined
+
+                        const handleOverride = async () => {
+                            setIsOverriding(question.id)
+                            try {
+                                const result = await overrideAnswerCorrectness(
+                                    classroomId,
+                                    studentId,
+                                    selection.assignmentId,
+                                    question.id
+                                )
+                                if (!result.success) {
+                                    toast.error(result.error || "Failed to mark as correct")
+                                    return
+                                }
+                                if (result.submittedAnswers && typeof result.earnedPoints === 'number' && typeof result.isCompleted === 'boolean') {
+                                    onManualSubmissionApplied({
+                                        submittedAnswers: result.submittedAnswers,
+                                        earnedPointsPerPart: result.earnedPointsPerPart,
+                                        earnedPoints: result.earnedPoints,
+                                        isCompleted: result.isCompleted
+                                    })
+                                }
+                                toast.success("Answer marked as correct")
+                            } catch (err) {
+                                console.error(err)
+                                toast.error("Failed to mark as correct")
+                            } finally {
+                                setIsOverriding(null)
+                            }
+                        }
 
                         return (
                             <div key={question.id || index} className="rounded-md border border-border/60 bg-background p-4 space-y-4">
@@ -668,17 +708,35 @@ function ExerciseReviewPanel({
                                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                                             Student answer
                                         </p>
-                                        {hasSubmittedAnswer && data.assignment.points_enabled && editingQuestionId !== question.id && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                                onClick={() => setEditingQuestionId(question.id)}
-                                            >
-                                                <Pencil className="h-3 w-3" />
-                                                Edit
-                                            </Button>
-                                        )}
+                                        <div className="flex items-center gap-1">
+                                            {hasSubmittedAnswer && isQuestionCorrect === false && editingQuestionId !== question.id && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 gap-1.5 text-xs text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                    disabled={isOverriding === question.id}
+                                                    onClick={handleOverride}
+                                                >
+                                                    {isOverriding === question.id ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <ShieldCheck className="h-3 w-3" />
+                                                    )}
+                                                    Mark as Correct
+                                                </Button>
+                                            )}
+                                            {hasSubmittedAnswer && data.assignment.points_enabled && editingQuestionId !== question.id && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setEditingQuestionId(question.id)}
+                                                >
+                                                    <Pencil className="h-3 w-3" />
+                                                    Edit
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
                                     {editingQuestionId === question.id ? (
                                         <div className="rounded-md border border-amber-300/60 bg-amber-50/50 p-3 space-y-3">
@@ -715,6 +773,7 @@ function ExerciseReviewPanel({
                                             question={question}
                                             disabled={true}
                                             submittedAnswer={submittedAnswer}
+                                            submittedIsCorrect={isQuestionCorrect}
                                         />
                                     ) : (
                                         <p className="text-sm text-muted-foreground">No submitted answer for this question.</p>

@@ -1869,7 +1869,7 @@ export async function getStudentAssignmentSubmissionForTeacher(
     const supabaseAdmin = createAdminClient()
     const { data: progress } = await supabaseAdmin
         .from('assignment_progress')
-        .select('submitted_answers, earned_points, is_completed')
+        .select('submitted_answers, earned_points, earned_points_per_part, is_completed')
         .eq('student_id', studentId)
         .eq('assignment_id', assignmentId)
         .maybeSingle()
@@ -1886,6 +1886,7 @@ export async function getStudentAssignmentSubmissionForTeacher(
             questions: orderedQuestions
         },
         submittedAnswers: progress?.submitted_answers || {},
+        earnedPointsPerPart: progress?.earned_points_per_part || {},
         earnedPoints: progress?.earned_points || 0,
         isCompleted: !!progress?.is_completed
     }
@@ -2027,7 +2028,126 @@ export async function submitTeacherManualPointsAnswer(
     }
 }
 
+export async function overrideAnswerCorrectness(
+    classroomId: string,
+    studentId: string,
+    assignmentId: string,
+    questionId: string
+): Promise<ActionState & {
+    submittedAnswers?: Record<string, string>
+    earnedPointsPerPart?: Record<string, number>
+    earnedPoints?: number
+    isCompleted?: boolean
+}> {
+    const supabase = await createClient()
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { data: assignment } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            points_enabled,
+            required_variations_count,
+            questions(
+                id,
+                points
+            )
+        `)
+        .eq('id', assignmentId)
+        .eq('classroom_id', classroomId)
+        .single()
+
+    if (!assignment) {
+        return { success: false, error: "Exercise not found" }
+    }
+
+    const questions = Array.isArray(assignment.questions) ? assignment.questions : []
+    const selectedQuestion = questions.find((q) => q.id === questionId)
+
+    if (!selectedQuestion) {
+        return { success: false, error: "Question not found" }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const { data: existingProgress } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('submitted_answers, earned_points_per_part, completed_question_indices')
+        .eq('student_id', studentId)
+        .eq('assignment_id', assignmentId)
+        .maybeSingle()
+
+    const submittedAnswers: Record<string, string> = existingProgress?.submitted_answers && typeof existingProgress.submitted_answers === 'object'
+        ? { ...existingProgress.submitted_answers }
+        : {}
+
+    // Verify the student actually submitted an answer for this question
+    if (submittedAnswers[questionId] === undefined) {
+        return { success: false, error: "Student has not submitted an answer for this question" }
+    }
+
+    const earnedPointsPerPart: Record<string, number> = existingProgress?.earned_points_per_part && typeof existingProgress.earned_points_per_part === 'object'
+        ? { ...existingProgress.earned_points_per_part }
+        : {}
+
+    const completedIndices: number[] = Array.isArray(existingProgress?.completed_question_indices)
+        ? existingProgress.completed_question_indices
+        : []
+
+    // Override: award full points for this question
+    const pointsPerPart = selectedQuestion.points || 1
+    earnedPointsPerPart[questionId] = pointsPerPart
+
+    const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
+    const submittedCount = Object.keys(submittedAnswers).length
+    const totalQuestions = questions.length
+    const requiredVariationsCount = assignment.required_variations_count || 0
+
+    const isFullyCompleted = requiredVariationsCount > 0
+        ? submittedCount >= requiredVariationsCount
+        : submittedCount >= totalQuestions
+
+    const { error: upsertError } = await supabaseAdmin
+        .from('assignment_progress')
+        .upsert({
+            student_id: studentId,
+            assignment_id: assignmentId,
+            completed_question_indices: completedIndices,
+            is_completed: isFullyCompleted,
+            submitted_answers: submittedAnswers,
+            earned_points_per_part: earnedPointsPerPart,
+            earned_points: totalEarnedPoints,
+            updated_at: new Date().toISOString()
+        }, {
+            onConflict: 'student_id, assignment_id'
+        })
+
+    if (upsertError) {
+        console.error("Override answer correctness error", upsertError)
+        return { success: false, error: "Failed to override answer" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+
+    return {
+        success: true,
+        submittedAnswers,
+        earnedPointsPerPart,
+        earnedPoints: totalEarnedPoints,
+        isCompleted: isFullyCompleted
+    }
+}
 
 export async function deleteCollection(collectionId: string, classroomId: string, deleteExercises: boolean = false): Promise<ActionState> {
     const supabase = await createClient()
