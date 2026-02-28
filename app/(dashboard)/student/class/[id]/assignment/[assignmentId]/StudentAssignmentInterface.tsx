@@ -173,18 +173,20 @@ export function StudentAssignmentInterface({
     // In variation mode, we never want a persistent diagram as each variation is a separate problem.
     const showPersistentDiagram = !isVariationMode && !showAll && currentIndex > 0 && hasPersistentDiagram
 
-    const persistRevealState = async (questionIndex: number, newRevealed: Set<number>) => {
+    const persistRevealState = async (questionIndex: number, newRevealed: Set<number>, overrideCompleted?: Set<number>, markCompleted: boolean = false) => {
         const questionId = questions[questionIndex]?.id
         if (!questionId) {
             console.warn("Reveal click log skipped: missing question id", { assignmentId: assignment.id, questionIndex })
         }
 
+        const completedToSave = overrideCompleted ?? completedIndices
+
         try {
             const [progressResult, logResult] = await Promise.all([
                 upsertAssignmentProgress(
                     assignment.id,
-                    Array.from(completedIndices),
-                    false, // Revelation never completes the assignment
+                    Array.from(completedToSave),
+                    markCompleted, // true when single-variation reveal counts as completion
                     currentIndex,
                     Array.from(newRevealed),
                     submittedAnswers
@@ -209,15 +211,33 @@ export function StudentAssignmentInterface({
     }
 
     const handleRevealSolution = async () => {
-        if (!confirm("Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai užduočiai ir turėsite spręsti kitą.")) {
+        // Check if revealing this question means there are no other unsolved questions left
+        const unsolvedOthers = questions.map((_: any, i: number) => i).filter((i: number) =>
+            i !== currentIndex && !completedIndices.has(i) && !revealedIndices.has(i)
+        )
+        const isLastUnsolved = unsolvedOthers.length === 0
+
+        const confirmMsg = isLastUnsolved
+            ? "Ar tikrai norite pamatyti sprendimą?"
+            : "Ar tikrai? Jei parodysite sprendimą, negalėsite pateikti atsakymo šiai užduočiai ir turėsite spręsti kitą."
+        if (!confirm(confirmMsg)) {
             return
         }
 
         const newRevealed = new Set(revealedIndices).add(currentIndex)
         setRevealedIndices(newRevealed)
 
-        await persistRevealState(currentIndex, newRevealed)
-        toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
+        // If this is the last unsolved question, treat reveal as completing the exercise
+        if (isLastUnsolved) {
+            const newCompleted = new Set(completedIndices).add(currentIndex)
+            completedIndicesRef.current = newCompleted
+            setCompletedIndices(newCompleted)
+            await persistRevealState(currentIndex, newRevealed, newCompleted, true)
+            toast.info("Sprendimas parodytas.")
+        } else {
+            await persistRevealState(currentIndex, newRevealed)
+            toast.info("Sprendimas parodytas. Prašome spręsti kitą variaciją.")
+        }
     }
 
     const handleAnswerCheck = async (questionId: string, answer: string, isCorrect: boolean, questionIndex: number) => {
@@ -505,7 +525,19 @@ export function StudentAssignmentInterface({
                                                             if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
                                                             const newRevealed = new Set(revealedIndices).add(index)
                                                             setRevealedIndices(newRevealed)
-                                                            await persistRevealState(index, newRevealed)
+                                                            // Check if this is the last unsolved question
+                                                            const unsolvedOthers = questions.filter((_: any, i: number) =>
+                                                                i !== index && !completedIndices.has(i) && !revealedIndices.has(i)
+                                                            )
+                                                            if (unsolvedOthers.length === 0) {
+                                                                // Last unsolved question - treat reveal as completion
+                                                                const newCompleted = new Set(completedIndices).add(index)
+                                                                completedIndicesRef.current = newCompleted
+                                                                setCompletedIndices(newCompleted)
+                                                                await persistRevealState(index, newRevealed, newCompleted, true)
+                                                            } else {
+                                                                await persistRevealState(index, newRevealed)
+                                                            }
                                                         }}
                                                     >
                                                         <HelpCircle className="h-3 w-3" />
