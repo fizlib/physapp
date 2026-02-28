@@ -86,6 +86,7 @@ export function StudentAssignmentInterface({
         return correctness
     })
     const [isFinishing, setIsFinishing] = useState(false)
+    const [isSavingPoints, setIsSavingPoints] = useState(false)
     const lastSyncedIndexRef = useRef(currentIndex)
     const answerSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
     const completedIndicesRef = useRef<Set<number>>(new Set(initialCompletedIndices))
@@ -259,32 +260,37 @@ export function StudentAssignmentInterface({
     const handlePointsSubmit = async (questionId: string, questionPoints: number, answer: string, isCorrect: boolean, questionIndex: number) => {
         // Lock this specific question
         setLockedQuestionIds(prev => new Set(prev).add(questionId))
+        setIsSavingPoints(true)
 
-        const result = await submitPointsAnswer(
-            assignment.id,
-            questionId,
-            answer,
-            isCorrect,
-            questionPoints,
-            totalQuestions,
-            isVariationMode ? requiredVariations : undefined,
-            questionIndex
-        )
+        try {
+            const result = await submitPointsAnswer(
+                assignment.id,
+                questionId,
+                answer,
+                isCorrect,
+                questionPoints,
+                totalQuestions,
+                isVariationMode ? requiredVariations : undefined,
+                questionIndex
+            )
 
-        if (result.success) {
-            if (onProgressUpdate) onProgressUpdate()
-            toast.success("Atsakymas pateiktas!")
-            setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
-            setPointsCorrectnessByQuestionId(prev => ({ ...prev, [questionId]: isCorrect }))
-        } else if (result.alreadySubmitted) {
-            toast.error("Šio varianto atsakymas jau buvo pateiktas")
-        } else {
-            setLockedQuestionIds(prev => {
-                const next = new Set(prev)
-                next.delete(questionId)
-                return next
-            })
-            toast.error(result.error || "Nepavyko pateikti atsakymo")
+            if (result.success) {
+                if (onProgressUpdate) onProgressUpdate()
+                toast.success("Atsakymas pateiktas!")
+                setSubmittedAnswers(prev => ({ ...prev, [questionId]: answer }))
+                setPointsCorrectnessByQuestionId(prev => ({ ...prev, [questionId]: isCorrect }))
+            } else if (result.alreadySubmitted) {
+                toast.error("Šio varianto atsakymas jau buvo pateiktas")
+            } else {
+                setLockedQuestionIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(questionId)
+                    return next
+                })
+                toast.error(result.error || "Nepavyko pateikti atsakymo")
+            }
+        } finally {
+            setIsSavingPoints(false)
         }
     }
 
@@ -546,7 +552,7 @@ export function StudentAssignmentInterface({
                             </Button>
                         )}
                         <Button
-                            disabled={isFinishing || (!canSkip && !pointsEnabled && completedIndices.size !== totalQuestions)}
+                            disabled={isFinishing || isSavingPoints || (!canSkip && !pointsEnabled && completedIndices.size !== totalQuestions)}
                             variant="default"
                             size="lg"
                             className="bg-green-600 hover:bg-green-700 text-white gap-2 shadow-lg"
@@ -745,7 +751,7 @@ export function StudentAssignmentInterface({
                                             }
                                         }}
 
-                                        disabled={!canProceed || (pointsEnabled && isVariationMode && !isCurrentQuestionLocked)}
+                                        disabled={!canProceed || isSavingPoints || (pointsEnabled && isVariationMode && !isCurrentQuestionLocked)}
                                         className="gap-2"
                                     >
                                         {isVariationMode ? "Kita užduotis" : "Kitas klausimas"}
@@ -753,7 +759,7 @@ export function StudentAssignmentInterface({
                                     </Button>
                                 ) : (
                                     <Button
-                                        disabled={isFinishing || (!canProceed && !pointsEnabled)}
+                                        disabled={isFinishing || isSavingPoints || (!canProceed && !pointsEnabled)}
                                         variant="default"
                                         className="bg-green-600 hover:bg-green-700 text-white gap-2"
                                         onClick={async () => {
