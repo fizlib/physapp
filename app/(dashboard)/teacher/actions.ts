@@ -637,6 +637,55 @@ function processExerciseData(data: any, generateSolution: boolean, diagramImageU
     return data
 }
 
+function robustJsonParse(raw: string): any {
+    // Strip markdown code fences
+    let jsonStr = raw.replace(/```json/g, '').replace(/```/g, '').trim()
+
+    // Escape real newlines/tabs inside quoted strings
+    jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
+        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
+    })
+
+    // Strategy 1: Try direct parse
+    try {
+        return JSON.parse(jsonStr)
+    } catch (_) { /* continue */ }
+
+    // Strategy 2: Remove control characters
+    let cleaned = jsonStr.replace(/[\x00-\x1F\x7F]/g, '')
+    try {
+        return JSON.parse(cleaned)
+    } catch (_) { /* continue */ }
+
+    // Strategy 3: Fix trailing commas before } or ]
+    cleaned = cleaned.replace(/,\s*([\]}])/g, '$1')
+    try {
+        return JSON.parse(cleaned)
+    } catch (_) { /* continue */ }
+
+    // Strategy 4: Extract the outermost { ... } and try to parse that
+    const firstBrace = cleaned.indexOf('{')
+    const lastBrace = cleaned.lastIndexOf('}')
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const extracted = cleaned.slice(firstBrace, lastBrace + 1)
+        try {
+            return JSON.parse(extracted)
+        } catch (_) { /* continue */ }
+
+        // Strategy 5: Truncate at the last valid closing structure
+        const lastArrayClose = extracted.lastIndexOf(']')
+        if (lastArrayClose !== -1) {
+            const truncated = extracted.slice(0, lastArrayClose + 1) + '}'
+            try {
+                return JSON.parse(truncated)
+            } catch (_) { /* continue */ }
+        }
+    }
+
+    // All strategies failed
+    throw new SyntaxError(`Failed to parse Gemini response as JSON. Response length: ${raw.length}. First 200 chars: ${raw.slice(0, 200)}`)
+}
+
 async function callGeminiForExercise(prompt: string, imagePart: Part): Promise<any> {
     console.log("Calling Gemini API...")
     const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt, imagePart])
@@ -644,12 +693,7 @@ async function callGeminiForExercise(prompt: string, imagePart: Part): Promise<a
     const text = response.text()
     console.log("Gemini Raw Response length:", text.length)
 
-    let jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim()
-    jsonStr = jsonStr.replace(/("(?:[^"\\]|\\.)*")/g, (match) => {
-        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')
-    })
-
-    return JSON.parse(jsonStr)
+    return robustJsonParse(text)
 }
 
 export async function generateExerciseFromImage(formData: FormData) {
@@ -713,7 +757,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   LATEX FORMATTING: Use LaTeX for ALL math, units, and symbols. For multiple_choice options, wrap LaTeX in single dollar signs.
   NUMERICAL UNITS: Use SI units (m, s, kg, N, J, etc.) for correct_value.
   PHYSICAL CONSTANTS: Use g = 10 m/s^2 for gravitational acceleration unless otherwise specified in the problem image.
-  NOTATION: Weight ("Sunkio jėga") MUST be written as F with a subscript "s" (F_s in LaTeX).
+  NOTATION: "Sunkio jėga" (Gravity force) MUST be written as F with a subscript "s" (F_s in LaTeX), and "Svoris" (Weight) MUST be written as P.
 
   ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
   - Generate diagram_svg ONLY if the input image contains a diagram, graph, or schema. If the input image is text-only, set diagram_type and diagram_svg to null.
