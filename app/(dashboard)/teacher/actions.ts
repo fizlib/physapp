@@ -718,6 +718,7 @@ export async function generateExerciseFromImage(formData: FormData) {
   ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
   - Generate diagram_svg ONLY if the input image contains a diagram, graph, or schema. If the input image is text-only, set diagram_type and diagram_svg to null.
   - For VECTORS: Include gray grid, snap points, DRAW ARROWS above labels, position labels with offset.
+  - CRITICAL: Inside <svg> tags, DO NOT use LaTeX syntax (e.g., no $ delimiters, no \\vec, no \\frac). Use plain text or Unicode characters for labels (e.g., use 'Fs' instead of '\\vec{F}_s').
   `}
   
   Return JSON:
@@ -2553,6 +2554,7 @@ export async function generateVariationsFromExercise(
     - PHYSICAL CONSTANTS: Use g = 10 m/s^2 for gravitational acceleration unless otherwise specified in the problem image.
     - NOTATION: Weight ("Sunkio jėga") MUST be written as F with a subscript "s" (F_s in LaTeX).
     - If diagram_svg exists, keep the same diagram structure but update labels or values if they changed in the text.
+    - CRITICAL: Inside <svg> tags, DO NOT use LaTeX syntax (e.g., no $ delimiters, no \\vec, no \\frac). Use plain text or Unicode characters for labels.
     ${generateSolution ? '- SOLUTION MANUAL MODE: Generate step-by-step solution in Lithuanian for each variation.' : ''}
 
     Return JSON as an ARRAY of objects (questions):
@@ -2677,6 +2679,7 @@ RULES:
 - Do not return markdown, JSON, or explanations.
 - Keep the diagram semantically consistent with the question unless the request says otherwise.
 - Preserve existing coordinate system/viewBox when possible.
+- CRITICAL: Inside <svg> tags, DO NOT use LaTeX syntax (e.g., no $ delimiters, no \\vec, no \\frac). Use plain text or Unicode characters for labels.
 `
 
                 const result = await generateContentWithFallback("gemini-3-flash-preview", [geminiPrompt])
