@@ -19,7 +19,7 @@ interface DiagramDisplayProps {
 }
 
 export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: DiagramDisplayProps) {
-    if (!diagramImageUrl && (!diagramType || !diagramSvg)) return null
+    if (!diagramImageUrl && !diagramSvg) return null
 
     const sanitizedSvg = diagramSvg ? sanitizeSvg(diagramSvg) : null
     const title = diagramImageUrl ? 'Iliustracija' : (diagramType === 'graph' ? 'Grafikas' : 'Schema')

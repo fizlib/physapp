@@ -284,18 +284,20 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     }
 
     const updateQuestion = (index: number, field: keyof QuestionData, value: any) => {
-        const newQuestions = [...data.questions]
-        newQuestions[index] = { ...newQuestions[index], [field]: value }
+        setData(prev => {
+            const newQuestions = [...prev.questions]
+            newQuestions[index] = { ...newQuestions[index], [field]: value }
 
-        // Special handling for type switch
-        if (field === 'type' && value === 'multiple_choice') {
-            if (!newQuestions[index].options || newQuestions[index].options?.length === 0) {
-                newQuestions[index].options = ['', '', '', '']
-                newQuestions[index].correct_answer = 'A'
+            // Special handling for type switch
+            if (field === 'type' && value === 'multiple_choice') {
+                if (!newQuestions[index].options || newQuestions[index].options?.length === 0) {
+                    newQuestions[index].options = ['', '', '', '']
+                    newQuestions[index].correct_answer = 'A'
+                }
             }
-        }
 
-        setData({ ...data, questions: newQuestions })
+            return { ...prev, questions: newQuestions }
+        })
     }
 
     const updateOption = (qIndex: number, optIndex: number, value: string) => {
@@ -1245,13 +1247,38 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         </div>
 
                                         {/* Diagram Section */}
-                                        {(q.diagram_type && q.diagram_svg || q.diagram_image_url) && (
+                                        {(q.diagram_type && q.diagram_svg || q.diagram_image_url) ? (
                                             <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
                                                 <div className="flex items-center justify-between">
                                                     <Label className="flex items-center gap-2">
                                                         <span className="text-lg">📊</span>
-                                                        {q.diagram_image_url ? 'Iliustracija' : `Detected ${q.diagram_type === 'graph' ? 'Graph' : 'Diagram'}`}
+                                                        {q.diagram_image_url ? 'Iliustracija' : (q.diagram_type === 'graph' ? 'Grafikas' : 'Schema')}
                                                     </Label>
+                                                    {!q.diagram_image_url && (
+                                                        <div className="flex items-center gap-2">
+                                                            <select
+                                                                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                                value={q.diagram_type || 'scheme'}
+                                                                onChange={(e) => updateQuestion(index, 'diagram_type', e.target.value)}
+                                                            >
+                                                                <option value="scheme">Schema</option>
+                                                                <option value="graph">Grafikas</option>
+                                                            </select>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-8 text-destructive hover:text-destructive/90"
+                                                                onClick={() => {
+                                                                    updateQuestion(index, 'diagram_type', null)
+                                                                    updateQuestion(index, 'diagram_svg', null)
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                                                Remove
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
@@ -1261,27 +1288,44 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                             alt="Illustration"
                                                             className="max-w-full max-h-[300px] object-contain"
                                                         />
-                                                    ) : (
+                                                    ) : q.diagram_svg?.trim() ? (
                                                         <div
                                                             dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
                                                             className="w-full max-w-[300px]"
                                                         />
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground italic">Paste SVG code below to see a preview</p>
                                                     )}
                                                 </div>
 
                                                 {!q.diagram_image_url && (
                                                     <div className="space-y-2">
                                                         <Label className="text-sm text-muted-foreground">
-                                                            Edit SVG Code
+                                                            SVG Code
                                                         </Label>
                                                         <textarea
                                                             className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                            placeholder='<svg width="200" height="200">...</svg>'
                                                             value={q.diagram_svg || ''}
                                                             onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
                                                         />
                                                     </div>
                                                 )}
                                             </div>
+                                        ) : !q.diagram_image_url && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full border-dashed"
+                                                onClick={() => {
+                                                    updateQuestion(index, 'diagram_type', 'scheme')
+                                                    updateQuestion(index, 'diagram_svg', '')
+                                                }}
+                                            >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Add Diagram (SVG)
+                                            </Button>
                                         )}
                                     </CardContent>
                                 </Card>

@@ -223,18 +223,20 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     }, [initialData, open])
 
     const updateQuestion = (index: number, field: keyof QuestionData, value: any) => {
-        const newQuestions = [...data.questions]
-        newQuestions[index] = { ...newQuestions[index], [field]: value }
+        setData(prev => {
+            const newQuestions = [...prev.questions]
+            newQuestions[index] = { ...newQuestions[index], [field]: value }
 
-        // Special handling for type switch
-        if (field === 'type' && value === 'multiple_choice') {
-            if (!newQuestions[index].options || newQuestions[index].options?.length === 0) {
-                newQuestions[index].options = ['', '', '', '']
-                newQuestions[index].correct_answer = 'A'
+            // Special handling for type switch
+            if (field === 'type' && value === 'multiple_choice') {
+                if (!newQuestions[index].options || newQuestions[index].options?.length === 0) {
+                    newQuestions[index].options = ['', '', '', '']
+                    newQuestions[index].correct_answer = 'A'
+                }
             }
-        }
 
-        setData({ ...data, questions: newQuestions })
+            return { ...prev, questions: newQuestions }
+        })
     }
 
     const updateOption = (qIndex: number, optIndex: number, value: string) => {
@@ -831,72 +833,112 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                                 </div>
                                             )}
 
-                                            {q.diagram_svg && !illustrationPreviews[index] && (
+                                            {q.diagram_svg !== null && q.diagram_svg !== undefined && !illustrationPreviews[index] && (
                                                 <div className="space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <select
+                                                            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                                                            value={q.diagram_type || 'scheme'}
+                                                            onChange={(e) => updateQuestion(index, 'diagram_type', e.target.value)}
+                                                        >
+                                                            <option value="scheme">Schema</option>
+                                                            <option value="graph">Grafikas</option>
+                                                        </select>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 text-destructive hover:text-destructive/90"
+                                                            onClick={() => {
+                                                                updateQuestion(index, 'diagram_type', null)
+                                                                updateQuestion(index, 'diagram_svg', null)
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                                            Remove
+                                                        </Button>
+                                                    </div>
                                                     <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
-                                                        <div
-                                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
-                                                            className="w-full max-w-[300px]"
-                                                        />
+                                                        {q.diagram_svg?.trim() ? (
+                                                            <div
+                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                                className="w-full max-w-[300px]"
+                                                            />
+                                                        ) : (
+                                                            <p className="text-sm text-muted-foreground italic">Paste SVG code below to see a preview</p>
+                                                        )}
                                                     </div>
                                                     <Label className="text-sm text-muted-foreground">
-                                                        Edit SVG Code
+                                                        SVG Code
                                                     </Label>
                                                     <textarea
                                                         className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                        placeholder='<svg width="200" height="200">...</svg>'
                                                         value={q.diagram_svg || ''}
                                                         onChange={(e) => updateQuestion(index, 'diagram_svg', e.target.value)}
                                                     />
 
-                                                    <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-                                                        <Label className="text-sm font-medium">Gemini SVG Prompt</Label>
-                                                        <textarea
-                                                            className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                                            placeholder="e.g. Change labels to Lithuanian and color the force vector red."
-                                                            value={svgPromptByQuestion[index] || ''}
-                                                            onChange={(e) =>
-                                                                setSvgPromptByQuestion((prev) => ({ ...prev, [index]: e.target.value }))
-                                                            }
-                                                        />
+                                                    {q.diagram_svg?.trim() && (
+                                                        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                                                            <Label className="text-sm font-medium">Gemini SVG Prompt</Label>
+                                                            <textarea
+                                                                className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                                placeholder="e.g. Change labels to Lithuanian and color the force vector red."
+                                                                value={svgPromptByQuestion[index] || ''}
+                                                                onChange={(e) =>
+                                                                    setSvgPromptByQuestion((prev) => ({ ...prev, [index]: e.target.value }))
+                                                                }
+                                                            />
 
-                                                        {hasMultipleVariations && (
-                                                            <div className="flex items-center space-x-2">
-                                                                <Checkbox
-                                                                    id={`edit-svg-all-${index}`}
-                                                                    checked={applySvgEditToAllVariations}
-                                                                    onCheckedChange={(checked) => setApplySvgEditToAllVariations(checked as boolean)}
-                                                                />
-                                                                <Label htmlFor={`edit-svg-all-${index}`} className="text-xs font-normal">
-                                                                    Apply to all variation SVGs ({variationSvgCount})
-                                                                </Label>
-                                                            </div>
-                                                        )}
-
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="w-full sm:w-auto"
-                                                            onClick={() => handleGeminiSvgEdit(index)}
-                                                            disabled={editingSvgIndex !== null || !(svgPromptByQuestion[index] || '').trim()}
-                                                        >
-                                                            {editingSvgIndex === index ? (
-                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                            ) : (
-                                                                <Sparkles className="mr-2 h-4 w-4" />
+                                                            {hasMultipleVariations && (
+                                                                <div className="flex items-center space-x-2">
+                                                                    <Checkbox
+                                                                        id={`edit-svg-all-${index}`}
+                                                                        checked={applySvgEditToAllVariations}
+                                                                        onCheckedChange={(checked) => setApplySvgEditToAllVariations(checked as boolean)}
+                                                                    />
+                                                                    <Label htmlFor={`edit-svg-all-${index}`} className="text-xs font-normal">
+                                                                        Apply to all variation SVGs ({variationSvgCount})
+                                                                    </Label>
+                                                                </div>
                                                             )}
-                                                            {hasMultipleVariations && applySvgEditToAllVariations
-                                                                ? "Edit all variation SVGs"
-                                                                : "Edit SVG with Gemini"}
-                                                        </Button>
-                                                    </div>
+
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="w-full sm:w-auto"
+                                                                onClick={() => handleGeminiSvgEdit(index)}
+                                                                disabled={editingSvgIndex !== null || !(svgPromptByQuestion[index] || '').trim()}
+                                                            >
+                                                                {editingSvgIndex === index ? (
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <Sparkles className="mr-2 h-4 w-4" />
+                                                                )}
+                                                                {hasMultipleVariations && applySvgEditToAllVariations
+                                                                    ? "Edit all variation SVGs"
+                                                                    : "Edit SVG with Gemini"}
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
                                             {!illustrationPreviews[index] && !q.diagram_svg && (
-                                                <p className="text-xs text-muted-foreground italic">
-                                                    Ši užduotis neturi iliustracijos.
-                                                </p>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full border-dashed"
+                                                    onClick={() => {
+                                                        updateQuestion(index, 'diagram_type', 'scheme')
+                                                        updateQuestion(index, 'diagram_svg', '')
+                                                    }}
+                                                >
+                                                    <Plus className="mr-2 h-4 w-4" />
+                                                    Add Diagram (SVG)
+                                                </Button>
                                             )}
                                         </div>
                                     </div>
