@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { BookOpen } from "lucide-react"
-import { getStudentDashboardStats } from "./actions"
+import { getStudentDashboardStats, getStudentPointsBreakdown } from "./actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
+import { PointsBreakdown } from "@/components/student/PointsBreakdown"
 
 
 export default async function StudentDashboard() {
@@ -24,7 +25,10 @@ export default async function StudentDashboard() {
         .select('*')
         .order('created_at', { ascending: false })
 
-    const { stats } = await getStudentDashboardStats()
+    const [{ stats }, { breakdown }] = await Promise.all([
+        getStudentDashboardStats(),
+        getStudentPointsBreakdown()
+    ])
 
 
     return (
@@ -53,7 +57,14 @@ export default async function StudentDashboard() {
                                         earnedPoints={stats[classroom.id].earnedPoints}
                                         maxPoints={stats[classroom.id].totalPoints}
                                         size={100}
-                                    />
+                                    >
+                                        {breakdown && breakdown[classroom.id] && (
+                                            <PointsBreakdown
+                                                bonusPoints={breakdown[classroom.id].bonusPoints}
+                                                collections={breakdown[classroom.id].collections}
+                                            />
+                                        )}
+                                    </CircularGradeDisplay>
                                 </div>
                             )}
                             <Link

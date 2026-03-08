@@ -7,6 +7,7 @@ interface CircularGradeDisplayProps {
     maxPoints: number
     size?: number
     strokeWidth?: number
+    children?: React.ReactNode
 }
 
 export function CircularGradeDisplay({
@@ -14,6 +15,7 @@ export function CircularGradeDisplay({
     maxPoints,
     size = 120,
     strokeWidth = 10,
+    children,
 }: CircularGradeDisplayProps) {
     const [currentProgress, setCurrentProgress] = useState(0)
     const [displayGrade, setDisplayGrade] = useState(0)
@@ -124,6 +126,8 @@ export function CircularGradeDisplay({
                     Viso surinkta taškų
                 </div>
             </div>
+
+            {children}
         </div>
     )
 }

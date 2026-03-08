@@ -984,6 +984,141 @@ export async function getStudentDashboardStats(): Promise<{
     return { success: true, stats }
 }
 
+// Get per-collection points breakdown for dashboard expand view
+export async function getStudentPointsBreakdown(): Promise<{
+    success: boolean
+    breakdown?: Record<string, {
+        bonusPoints: number
+        collections: Array<{
+            id: string
+            title: string
+            totalPoints: number
+            earnedPoints: number
+        }>
+    }>
+    error?: string
+}> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // 1. Get enrolled classrooms
+    const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select(`
+            classroom_id,
+            bonus_points,
+            classrooms (
+                id,
+                type
+            )
+        `)
+        .eq('student_id', user.id)
+
+    if (!enrollments) return { success: false, error: "No enrollments found" }
+
+    const schoolClassEnrollments = enrollments.filter((e: any) => e.classrooms?.type === 'school_class')
+    const schoolClassIds = schoolClassEnrollments.map((e: any) => e.classroom_id)
+
+    if (schoolClassIds.length === 0) return { success: true, breakdown: {} }
+
+    // 2. Fetch all published, points-enabled assignments with their collection info
+    const { data: assignments } = await supabase
+        .from('assignments')
+        .select(`
+            id,
+            classroom_id,
+            collection_id,
+            points,
+            points_enabled,
+            required_variations_count,
+            questions (points),
+            collections (id, title, created_at)
+        `)
+        .in('classroom_id', schoolClassIds)
+        .eq('published', true)
+        .eq('points_enabled', true)
+
+    if (!assignments) return { success: true, breakdown: {} }
+
+    // 3. Fetch progress for these assignments
+    const assignmentIds = assignments.map(a => a.id)
+    const { data: progress } = await supabase
+        .from('assignment_progress')
+        .select('assignment_id, earned_points')
+        .eq('student_id', user.id)
+        .in('assignment_id', assignmentIds)
+
+    const progressMap = new Map(progress?.map(p => [p.assignment_id, p.earned_points || 0]) || [])
+
+    // 4. Aggregate per-collection per-classroom
+    // Map: classroomId -> collectionId -> { title, createdAt, totalPoints, earnedPoints }
+    const classroomCollections = new Map<string, Map<string, { title: string, createdAt: string, totalPoints: number, earnedPoints: number }>>()
+
+    schoolClassIds.forEach(cid => {
+        classroomCollections.set(cid, new Map())
+    })
+
+    assignments.forEach((a: any) => {
+        const cid = a.classroom_id
+        const collId = a.collection_id
+        if (!cid || !collId) return
+
+        const collectionsMap = classroomCollections.get(cid)
+        if (!collectionsMap) return
+
+        const collectionData = a.collections
+        const collection = Array.isArray(collectionData) ? collectionData[0] : collectionData
+        const collTitle = (collection as any)?.title || 'Untitled'
+        const collCreatedAt = (collection as any)?.created_at || ''
+
+        if (!collectionsMap.has(collId)) {
+            collectionsMap.set(collId, { title: collTitle, createdAt: collCreatedAt, totalPoints: 0, earnedPoints: 0 })
+        }
+
+        const entry = collectionsMap.get(collId)!
+
+        const requiredCount = a.required_variations_count || 0
+        const isVariation = requiredCount > 0
+        let max = a.points || 0
+
+        if (isVariation && a.questions?.[0]) {
+            const pointsPerVariation = a.questions[0].points || 1
+            max = pointsPerVariation * requiredCount
+        }
+
+        const earned = progressMap.get(a.id) || 0
+        entry.totalPoints += max
+        entry.earnedPoints += earned
+    })
+
+    // 5. Build result
+    const breakdown: Record<string, {
+        bonusPoints: number
+        collections: Array<{ id: string, title: string, totalPoints: number, earnedPoints: number }>
+    }> = {}
+
+    schoolClassIds.forEach(cid => {
+        const collectionsMap = classroomCollections.get(cid)!
+        const enrollment = schoolClassEnrollments.find((e: any) => e.classroom_id === cid)
+        const bonusPoints = enrollment?.bonus_points || 0
+
+        breakdown[cid] = {
+            bonusPoints,
+            collections: Array.from(collectionsMap.entries())
+                .sort(([, a], [, b]) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                .map(([id, data]) => ({
+                    id,
+                    title: data.title,
+                    totalPoints: data.totalPoints,
+                    earnedPoints: data.earnedPoints,
+                }))
+        }
+    })
+
+    return { success: true, breakdown }
+}
+
 export async function reportTabViolation(collectionId: string): Promise<ActionState> {
     const supabase = await createClient()
 
