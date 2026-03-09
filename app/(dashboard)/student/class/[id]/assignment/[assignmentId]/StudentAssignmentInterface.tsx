@@ -480,90 +480,81 @@ export function StudentAssignmentInterface({
                             : (isCorrect ? 'border-green-500/40 bg-green-50/10' : '')
                         return (
                             <Card key={index} className={`transition-all ${cardStateClasses}`}>
-                                <CardContent className="p-6">
-                                    <div className="flex gap-4">
-                                        <div className="flex-none pt-1">
-                                            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${pointsEnabled ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-muted text-muted-foreground'}`}>
+                                <CardContent className="px-6 pt-4 pb-6">
+                                    <div className="space-y-6">
+                                        <div className="text-lg leading-relaxed">
+                                            <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-semibold mr-2 align-middle ${pointsEnabled ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-muted text-muted-foreground'}`}>
                                                 {exerciseNumber ? (questions.length > 1 ? `${exerciseNumber}.${index + 1}` : exerciseNumber) : index + 1}
                                             </span>
-                                            {pointsEnabled && (
-                                                <div className="flex justify-center mt-1">
-                                                    <Award className="h-3 w-3 text-amber-500" />
-                                                </div>
-                                            )}
+                                            <MathDisplay content={q.latex_text || "No question text"} />
                                         </div>
-                                        <div className="flex-1 space-y-6">
-                                            <div className="text-lg leading-relaxed">
-                                                <MathDisplay content={q.latex_text || "No question text"} />
+                                        <DiagramDisplay
+                                            diagramType={q.diagram_type}
+                                            diagramLatex={q.diagram_latex}
+                                            diagramSvg={q.diagram_svg}
+                                            diagramImageUrl={q.diagram_image_url}
+                                        />
+
+                                        {revealedIndices.has(index) && q.solution_text && (
+                                            <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
+                                                    <BookOpen className="h-4 w-4" />
+                                                    Išsamus sprendimas
+                                                </div>
+                                                <div className="text-zinc-800 text-sm leading-relaxed border-t border-blue-100 pt-3">
+                                                    <MathDisplay content={q.solution_text} />
+                                                </div>
                                             </div>
-                                            <DiagramDisplay
-                                                diagramType={q.diagram_type}
-                                                diagramLatex={q.diagram_latex}
-                                                diagramSvg={q.diagram_svg}
-                                                diagramImageUrl={q.diagram_image_url}
+                                        )}
+
+                                        {!hideRevealSolution && !isCorrect && !revealedIndices.has(index) && (
+                                            <div className="flex justify-end">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-muted-foreground hover:text-blue-600 hover:bg-blue-50 gap-2 h-7 px-2 text-[10px]"
+                                                    onClick={async () => {
+                                                        if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
+                                                        const newRevealed = new Set(revealedIndices).add(index)
+                                                        setRevealedIndices(newRevealed)
+                                                        // Check if this is the last unsolved question
+                                                        const unsolvedOthers = questions.filter((_: any, i: number) =>
+                                                            i !== index && !completedIndices.has(i) && !revealedIndices.has(i)
+                                                        )
+                                                        if (unsolvedOthers.length === 0) {
+                                                            // Last unsolved question - treat reveal as completion
+                                                            const newCompleted = new Set(completedIndices).add(index)
+                                                            completedIndicesRef.current = newCompleted
+                                                            setCompletedIndices(newCompleted)
+                                                            await persistRevealState(index, newRevealed, newCompleted, true)
+                                                        } else {
+                                                            await persistRevealState(index, newRevealed)
+                                                        }
+                                                    }}
+                                                >
+                                                    <HelpCircle className="h-3 w-3" />
+                                                    Rodyti sprendimą
+                                                </Button>
+                                            </div>
+                                        )}
+
+                                        <div className={`pt-2 ${revealedIndices.has(index) ? "pointer-events-none" : ""}`}>
+                                            <TestInterface
+                                                key={q.id || index}
+                                                question={q}
+                                                showVirtualKeyboardToggle={showVirtualKeyboardToggle}
+                                                questionId={q.id}
+                                                questionPoints={q.points || 1}
+                                                pointsMode={pointsEnabled}
+                                                disabled={lockedQuestionIds.has(q.id)}
+                                                submittedAnswer={submittedAnswers[q.id]}
+                                                submittedIsCorrect={pointsEnabled && !hideCorrectness ? pointsCorrectnessByQuestionId[q.id] : undefined}
+                                                onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
+                                                    handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, index)
+                                                }
+                                                onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
+                                                isRevealed={revealedIndices.has(index)}
                                             />
-
-                                            {revealedIndices.has(index) && q.solution_text && (
-                                                <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-200 space-y-3 animate-in fade-in slide-in-from-top-2">
-                                                    <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
-                                                        <BookOpen className="h-4 w-4" />
-                                                        Išsamus sprendimas
-                                                    </div>
-                                                    <div className="text-zinc-800 text-sm leading-relaxed border-t border-blue-100 pt-3">
-                                                        <MathDisplay content={q.solution_text} />
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {!hideRevealSolution && !isCorrect && !revealedIndices.has(index) && (
-                                                <div className="flex justify-end">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-muted-foreground hover:text-blue-600 hover:bg-blue-50 gap-2 h-7 px-2 text-[10px]"
-                                                        onClick={async () => {
-                                                            if (!confirm("Rodyti sprendimą? Atsakymo pateikimas šiam klausimui bus išjungtas.")) return
-                                                            const newRevealed = new Set(revealedIndices).add(index)
-                                                            setRevealedIndices(newRevealed)
-                                                            // Check if this is the last unsolved question
-                                                            const unsolvedOthers = questions.filter((_: any, i: number) =>
-                                                                i !== index && !completedIndices.has(i) && !revealedIndices.has(i)
-                                                            )
-                                                            if (unsolvedOthers.length === 0) {
-                                                                // Last unsolved question - treat reveal as completion
-                                                                const newCompleted = new Set(completedIndices).add(index)
-                                                                completedIndicesRef.current = newCompleted
-                                                                setCompletedIndices(newCompleted)
-                                                                await persistRevealState(index, newRevealed, newCompleted, true)
-                                                            } else {
-                                                                await persistRevealState(index, newRevealed)
-                                                            }
-                                                        }}
-                                                    >
-                                                        <HelpCircle className="h-3 w-3" />
-                                                        Rodyti sprendimą
-                                                    </Button>
-                                                </div>
-                                            )}
-
-                                            <div className={`pt-2 ${revealedIndices.has(index) ? "pointer-events-none" : ""}`}>
-                                                <TestInterface
-                                                    key={q.id || index}
-                                                    question={q}
-                                                    showVirtualKeyboardToggle={showVirtualKeyboardToggle}
-                                                    questionId={q.id}
-                                                    questionPoints={q.points || 1}
-                                                    pointsMode={pointsEnabled}
-                                                    disabled={lockedQuestionIds.has(q.id)}
-                                                    submittedAnswer={submittedAnswers[q.id]}
-                                                    submittedIsCorrect={pointsEnabled && !hideCorrectness ? pointsCorrectnessByQuestionId[q.id] : undefined}
-                                                    onPointsSubmit={(questionId, questionPoints, answer, pointsIsCorrect) =>
-                                                        handlePointsSubmit(questionId, questionPoints, answer, pointsIsCorrect, index)
-                                                    }
-                                                    onCheck={(ans, isCorrect) => handleAnswerCheck(q.id, ans, isCorrect, index)}
-                                                    isRevealed={revealedIndices.has(index)}
-                                                />
-                                            </div>
                                         </div>
                                     </div>
                                 </CardContent>
@@ -656,6 +647,11 @@ export function StudentAssignmentInterface({
                     <CardHeader className="flex flex-row items-start justify-between pb-2">
                         <div className="space-y-1">
                             <div className="flex items-center gap-2">
+                                {exerciseNumber && (
+                                    <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-semibold ${pointsEnabled ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-muted text-muted-foreground'}`}>
+                                        {exerciseNumber}
+                                    </span>
+                                )}
                                 {!isVariationMode && (
                                     <CardTitle className="text-xl">
                                         {`Klausimas ${currentIndex + 1}`}
