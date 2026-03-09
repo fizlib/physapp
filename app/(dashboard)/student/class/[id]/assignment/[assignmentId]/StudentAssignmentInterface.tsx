@@ -385,7 +385,7 @@ export function StudentAssignmentInterface({
                             {onPrevious && (
                                 <Button variant="outline" className="gap-2" onClick={onPrevious}>
                                     <ArrowLeft className="h-4 w-4" />
-                                    Ankstesnė užduotis
+                                    Atgal
                                 </Button>
                             )}
                             <Button
@@ -571,7 +571,7 @@ export function StudentAssignmentInterface({
                                 onClick={onPrevious}
                             >
                                 <ArrowLeft className="h-4 w-4" />
-                                Ankstesnė užduotis
+                                Atgal
                             </Button>
                         )}
                         <Button
@@ -752,7 +752,7 @@ export function StudentAssignmentInterface({
                                         onClick={onPrevious}
                                     >
                                         <ArrowLeft className="h-4 w-4" />
-                                        Ankstesnė užduotis
+                                        Atgal
                                     </Button>
                                 )}
                                 {!isLastQuestion || (isVariationMode && effectiveCompletedCount < requiredVariations) ? (
