@@ -686,9 +686,9 @@ function robustJsonParse(raw: string): any {
     throw new SyntaxError(`Failed to parse Gemini response as JSON. Response length: ${raw.length}. First 200 chars: ${raw.slice(0, 200)}`)
 }
 
-async function callGeminiForExercise(prompt: string, imagePart: Part): Promise<any> {
-    console.log("Calling Gemini API...")
-    const result = await generateContentWithFallback("gemini-3-flash-preview", [prompt, imagePart])
+async function callGeminiForExercise(prompt: string, imagePart: Part, modelName: string = 'gemini-3-flash-preview'): Promise<any> {
+    console.log(`Calling Gemini API with model: ${modelName}...`)
+    const result = await generateContentWithFallback(modelName, [prompt, imagePart])
     const response = await result.response
     const text = response.text()
     console.log("Gemini Raw Response length:", text.length)
@@ -708,6 +708,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const generateSolution = formData.get('generateSolution') === 'true'
     const useImageAsIllustration = formData.get('useImageAsIllustration') === 'true'
     const customInstructions = formData.get('customInstructions') as string || ''
+    const model = formData.get('model') as string || 'gemini-3-flash-preview'
 
     const file = formData.get('image') as File
     if (!file) {
@@ -801,7 +802,7 @@ export async function generateExerciseFromImage(formData: FormData) {
         ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
       `;
 
-            let data = await callGeminiForExercise(prompt, imagePart)
+            let data = await callGeminiForExercise(prompt, imagePart, model)
             data = processExerciseData(data, generateSolution, diagramImageUrl)
             return { success: true, data }
         } else {
@@ -812,7 +813,7 @@ export async function generateExerciseFromImage(formData: FormData) {
         ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
       `;
 
-            let baseData = await callGeminiForExercise(basePrompt, imagePart)
+            let baseData = await callGeminiForExercise(basePrompt, imagePart, model)
             baseData = processExerciseData(baseData, generateSolution, diagramImageUrl)
 
             // Stage 2: Generate Variations in Parallel
@@ -830,7 +831,7 @@ export async function generateExerciseFromImage(formData: FormData) {
           - Ensure MCQ options are relevant to the NEW variation.
           ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
         `;
-                variationPromises.push(callGeminiForExercise(varPrompt, imagePart))
+                variationPromises.push(callGeminiForExercise(varPrompt, imagePart, model))
             }
 
             const variations = await Promise.all(variationPromises)

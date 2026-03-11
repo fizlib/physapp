@@ -310,6 +310,7 @@ export async function checkIpAccess(classroomId: string, category: string, colle
 
 // Lightweight status check used by classwork polling:
 // combines IP restriction and test mode state in a single server action call.
+// Optimized: all independent DB queries run in parallel via Promise.all.
 export async function getCollectionRuntimeStatus(
     classroomId: string,
     category: string,
@@ -328,23 +329,42 @@ export async function getCollectionRuntimeStatus(
     const studentIp = await getClientIp()
     const { data: { user } } = await supabase.auth.getUser()
 
-    const [{ data: classroom, error: classroomError }, { data: collection, error: collectionError }] = await Promise.all([
-        supabase
-            .from('classrooms')
-            .select('allowed_ip, ip_check_enabled')
-            .eq('id', classroomId)
-            .single(),
+    const needsIpCheck = category === 'classwork'
+
+    // Run ALL independent queries in parallel — single network round-trip
+    const [classroomResult, collectionResult, monitoredCollectionsResult] = await Promise.all([
+        // 1. Classroom (for IP check)
+        needsIpCheck
+            ? supabase
+                .from('classrooms')
+                .select('allowed_ip, ip_check_enabled')
+                .eq('id', classroomId)
+                .single()
+            : Promise.resolve({ data: null, error: null }),
+        // 2. Collection (for test mode)
         includeTestModeStatus
             ? supabase
                 .from('collections')
-                .select('test_mode_ends_at')
+                .select('test_mode_ends_at, tab_monitoring_enabled')
                 .eq('id', collectionId)
                 .single()
-            : Promise.resolve({ data: null, error: null })
+            : Promise.resolve({ data: null, error: null }),
+        // 3. Monitored collections (for tab blocking) — only need IDs
+        user
+            ? supabase
+                .from('collections')
+                .select('id')
+                .eq('classroom_id', classroomId)
+                .eq('tab_monitoring_enabled', true)
+            : Promise.resolve({ data: null, error: null }),
     ])
 
-    if (classroomError || collectionError) {
-        console.error("Error fetching collection runtime status:", classroomError || collectionError)
+    const classroom = classroomResult.data
+    const collection = collectionResult.data as { test_mode_ends_at?: string | null; tab_monitoring_enabled?: boolean } | null
+    const monitoredCollections = monitoredCollectionsResult.data as { id: string }[] | null
+
+    if (classroomResult.error || collectionResult.error) {
+        console.error("Error fetching collection runtime status:", classroomResult.error || collectionResult.error)
         return {
             success: false,
             isRestricted: false,
@@ -353,78 +373,68 @@ export async function getCollectionRuntimeStatus(
         }
     }
 
-    let isRestricted = category === 'classwork' &&
+    // Determine restriction and test mode info
+    const ipMismatch = needsIpCheck &&
         classroom?.ip_check_enabled &&
         classroom?.allowed_ip &&
         studentIp !== classroom.allowed_ip
 
-    if (isRestricted && user) {
-        const { data: bypass } = await createAdminClient()
-            .from('ip_bypasses')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('collection_id', collectionId)
-            .gt('expires_at', new Date().toISOString())
-            .maybeSingle()
-
-        if (bypass) {
-            isRestricted = false
-        }
-    }
-
-    // Check if student is a test participant
-    let isTestParticipant = true // default true for backward compat (if no participants table rows exist)
     const testModeEndsAt = collection?.test_mode_ends_at || null
-    if (testModeEndsAt && user) {
-        const endTime = new Date(testModeEndsAt).getTime()
-        const now = Date.now()
-        if (endTime > now) {
-            // Test is active — check participation
-            const { data: participation } = await supabase
+    const testIsActive = testModeEndsAt && new Date(testModeEndsAt).getTime() > Date.now()
+
+    // Run conditional follow-up queries in parallel
+    const [bypassResult, participationResult, participantCountResult, tabViolationResult] = await Promise.all([
+        // IP bypass — only if actually restricted
+        (ipMismatch && user)
+            ? createAdminClient()
+                .from('ip_bypasses')
+                .select('id')
+                .eq('user_id', user.id)
+                .eq('collection_id', collectionId)
+                .gt('expires_at', new Date().toISOString())
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        // Test participation (own row) — only if test is active
+        (testIsActive && user)
+            ? supabase
                 .from('collection_test_participants')
                 .select('student_id')
                 .eq('collection_id', collectionId)
                 .eq('student_id', user.id)
                 .maybeSingle()
-
-            // If the table has rows for this collection but student is not in them, they're not a participant
-            // If the table has NO rows at all for this collection, treat everyone as a participant (backward compat)
-            // IMPORTANT: Use admin client for counting because RLS only exposes own rows to students
-            const { count } = await createAdminClient()
+            : Promise.resolve({ data: null }),
+        // Test participant count — only if test is active
+        (testIsActive && user)
+            ? createAdminClient()
                 .from('collection_test_participants')
                 .select('student_id', { count: 'exact', head: true })
                 .eq('collection_id', collectionId)
-
-            if (count && count > 0) {
-                isTestParticipant = !!participation
-            }
-        }
-    }
-
-    // Check tab monitoring violation (classroom-wide)
-    let tabBlocked = false
-    if (user) {
-        // Get all monitored collections in this classroom
-        const { data: monitoredCollections } = await supabase
-            .from('collections')
-            .select('id')
-            .eq('classroom_id', classroomId)
-            .eq('tab_monitoring_enabled', true)
-
-        if (monitoredCollections && monitoredCollections.length > 0) {
-            const monitoredIds = monitoredCollections.map(c => c.id)
-            const { data: violation } = await supabase
+            : Promise.resolve({ count: null }),
+        // Tab violation — only if there are monitored collections
+        (user && monitoredCollections && monitoredCollections.length > 0)
+            ? supabase
                 .from('tab_monitoring_violations')
                 .select('blocked')
-                .in('collection_id', monitoredIds)
+                .in('collection_id', monitoredCollections.map(c => c.id))
                 .eq('student_id', user.id)
                 .eq('blocked', true)
                 .limit(1)
                 .maybeSingle()
+            : Promise.resolve({ data: null }),
+    ])
 
-            tabBlocked = !!violation
+    const isRestricted = ipMismatch && !bypassResult.data
+
+    // Determine test participation
+    let isTestParticipant = true // default true for backward compat
+    if (testIsActive && user) {
+        const count = (participantCountResult as any).count
+        if (count && count > 0) {
+            isTestParticipant = !!participationResult.data
         }
     }
+
+    const tabBlocked = !!tabViolationResult.data
 
     return {
         success: true,

@@ -12,11 +12,18 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor, PenLine } from "lucide-react"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor, PenLine, Cpu } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion, uploadIllustration } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SIMULATIONS } from "@/lib/simulations"
+
+const GEMINI_MODELS = [
+    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
+] as const
+
+const GEMINI_MODEL_STORAGE_KEY = 'physapp-gemini-model'
 
 interface QuestionData {
     type: 'numerical' | 'multiple_choice'
@@ -163,8 +170,18 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [pointsEnabled, setPointsEnabled] = useState(false)
     const [points, setPoints] = useState(1)
     const [generationMethod, setGenerationMethod] = useState<'batch' | 'parallel'>('batch')
+    const [selectedModel, setSelectedModel] = useState<string>(GEMINI_MODELS[0].id)
+    const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const illustrationInputRef = useRef<HTMLInputElement>(null)
+
+    // Load saved model from localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem(GEMINI_MODEL_STORAGE_KEY)
+        if (saved && GEMINI_MODELS.some(m => m.id === saved)) {
+            setSelectedModel(saved)
+        }
+    }, [])
 
     const isClasswork = collectionCategory === 'classwork'
 
@@ -241,6 +258,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             formData.append('customInstructions', customInstructions)
             formData.append('answersInSvg', answersInSvg.toString())
             formData.append('generateSolution', generateSolution.toString())
+            formData.append('model', selectedModel)
             formData.append('useImageAsIllustration', useImageAsIllustration.toString())
             if (useImageAsIllustration) {
                 const targetFile = illustrationFile || selectedFile;
@@ -1023,6 +1041,42 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                     <img src={imagePreview} alt="Preview" className="object-cover w-full h-full" />
                                 </div>
                             )}
+
+                            {/* Model Selector */}
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setModelSelectorOpen(!modelSelectorOpen)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted/50 hover:bg-muted transition-colors text-xs text-muted-foreground hover:text-foreground mx-auto"
+                                >
+                                    <Cpu className="h-3 w-3" />
+                                    {GEMINI_MODELS.find(m => m.id === selectedModel)?.label || selectedModel}
+                                    <ChevronDown className={`h-3 w-3 transition-transform ${modelSelectorOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {modelSelectorOpen && (
+                                    <div className="absolute left-1/2 -translate-x-1/2 mt-1 z-50 bg-popover border border-border rounded-lg shadow-lg py-1 min-w-[200px]">
+                                        {GEMINI_MODELS.map(model => (
+                                            <button
+                                                key={model.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedModel(model.id)
+                                                    localStorage.setItem(GEMINI_MODEL_STORAGE_KEY, model.id)
+                                                    setModelSelectorOpen(false)
+                                                }}
+                                                className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                                                    selectedModel === model.id
+                                                        ? 'bg-primary/10 text-primary font-medium'
+                                                        : 'hover:bg-muted text-foreground'
+                                                }`}
+                                            >
+                                                {selectedModel === model.id && <Check className="h-3.5 w-3.5" />}
+                                                <span className={selectedModel === model.id ? '' : 'pl-[22px]'}>{model.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
 
                             <Button type="submit" className="w-full" disabled={!imagePreview || loading}>
                                 {loading ? (

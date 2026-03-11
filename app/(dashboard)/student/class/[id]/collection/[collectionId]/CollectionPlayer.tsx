@@ -387,8 +387,8 @@ export function CollectionPlayer({
         let cancelled = false
         let timeout: ReturnType<typeof setTimeout> | null = null
 
-        const BASE_POLL_MS = 12000
-        const JITTER_MS = 3000
+        const BASE_POLL_MS = 8000
+        const JITTER_MS = 2000
 
         const check = async () => {
             // Time Check (local, no server round-trip needed)
@@ -471,6 +471,62 @@ export function CollectionPlayer({
             if (timeout) clearTimeout(timeout)
         }
     }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModePollingEnabled])
+
+    // Fast lightweight test-status poller — only runs when test is NOT active.
+    // Uses a minimal API endpoint that responds quickly even on Vercel cold starts.
+    useEffect(() => {
+        if (isCompleted || collection.category !== 'classwork' || !testModePollingEnabled || isTestModeActive) return
+
+        let cancelled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
+        const FAST_POLL_MS = 4000
+
+        const checkTestStart = async () => {
+            try {
+                const res = await fetch(`/api/test-status?collectionId=${collection.id}`)
+                if (cancelled || !res.ok) return
+                const data = await res.json()
+
+                if (data.testModeEndsAt) {
+                    const endTime = new Date(data.testModeEndsAt).getTime()
+                    const remaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000))
+                    const alreadyHandled = data.testModeEndsAt === handledTestEndTimeRef.current
+                    const participantStatus = data.isParticipant !== undefined ? data.isParticipant : true
+
+                    setIsTestParticipant(participantStatus)
+
+                    if (remaining > 0 && !alreadyHandled && participantStatus) {
+                        handledTestEndTimeRef.current = data.testModeEndsAt
+                        setKnownTestModeEndsAt(data.testModeEndsAt)
+                        setTestModeRemainingSeconds(remaining)
+                        setTestModeExpired(false)
+                        setIsCompleted(false)
+                        setIsReviewing(false)
+
+                        const firstPointedIndex = assignmentsRef.current.findIndex((a: any) => a.points_enabled)
+                        if (firstPointedIndex >= 0 && currentAssignmentIndexRef.current !== firstPointedIndex) {
+                            setCurrentAssignmentIndex(firstPointedIndex)
+                        }
+                        setHasRedirectedToPointed(true)
+                        return // Stop polling — test detected
+                    }
+                }
+            } catch {
+                // Silently ignore fetch errors
+            }
+
+            if (!cancelled) {
+                timeout = setTimeout(checkTestStart, FAST_POLL_MS)
+            }
+        }
+
+        // Start after a short initial delay
+        timeout = setTimeout(checkTestStart, 2000)
+        return () => {
+            cancelled = true
+            if (timeout) clearTimeout(timeout)
+        }
+    }, [isCompleted, collection.category, collection.id, testModePollingEnabled, isTestModeActive])
 
     // Polling effect for waiting for next exercise to be published
     useEffect(() => {
