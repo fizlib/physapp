@@ -10,6 +10,7 @@ import { SortableExerciseList } from "./SortableExerciseList"
 import { CollectionBatchActions } from "./CollectionBatchActions"
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
 import { StartTestButton } from "./StartTestButton"
+import { MarkdownContent } from "@/components/ui/markdown-editor"
 
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
@@ -34,6 +35,8 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
 
     if (!collection) notFound()
 
+    const isInformationPage = collection.category === 'information'
+
     // Sort assignments by order_index (or created_at if index helps)
     const assignments = collection.assignments?.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) || []
 
@@ -55,25 +58,31 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                         <div>
                             <h1 className="text-3xl font-serif font-bold text-primary">{collection.title}</h1>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Manage exercises in this collection.
+                                {isInformationPage
+                                    ? "Manage information page content."
+                                    : "Manage exercises in this collection."}
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <CreateExerciseDialog
-                                classroomId={id}
-                                classroomType={collection.classrooms?.type || 'school_class'}
-                                collectionId={collectionId}
-                                collectionCategory={collection.category}
-                            />
-                            <CollectionManager
-                                classroomId={id}
-                                collectionId={collectionId}
-                            />
-                            {collection.category === 'classwork' && (
-                                <CollectionBatchActions
-                                    assignments={assignments}
-                                    classroomId={id}
-                                />
+                            {!isInformationPage && (
+                                <>
+                                    <CreateExerciseDialog
+                                        classroomId={id}
+                                        classroomType={collection.classrooms?.type || 'school_class'}
+                                        collectionId={collectionId}
+                                        collectionCategory={collection.category}
+                                    />
+                                    <CollectionManager
+                                        classroomId={id}
+                                        collectionId={collectionId}
+                                    />
+                                    {collection.category === 'classwork' && (
+                                        <CollectionBatchActions
+                                            assignments={assignments}
+                                            classroomId={id}
+                                        />
+                                    )}
+                                </>
                             )}
                             <CollectionSettingsDialog
                                 classroomId={id}
@@ -83,16 +92,19 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 currentScheduledDate={collection.scheduled_date}
                                 currentScheduledEndAt={collection.scheduled_end_at}
                                 currentSlidesUrl={collection.slides_url}
+                                currentInfoContent={collection.info_content}
                                 lessonSchedule={classroom?.lesson_schedule}
                                 currentTabMonitoringEnabled={collection.tab_monitoring_enabled}
                                 currentAutoDisableTabMonitoring={collection.auto_disable_tab_monitoring_after_test}
                             />
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/teacher/class/${id}/collection/${collectionId}/statistics`}>
-                                    <BarChart2 className="mr-2 h-4 w-4" />
-                                    Statistics
-                                </Link>
-                            </Button>
+                            {!isInformationPage && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={`/teacher/class/${id}/collection/${collectionId}/statistics`}>
+                                        <BarChart2 className="mr-2 h-4 w-4" />
+                                        Statistics
+                                    </Link>
+                                </Button>
+                            )}
                         </div>
                     </div>
                     {collection.category === 'classwork' && (
@@ -106,12 +118,27 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                     )}
                 </div>
 
-                {/* Exercises List */}
-                <SortableExerciseList
-                    initialAssignments={assignments}
-                    classroomId={id}
-                    collectionId={collectionId}
-                />
+                {/* Content */}
+                {isInformationPage ? (
+                    <Card>
+                        <CardContent className="p-6">
+                            {collection.info_content ? (
+                                <MarkdownContent content={collection.info_content} />
+                            ) : (
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <p className="text-sm font-medium">No content yet.</p>
+                                    <p className="text-xs opacity-70 mt-1">Open Settings to add information content.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                ) : (
+                    <SortableExerciseList
+                        initialAssignments={assignments}
+                        classroomId={id}
+                        collectionId={collectionId}
+                    />
+                )}
 
             </div>
         </div>

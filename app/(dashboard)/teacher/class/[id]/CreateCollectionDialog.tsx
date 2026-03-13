@@ -15,6 +15,7 @@ import { Loader2, Plus } from "lucide-react"
 import { createCollection } from "../../actions"
 import { toast } from "sonner"
 import { LessonCalendar } from "@/components/teacher/LessonCalendar"
+import { MarkdownEditor } from "@/components/ui/markdown-editor"
 
 interface LessonSlot {
     day: number
@@ -31,7 +32,8 @@ export function CreateCollectionDialog({ classroomId, classroomType = 'school_cl
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [title, setTitle] = useState("")
-    const [category, setCategory] = useState<'homework' | 'classwork'>('homework')
+    const [category, setCategory] = useState<'homework' | 'classwork' | 'information'>('homework')
+    const [infoContent, setInfoContent] = useState("")
 
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -52,7 +54,7 @@ export function CreateCollectionDialog({ classroomId, classroomType = 'school_cl
                 scheduledDate = dateWithTime.toISOString()
             }
 
-            const result = await createCollection(classroomId, title, category, scheduledDate)
+            const result = await createCollection(classroomId, title, category, scheduledDate, category === 'information' ? infoContent : undefined)
             if (result.success) {
                 toast.success("Collection created successfully!")
                 setOpen(false)
@@ -73,6 +75,7 @@ export function CreateCollectionDialog({ classroomId, classroomType = 'school_cl
         setCategory('homework')
         setSelectedDate(null)
         setSelectedTime("")
+        setInfoContent("")
     }
 
     const showCalendar = category === 'classwork'
@@ -127,6 +130,17 @@ export function CreateCollectionDialog({ classroomId, classroomType = 'school_cl
                                     />
                                     Homework
                                 </label>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="category"
+                                        value="information"
+                                        checked={category === 'information'}
+                                        onChange={() => setCategory('information')}
+                                        className="accent-primary"
+                                    />
+                                    Information
+                                </label>
                             </div>
                         </div>
                     )}
@@ -140,6 +154,20 @@ export function CreateCollectionDialog({ classroomId, classroomType = 'school_cl
                                     setSelectedDate(date)
                                     setSelectedTime(time)
                                 }}
+                            />
+                        </div>
+                    )}
+
+                    {/* Content editor for Information pages */}
+                    {category === 'information' && (
+                        <div className="space-y-2 pt-2 border-t">
+                            <Label htmlFor="info-content">Content</Label>
+                            <MarkdownEditor
+                                value={infoContent}
+                                onChange={setInfoContent}
+                                placeholder="Enter the information you want to share with students..."
+                                disabled={loading}
+                                minHeight="120px"
                             />
                         </div>
                     )}

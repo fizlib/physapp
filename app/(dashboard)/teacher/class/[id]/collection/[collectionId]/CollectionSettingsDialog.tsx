@@ -19,6 +19,7 @@ import { updateCollection, deleteCollection, uploadCollectionSlides, listCollect
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { LessonCalendar } from "@/components/teacher/LessonCalendar"
+import { MarkdownEditor } from "@/components/ui/markdown-editor"
 
 interface LessonSlot {
     day: number
@@ -29,10 +30,11 @@ interface CollectionSettingsDialogProps {
     classroomId: string
     collectionId: string
     currentTitle: string
-    currentCategory: 'homework' | 'classwork'
+    currentCategory: 'homework' | 'classwork' | 'information'
     currentScheduledDate?: string | null
     currentScheduledEndAt?: string | null
     currentSlidesUrl?: string | null
+    currentInfoContent?: string | null
     lessonSchedule?: LessonSlot[] | null
     trigger?: React.ReactNode
     currentTabMonitoringEnabled?: boolean
@@ -47,6 +49,7 @@ export function CollectionSettingsDialog({
     currentScheduledDate,
     currentScheduledEndAt,
     currentSlidesUrl,
+    currentInfoContent,
     lessonSchedule,
     trigger,
     currentTabMonitoringEnabled,
@@ -55,7 +58,8 @@ export function CollectionSettingsDialog({
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [title, setTitle] = useState(currentTitle)
-    const [category, setCategory] = useState<'homework' | 'classwork'>(currentCategory)
+    const [category, setCategory] = useState<'homework' | 'classwork' | 'information'>(currentCategory)
+    const [infoContent, setInfoContent] = useState<string>(currentInfoContent || "")
 
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
@@ -105,6 +109,7 @@ export function CollectionSettingsDialog({
             }
             setUseScheduling(!!currentScheduledDate)
             setSlidesUrl(currentSlidesUrl || null)
+            setInfoContent(currentInfoContent || "")
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
             setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
@@ -130,7 +135,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -217,7 +222,7 @@ export function CollectionSettingsDialog({
 
                     <div className="space-y-3">
                         <Label>Category</Label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
                             <label className={`
                                 flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-muted/50
                                 ${category === 'homework' ? 'border-primary bg-primary/5' : 'border-border'}
@@ -249,8 +254,38 @@ export function CollectionSettingsDialog({
                                 <span className="font-semibold text-sm">Classwork</span>
                                 {category === 'classwork' && <Check className="w-4 h-4 text-primary mt-2" />}
                             </label>
+
+                            <label className={`
+                                flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all hover:bg-muted/50
+                                ${category === 'information' ? 'border-teal-500 bg-teal-50/50' : 'border-border'}
+                            `}>
+                                <input
+                                    type="radio"
+                                    name="settings-category"
+                                    value="information"
+                                    className="sr-only"
+                                    checked={category === 'information'}
+                                    onChange={() => setCategory('information')}
+                                />
+                                <span className="font-semibold text-sm">Information</span>
+                                {category === 'information' && <Check className="w-4 h-4 text-teal-500 mt-2" />}
+                            </label>
                         </div>
                     </div>
+
+                    {/* Content editor for Information pages */}
+                    {category === 'information' && (
+                        <div className="space-y-3">
+                            <Label>Content</Label>
+                            <MarkdownEditor
+                                value={infoContent}
+                                onChange={setInfoContent}
+                                placeholder="Enter the information you want to share with students..."
+                                disabled={loading}
+                                minHeight="150px"
+                            />
+                        </div>
+                    )}
 
                     <div className="space-y-3">
                         <Label>Theory Slides (PDF)</Label>

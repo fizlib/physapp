@@ -8,6 +8,7 @@ import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
 import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { MarkdownContent } from "@/components/ui/markdown-editor"
 
 interface CollectionData {
     id: string
@@ -18,6 +19,7 @@ interface CollectionData {
     scheduled_end_at: string | null
     test_mode_ends_at: string | null
     tab_monitoring_enabled: boolean | null
+    info_content: string | null
 }
 
 interface AssignmentMetaRow {
@@ -77,7 +79,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 slides_url,
                 scheduled_end_at,
                 test_mode_ends_at,
-                tab_monitoring_enabled
+                tab_monitoring_enabled,
+                info_content
             `)
             .eq('id', collectionId)
             .eq('classroom_id', id)
@@ -98,6 +101,34 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     const collection = collectionResult.data as CollectionData | null
 
     if (!collection) notFound()
+
+    // For information collections, render content directly
+    if (collection.category === 'information') {
+        return (
+            <div className="min-h-screen bg-background p-8 font-sans text-foreground">
+                <div className="mx-auto max-w-3xl space-y-6">
+                    <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                        <Link href={`/student/class/${id}`}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Grįžti į klasę
+                        </Link>
+                    </Button>
+                    <div className="border-b pb-4">
+                        <h1 className="text-2xl font-serif font-bold tracking-tight">{collection.title}</h1>
+                    </div>
+                    {collection.info_content ? (
+                        <div className="bg-card rounded-lg border p-6">
+                            <MarkdownContent content={collection.info_content} />
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 text-muted-foreground">
+                            <p className="text-sm">Informacija dar nepateikta.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        )
+    }
 
     let allAssignmentsRows = (allAssignmentsResult.data || []) as AssignmentMetaRow[]
     let publishedAssignments = (publishedAssignmentsResult.data || []) as PublishedAssignmentRow[]

@@ -26,7 +26,7 @@ const CreateClassSchema = z.object({
 const CreateCollectionSchema = z.object({
     title: z.string().min(1),
     classroomId: z.string().uuid(),
-    category: z.enum(['homework', 'classwork']).default('homework'),
+    category: z.enum(['homework', 'classwork', 'information']).default('homework'),
 })
 
 const AddStudentSchema = z.object({
@@ -1140,7 +1140,7 @@ export async function deleteClassroom(classroomId: string): Promise<ActionState>
 }
 
 
-export async function createCollection(classroomId: string, title: string, category: 'homework' | 'classwork' = 'homework', scheduledDate?: string): Promise<ActionState> {
+export async function createCollection(classroomId: string, title: string, category: 'homework' | 'classwork' | 'information' = 'homework', scheduledDate?: string, infoContent?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1164,7 +1164,8 @@ export async function createCollection(classroomId: string, title: string, categ
         classroom_id: classroomId,
         title: title,
         category: category,
-        scheduled_date: scheduledDate || null
+        scheduled_date: scheduledDate || null,
+        info_content: category === 'information' ? (infoContent || null) : null
     })
 
     if (error) {
@@ -1176,7 +1177,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1199,8 +1200,9 @@ export async function updateCollection(classroomId: string, collectionId: string
     const updateData: any = {
         title: title,
         category: category,
-        scheduled_date: scheduledDate || null,
-        scheduled_end_at: scheduledEndDate || null
+        scheduled_date: category === 'information' ? null : (scheduledDate || null),
+        scheduled_end_at: category === 'information' ? null : (scheduledEndDate || null),
+        info_content: category === 'information' ? (infoContent || null) : null
     }
 
     if (tabMonitoringEnabled !== undefined) {

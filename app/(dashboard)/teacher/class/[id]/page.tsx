@@ -52,11 +52,12 @@ interface AssignmentProgressRow {
 interface ClassroomCollection {
     id: string
     title: string
-    category?: 'homework' | 'classwork' | null
+    category?: 'homework' | 'classwork' | 'information' | null
     assignments?: Array<{ id: string }> | null
     scheduled_date?: string | null
     scheduled_end_at?: string | null
     tab_monitoring_enabled?: boolean | null
+    info_content?: string | null
     created_at: string
 }
 
@@ -115,6 +116,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     const collectionsList = (collections || []) as ClassroomCollection[]
     const classworkCollections = collectionsList.filter((collection) => collection.category === 'classwork')
     const homeworkCollections = collectionsList.filter((collection) => collection.category === 'homework' || !collection.category)
+    const informationCollections = collectionsList.filter((collection) => collection.category === 'information')
 
     const studentPointsById: Record<string, StudentPointsSummary> = {}
     const enrolledStudentIds = enrollmentsList
@@ -437,6 +439,44 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                             </div>
                                         ) : (
                                             <p className="text-sm text-muted-foreground italic">No homework collections yet.</p>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <h3 className="text-lg font-medium text-teal-600">Information</h3>
+                                        {informationCollections.length > 0 ? (
+                                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                {informationCollections.map((collection) => (
+                                                    <Card key={collection.id} className="relative group hover:border-teal-500/50 transition-colors h-full">
+                                                        <Link href={`/teacher/class/${id}/collection/${collection.id}`} className="absolute inset-0 z-0" />
+                                                        <CardContent className="p-6 space-y-2">
+                                                            <div className="flex justify-between items-start pointer-events-none">
+                                                                <h3 className="font-semibold">{collection.title}</h3>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">Information</span>
+                                                                    <div className="pointer-events-auto">
+                                                                        <DeleteCollectionButton
+                                                                            collectionId={collection.id}
+                                                                            classroomId={id}
+                                                                            title={collection.title}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-sm text-muted-foreground line-clamp-2 pointer-events-none">
+                                                                {collection.info_content
+                                                                    ? collection.info_content.substring(0, 100) + (collection.info_content.length > 100 ? '...' : '')
+                                                                    : "No content yet"}
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                                Created {new Date(collection.created_at).toLocaleDateString()}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground italic">No information pages yet.</p>
                                         )}
                                     </div>
                                 </>

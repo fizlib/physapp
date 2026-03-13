@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
+import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert, Info } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -37,6 +37,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 scheduled_date,
                 scheduled_end_at,
                 slides_url,
+                info_content,
                 assignments (
                     id,
                     published
@@ -133,6 +134,31 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                         {/* Collections grouped by Category */}
                         {collections && collections.length > 0 ? (
                             <div className="space-y-8 mb-8">
+                                {/* Information Page Buttons */}
+                                {collections.some((c: any) => c.category === 'information') && (
+                                    <div className="space-y-3">
+                                        {collections.filter((c: any) => c.category === 'information').map((collection: any) => (
+                                            <Link
+                                                key={collection.id}
+                                                href={`/student/class/${id}/collection/${collection.id}`}
+                                            >
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full justify-between h-auto py-3 px-5 transition-all rounded-xl text-sm font-medium bg-background hover:bg-primary/5 hover:border-primary/50 hover:shadow-sm group border-border/60"
+                                                >
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div className="bg-primary/10 p-1.5 rounded-md text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                                                            <Info className="h-4 w-4 shrink-0" />
+                                                        </div>
+                                                        <span className="truncate">{collection.title}</span>
+                                                    </div>
+                                                    <span className="shrink-0 text-[10px] uppercase tracking-wider font-bold text-muted-foreground group-hover:text-primary transition-colors">Atidaryti &rarr;</span>
+                                                </Button>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {/* Classwork Section */}
                                 {collections.some((c: any) => c.category === 'classwork') && (
                                     <div className="space-y-4">
