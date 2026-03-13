@@ -2485,6 +2485,9 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                 title: sourceCollection.title,
                 category: sourceCollection.category,
                 slides_url: sourceCollection.slides_url,
+                info_content: sourceCollection.info_content || null,
+                info_button_color: sourceCollection.info_button_color || null,
+                theory_content: sourceCollection.theory_content || null,
                 scheduled_date: null // Don't copy schedule
             })
             .select()
