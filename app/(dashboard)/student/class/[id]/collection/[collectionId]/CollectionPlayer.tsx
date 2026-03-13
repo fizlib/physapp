@@ -27,7 +27,6 @@ import {
     checkTabBlockStatus
 } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
-import { SlidesButton } from "@/components/student/SlidesButton"
 
 interface AssignmentMeta {
     id: string
@@ -1036,13 +1035,13 @@ export function CollectionPlayer({
                                 </div>
 
                             )}
-                            {collection.slides_url && (
-                                <SlidesButton
-                                    url={collection.slides_url}
-                                    title={collection.title}
-                                    variant="outline"
-                                    className="h-9"
-                                />
+                            {(collection.slides_url || collection.theory_content) && (
+                                <Link href={`/student/class/${classroomId}/collection/${collection.id}/theory`}>
+                                    <Button variant="outline" size="sm" className="h-9">
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Teorija
+                                    </Button>
+                                </Link>
                             )}
                         </div>
                     </h1>

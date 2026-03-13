@@ -20,6 +20,7 @@ interface CollectionData {
     test_mode_ends_at: string | null
     tab_monitoring_enabled: boolean | null
     info_content: string | null
+    theory_content: string | null
 }
 
 interface AssignmentMetaRow {
@@ -80,7 +81,8 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 scheduled_end_at,
                 test_mode_ends_at,
                 tab_monitoring_enabled,
-                info_content
+                info_content,
+                theory_content
             `)
             .eq('id', collectionId)
             .eq('classroom_id', id)

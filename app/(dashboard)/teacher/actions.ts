@@ -1177,7 +1177,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string, infoButtonColor?: string): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string, infoButtonColor?: string, theoryContent?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1216,6 +1216,10 @@ export async function updateCollection(classroomId: string, collectionId: string
 
     if (slidesUrl !== undefined) {
         updateData.slides_url = slidesUrl
+    }
+
+    if (category !== 'information' && theoryContent !== undefined) {
+        updateData.theory_content = theoryContent || null
     }
 
     const { error } = await supabase

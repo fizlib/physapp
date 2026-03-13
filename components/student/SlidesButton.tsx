@@ -47,7 +47,7 @@ export function SlidesButton({ url, title, variant = "outline", className }: Sli
                 }}
             >
                 <FileText className="w-4 h-4 mr-2" />
-                Skaidrės
+                Atidaryti pamokos skaidres
             </Button>
             {!isIOS && (
                 <SlidesModal

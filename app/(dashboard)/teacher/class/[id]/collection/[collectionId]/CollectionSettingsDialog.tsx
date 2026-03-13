@@ -40,6 +40,7 @@ interface CollectionSettingsDialogProps {
     currentTabMonitoringEnabled?: boolean
     currentAutoDisableTabMonitoring?: boolean
     currentInfoButtonColor?: string | null
+    currentTheoryContent?: string | null
 }
 
 export function CollectionSettingsDialog({
@@ -55,7 +56,8 @@ export function CollectionSettingsDialog({
     trigger,
     currentTabMonitoringEnabled,
     currentAutoDisableTabMonitoring,
-    currentInfoButtonColor
+    currentInfoButtonColor,
+    currentTheoryContent
 }: CollectionSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -63,6 +65,7 @@ export function CollectionSettingsDialog({
     const [category, setCategory] = useState<'homework' | 'classwork' | 'information'>(currentCategory)
     const [infoContent, setInfoContent] = useState<string>(currentInfoContent || "")
     const [infoButtonColor, setInfoButtonColor] = useState<string>(currentInfoButtonColor || 'neutral')
+    const [theoryContent, setTheoryContent] = useState<string>(currentTheoryContent || "")
 
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
@@ -114,6 +117,7 @@ export function CollectionSettingsDialog({
             setSlidesUrl(currentSlidesUrl || null)
             setInfoContent(currentInfoContent || "")
             setInfoButtonColor(currentInfoButtonColor || 'neutral')
+            setTheoryContent(currentTheoryContent || "")
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
             setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
@@ -139,7 +143,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined, category !== 'information' ? theoryContent : undefined)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -330,6 +334,20 @@ export function CollectionSettingsDialog({
                                     {infoButtonColor === 'red' && <Check className="w-3.5 h-3.5 text-red-500 mt-1" />}
                                 </label>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Theory content for non-information categories */}
+                    {category !== 'information' && (
+                        <div className="space-y-3">
+                            <Label>Teorijos tekstas</Label>
+                            <MarkdownEditor
+                                value={theoryContent}
+                                onChange={setTheoryContent}
+                                placeholder="Įveskite teorijos tekstą, kurį matys mokiniai..."
+                                disabled={loading}
+                                minHeight="150px"
+                            />
                         </div>
                     )}
 

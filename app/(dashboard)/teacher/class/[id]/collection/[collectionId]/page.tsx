@@ -97,6 +97,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 currentTabMonitoringEnabled={collection.tab_monitoring_enabled}
                                 currentAutoDisableTabMonitoring={collection.auto_disable_tab_monitoring_after_test}
                                 currentInfoButtonColor={collection.info_button_color}
+                                currentTheoryContent={collection.theory_content}
                             />
                             {!isInformationPage && (
                                 <Button variant="outline" size="sm" asChild>

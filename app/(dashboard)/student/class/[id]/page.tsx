@@ -7,7 +7,7 @@ import Link from "next/link"
 import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
-import { SlidesButton } from "@/components/student/SlidesButton"
+import { FileText } from "lucide-react"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -37,6 +37,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 scheduled_date,
                 scheduled_end_at,
                 slides_url,
+                theory_content,
                 info_content,
                 info_button_color,
                 assignments (
@@ -223,14 +224,18 @@ export default async function StudentClassroomPage({ params }: { params: Promise
 
                                                             <div className="flex items-center justify-between gap-4">
                                                                 <div className="flex-1">
-                                                                    {collection.slides_url && (
+                                                                    {(collection.slides_url || collection.theory_content) && (
                                                                         <div className="pointer-events-auto relative z-30 inline-flex">
-                                                                            <SlidesButton
-                                                                                url={collection.slides_url}
-                                                                                title={collection.title}
-                                                                                variant="secondary"
-                                                                                className="h-8 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
-                                                                            />
+                                                                            <Link href={`/student/class/${id}/collection/${collection.id}/theory`}>
+                                                                                <Button
+                                                                                    variant="secondary"
+                                                                                    size="sm"
+                                                                                    className="h-8 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
+                                                                                >
+                                                                                    <FileText className="w-4 h-4 mr-2" />
+                                                                                    Teorija
+                                                                                </Button>
+                                                                            </Link>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -282,14 +287,18 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Namų darbai</span>
                                                             </div>
 
-                                                            {collection.slides_url && (
+                                                            {(collection.slides_url || collection.theory_content) && (
                                                                 <div className="pt-1 pointer-events-auto relative z-30">
-                                                                    <SlidesButton
-                                                                        url={collection.slides_url}
-                                                                        title={collection.title}
-                                                                        variant="secondary"
-                                                                        className="h-8 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none"
-                                                                    />
+                                                                    <Link href={`/student/class/${id}/collection/${collection.id}/theory`}>
+                                                                        <Button
+                                                                            variant="secondary"
+                                                                            size="sm"
+                                                                            className="h-8 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none"
+                                                                        >
+                                                                            <FileText className="w-4 h-4 mr-2" />
+                                                                            Teorija
+                                                                        </Button>
+                                                                    </Link>
                                                                 </div>
                                                             )}
 
