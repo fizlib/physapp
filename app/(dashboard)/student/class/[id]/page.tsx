@@ -160,7 +160,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                         isRed
                                                             ? 'text-red-500 group-hover:text-red-700'
                                                             : 'text-muted-foreground group-hover:text-primary'
-                                                    }`}>Atidaryti &rarr;</span>
+                                                    }`}>&rarr;</span>
                                                 </Button>
                                             </Link>
                                             )
