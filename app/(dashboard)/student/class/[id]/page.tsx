@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert, Info } from "lucide-react"
+import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { SlidesButton } from "@/components/student/SlidesButton"
@@ -38,6 +38,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 scheduled_end_at,
                 slides_url,
                 info_content,
+                info_button_color,
                 assignments (
                     id,
                     published
@@ -137,25 +138,33 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                 {/* Information Page Buttons */}
                                 {collections.some((c: any) => c.category === 'information') && (
                                     <div className="space-y-3">
-                                        {collections.filter((c: any) => c.category === 'information').map((collection: any) => (
+                                        {collections.filter((c: any) => c.category === 'information').map((collection: any) => {
+                                            const isRed = collection.info_button_color === 'red'
+                                            return (
                                             <Link
                                                 key={collection.id}
                                                 href={`/student/class/${id}/collection/${collection.id}`}
                                             >
                                                 <Button
                                                     variant="outline"
-                                                    className="w-full justify-between h-auto py-3 px-5 transition-all rounded-xl text-sm font-medium bg-background hover:bg-primary/5 hover:border-primary/50 hover:shadow-sm group border-border/60"
+                                                    className={`w-full justify-between h-auto py-3 px-5 transition-all rounded-xl text-sm font-medium group ${
+                                                        isRed
+                                                            ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-400 hover:shadow-sm text-red-800'
+                                                            : 'bg-background hover:bg-primary/5 hover:border-primary/50 hover:shadow-sm border-border/60'
+                                                    }`}
                                                 >
                                                     <div className="flex items-center gap-3 overflow-hidden">
-                                                        <div className="bg-primary/10 p-1.5 rounded-md text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                                            <Info className="h-4 w-4 shrink-0" />
-                                                        </div>
                                                         <span className="truncate">{collection.title}</span>
                                                     </div>
-                                                    <span className="shrink-0 text-[10px] uppercase tracking-wider font-bold text-muted-foreground group-hover:text-primary transition-colors">Atidaryti &rarr;</span>
+                                                    <span className={`shrink-0 text-[10px] uppercase tracking-wider font-bold transition-colors ${
+                                                        isRed
+                                                            ? 'text-red-500 group-hover:text-red-700'
+                                                            : 'text-muted-foreground group-hover:text-primary'
+                                                    }`}>Atidaryti &rarr;</span>
                                                 </Button>
                                             </Link>
-                                        ))}
+                                            )
+                                        })}
                                     </div>
                                 )}
 

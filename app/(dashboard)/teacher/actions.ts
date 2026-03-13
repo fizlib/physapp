@@ -1177,7 +1177,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string, infoButtonColor?: string): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1202,7 +1202,8 @@ export async function updateCollection(classroomId: string, collectionId: string
         category: category,
         scheduled_date: category === 'information' ? null : (scheduledDate || null),
         scheduled_end_at: category === 'information' ? null : (scheduledEndDate || null),
-        info_content: category === 'information' ? (infoContent || null) : null
+        info_content: category === 'information' ? (infoContent || null) : null,
+        info_button_color: category === 'information' ? (infoButtonColor || 'neutral') : null
     }
 
     if (tabMonitoringEnabled !== undefined) {

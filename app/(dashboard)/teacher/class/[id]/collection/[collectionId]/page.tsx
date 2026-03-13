@@ -96,6 +96,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                                 lessonSchedule={classroom?.lesson_schedule}
                                 currentTabMonitoringEnabled={collection.tab_monitoring_enabled}
                                 currentAutoDisableTabMonitoring={collection.auto_disable_tab_monitoring_after_test}
+                                currentInfoButtonColor={collection.info_button_color}
                             />
                             {!isInformationPage && (
                                 <Button variant="outline" size="sm" asChild>

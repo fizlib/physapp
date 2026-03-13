@@ -39,6 +39,7 @@ interface CollectionSettingsDialogProps {
     trigger?: React.ReactNode
     currentTabMonitoringEnabled?: boolean
     currentAutoDisableTabMonitoring?: boolean
+    currentInfoButtonColor?: string | null
 }
 
 export function CollectionSettingsDialog({
@@ -53,13 +54,15 @@ export function CollectionSettingsDialog({
     lessonSchedule,
     trigger,
     currentTabMonitoringEnabled,
-    currentAutoDisableTabMonitoring
+    currentAutoDisableTabMonitoring,
+    currentInfoButtonColor
 }: CollectionSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [title, setTitle] = useState(currentTitle)
     const [category, setCategory] = useState<'homework' | 'classwork' | 'information'>(currentCategory)
     const [infoContent, setInfoContent] = useState<string>(currentInfoContent || "")
+    const [infoButtonColor, setInfoButtonColor] = useState<string>(currentInfoButtonColor || 'neutral')
 
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
@@ -110,6 +113,7 @@ export function CollectionSettingsDialog({
             setUseScheduling(!!currentScheduledDate)
             setSlidesUrl(currentSlidesUrl || null)
             setInfoContent(currentInfoContent || "")
+            setInfoButtonColor(currentInfoButtonColor || 'neutral')
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
             setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
@@ -135,7 +139,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -188,6 +192,7 @@ export function CollectionSettingsDialog({
             ))
         || tabMonitoringEnabled !== !!currentTabMonitoringEnabled
         || autoDisableTabMonitoring !== (currentAutoDisableTabMonitoring !== false)
+        || infoButtonColor !== (currentInfoButtonColor || 'neutral')
 
 
     return (
@@ -284,6 +289,47 @@ export function CollectionSettingsDialog({
                                 disabled={loading}
                                 minHeight="150px"
                             />
+                        </div>
+                    )}
+
+                    {/* Button Color for Information pages */}
+                    {category === 'information' && (
+                        <div className="space-y-3">
+                            <Label>Button Color (Student View)</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <label className={`
+                                    flex flex-col items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-all hover:bg-muted/50
+                                    ${infoButtonColor === 'neutral' ? 'border-primary bg-primary/5' : 'border-border'}
+                                `}>
+                                    <input
+                                        type="radio"
+                                        name="info-button-color"
+                                        value="neutral"
+                                        className="sr-only"
+                                        checked={infoButtonColor === 'neutral'}
+                                        onChange={() => setInfoButtonColor('neutral')}
+                                    />
+                                    <div className="w-full h-6 rounded-md border border-border/60 bg-background mb-2" />
+                                    <span className="text-xs font-medium">Neutral</span>
+                                    {infoButtonColor === 'neutral' && <Check className="w-3.5 h-3.5 text-primary mt-1" />}
+                                </label>
+                                <label className={`
+                                    flex flex-col items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-all hover:bg-muted/50
+                                    ${infoButtonColor === 'red' ? 'border-red-500 bg-red-50/50' : 'border-border'}
+                                `}>
+                                    <input
+                                        type="radio"
+                                        name="info-button-color"
+                                        value="red"
+                                        className="sr-only"
+                                        checked={infoButtonColor === 'red'}
+                                        onChange={() => setInfoButtonColor('red')}
+                                    />
+                                    <div className="w-full h-6 rounded-md border border-red-200 bg-red-50 mb-2" />
+                                    <span className="text-xs font-medium">Red</span>
+                                    {infoButtonColor === 'red' && <Check className="w-3.5 h-3.5 text-red-500 mt-1" />}
+                                </label>
+                            </div>
                         </div>
                     )}
 
