@@ -41,6 +41,7 @@ interface CollectionSettingsDialogProps {
     currentAutoDisableTabMonitoring?: boolean
     currentInfoButtonColor?: string | null
     currentTheoryContent?: string | null
+    currentInfoPdfUrl?: string | null
 }
 
 export function CollectionSettingsDialog({
@@ -57,7 +58,8 @@ export function CollectionSettingsDialog({
     currentTabMonitoringEnabled,
     currentAutoDisableTabMonitoring,
     currentInfoButtonColor,
-    currentTheoryContent
+    currentTheoryContent,
+    currentInfoPdfUrl
 }: CollectionSettingsDialogProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
@@ -66,6 +68,8 @@ export function CollectionSettingsDialog({
     const [infoContent, setInfoContent] = useState<string>(currentInfoContent || "")
     const [infoButtonColor, setInfoButtonColor] = useState<string>(currentInfoButtonColor || 'neutral')
     const [theoryContent, setTheoryContent] = useState<string>(currentTheoryContent || "")
+    const [infoPdfUrl, setInfoPdfUrl] = useState<string | null>(currentInfoPdfUrl || null)
+    const [uploadingInfoPdf, setUploadingInfoPdf] = useState(false)
 
     // Calendar state
     const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
@@ -118,6 +122,7 @@ export function CollectionSettingsDialog({
             setInfoContent(currentInfoContent || "")
             setInfoButtonColor(currentInfoButtonColor || 'neutral')
             setTheoryContent(currentTheoryContent || "")
+            setInfoPdfUrl(currentInfoPdfUrl || null)
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
             setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
@@ -143,7 +148,7 @@ export function CollectionSettingsDialog({
                 }
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined, category !== 'information' ? theoryContent : undefined)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined, category !== 'information' ? theoryContent : undefined, category === 'information' ? infoPdfUrl : undefined)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -293,6 +298,77 @@ export function CollectionSettingsDialog({
                                 disabled={loading}
                                 minHeight="150px"
                             />
+                        </div>
+                    )}
+
+                    {/* PDF attachment for Information pages */}
+                    {category === 'information' && (
+                        <div className="space-y-3">
+                            <Label>Attached PDF</Label>
+                            <div className="space-y-2">
+                                {infoPdfUrl ? (
+                                    <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <FileText className="w-4 h-4 text-primary shrink-0" />
+                                            <span className="text-sm truncate">
+                                                {infoPdfUrl.split('/').pop()?.split('-').slice(1).join('-') || "Attached PDF"}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 text-xs"
+                                                onClick={() => window.open(infoPdfUrl!, '_blank')}
+                                            >
+                                                View
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 w-8 p-0 text-red-500"
+                                                onClick={() => setInfoPdfUrl(null)}
+                                                disabled={loading || uploadingInfoPdf}
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer relative">
+                                        <input
+                                            type="file"
+                                            accept=".pdf"
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            disabled={loading || uploadingInfoPdf}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0]
+                                                if (!file) return
+
+                                                setUploadingInfoPdf(true)
+                                                const formData = new FormData()
+                                                formData.append('file', file)
+
+                                                const res = await uploadCollectionSlides(formData)
+                                                if (res.success && res.url) {
+                                                    setInfoPdfUrl(res.url)
+                                                    toast.success("PDF uploaded")
+                                                } else {
+                                                    toast.error(res.error || "Failed to upload PDF")
+                                                }
+                                                setUploadingInfoPdf(false)
+                                            }}
+                                        />
+                                        {uploadingInfoPdf ? (
+                                            <Loader2 className="w-8 h-8 text-muted-foreground animate-spin mb-2" />
+                                        ) : (
+                                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                                        )}
+                                        <p className="text-sm font-medium">Click to upload PDF</p>
+                                        <p className="text-xs text-muted-foreground">PDF only (max 10MB)</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 

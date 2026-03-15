@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
 import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
-import { ShieldAlert, ArrowLeft, Loader2, Lock } from "lucide-react"
+import { ShieldAlert, ArrowLeft, Loader2, Lock, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { MarkdownContent } from "@/components/ui/markdown-editor"
@@ -20,6 +20,7 @@ interface CollectionData {
     test_mode_ends_at: string | null
     tab_monitoring_enabled: boolean | null
     info_content: string | null
+    info_pdf_url: string | null
     theory_content: string | null
 }
 
@@ -82,6 +83,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 test_mode_ends_at,
                 tab_monitoring_enabled,
                 info_content,
+                info_pdf_url,
                 theory_content
             `)
             .eq('id', collectionId)
@@ -106,6 +108,33 @@ export default async function StudentCollectionPage({ params }: { params: Promis
 
     // For information collections, render content directly
     if (collection.category === 'information') {
+        // If PDF-only (no text content), redirect directly
+        if (collection.info_pdf_url && !collection.info_content) {
+            return (
+                <div className="min-h-screen bg-background p-8 font-sans text-foreground">
+                    <div className="mx-auto max-w-3xl space-y-6">
+                        <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                            <Link href={`/student/class/${id}`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Grįžti į klasę
+                            </Link>
+                        </Button>
+                        <div className="border-b pb-4">
+                            <h1 className="text-2xl font-serif font-bold tracking-tight">{collection.title}</h1>
+                        </div>
+                        <div className="flex justify-center py-12">
+                            <a href={collection.info_pdf_url} target="_blank" rel="noopener noreferrer">
+                                <Button size="lg" className="gap-2">
+                                    <FileText className="w-5 h-5" />
+                                    Atidaryti PDF
+                                </Button>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            )
+        }
+
         return (
             <div className="min-h-screen bg-background p-8 font-sans text-foreground">
                 <div className="mx-auto max-w-3xl space-y-6">
@@ -118,6 +147,16 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                     <div className="border-b pb-4">
                         <h1 className="text-2xl font-serif font-bold tracking-tight">{collection.title}</h1>
                     </div>
+                    {collection.info_pdf_url && (
+                        <div className="flex">
+                            <a href={collection.info_pdf_url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="outline" className="gap-2">
+                                    <FileText className="w-4 h-4" />
+                                    Atidaryti PDF
+                                </Button>
+                            </a>
+                        </div>
+                    )}
                     {collection.info_content ? (
                         <div className="bg-card rounded-lg border p-6">
                             <MarkdownContent content={collection.info_content} />

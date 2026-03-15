@@ -8,6 +8,7 @@ import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucid
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { FileText } from "lucide-react"
+import { InfoCollectionButton } from "@/components/student/InfoCollectionButton"
 
 export default async function StudentClassroomPage({ params }: { params: Promise<{ id: string }> }) {
     const supabase = await createClient()
@@ -40,6 +41,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 theory_content,
                 info_content,
                 info_button_color,
+                info_pdf_url,
                 assignments (
                     id,
                     published
@@ -142,28 +144,15 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                         {collections.filter((c: any) => c.category === 'information').map((collection: any) => {
                                             const isRed = collection.info_button_color === 'red'
                                             return (
-                                            <Link
-                                                key={collection.id}
-                                                href={`/student/class/${id}/collection/${collection.id}`}
-                                            >
-                                                <Button
-                                                    variant="outline"
-                                                    className={`w-full justify-between h-auto py-3 px-5 transition-all rounded-xl text-sm font-medium group ${
-                                                        isRed
-                                                            ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-400 hover:shadow-sm text-red-800'
-                                                            : 'bg-background hover:bg-primary/5 hover:border-primary/50 hover:shadow-sm border-border/60'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <span className="truncate">{collection.title}</span>
-                                                    </div>
-                                                    <span className={`shrink-0 text-[10px] uppercase tracking-wider font-bold transition-colors ${
-                                                        isRed
-                                                            ? 'text-red-500 group-hover:text-red-700'
-                                                            : 'text-muted-foreground group-hover:text-primary'
-                                                    }`}>&rarr;</span>
-                                                </Button>
-                                            </Link>
+                                                <InfoCollectionButton
+                                                    key={collection.id}
+                                                    collectionId={collection.id}
+                                                    classroomId={id}
+                                                    title={collection.title}
+                                                    isRed={isRed}
+                                                    infoPdfUrl={collection.info_pdf_url}
+                                                    hasContent={!!collection.info_content}
+                                                />
                                             )
                                         })}
                                     </div>

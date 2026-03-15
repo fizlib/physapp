@@ -1177,7 +1177,7 @@ export async function createCollection(classroomId: string, title: string, categ
     return { success: true }
 }
 
-export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string, infoButtonColor?: string, theoryContent?: string): Promise<ActionState> {
+export async function updateCollection(classroomId: string, collectionId: string, title: string, category: 'homework' | 'classwork' | 'information', scheduledDate?: string, slidesUrl?: string | null, scheduledEndDate?: string, tabMonitoringEnabled?: boolean, autoDisableTabMonitoringAfterTest?: boolean, infoContent?: string, infoButtonColor?: string, theoryContent?: string, infoPdfUrl?: string | null): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -1203,7 +1203,8 @@ export async function updateCollection(classroomId: string, collectionId: string
         scheduled_date: category === 'information' ? null : (scheduledDate || null),
         scheduled_end_at: category === 'information' ? null : (scheduledEndDate || null),
         info_content: category === 'information' ? (infoContent || null) : null,
-        info_button_color: category === 'information' ? (infoButtonColor || 'neutral') : null
+        info_button_color: category === 'information' ? (infoButtonColor || 'neutral') : null,
+        info_pdf_url: category === 'information' ? (infoPdfUrl !== undefined ? (infoPdfUrl || null) : undefined) : null
     }
 
     if (tabMonitoringEnabled !== undefined) {
@@ -2487,6 +2488,7 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                 slides_url: sourceCollection.slides_url,
                 info_content: sourceCollection.info_content || null,
                 info_button_color: sourceCollection.info_button_color || null,
+                info_pdf_url: sourceCollection.info_pdf_url || null,
                 theory_content: sourceCollection.theory_content || null,
                 scheduled_date: null // Don't copy schedule
             })
