@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,6 +13,7 @@ import { ClassSettingsDialog } from "./ClassSettingsDialog"
 import { DeleteCollectionButton } from "./DeleteCollectionButton"
 import { TabMonitoringToggle } from "./TabMonitoringToggle"
 import { TeacherIpSync } from "../../TeacherIpSync"
+import { getStudentClassroomProgress } from "../../actions"
 
 interface StudentPointsSummary {
     earned: number
@@ -30,24 +30,7 @@ interface ClassroomEnrollment {
     } | null
 }
 
-interface AssignmentQuestionPoints {
-    points: number | null
-}
 
-interface ClassroomAssignmentForPoints {
-    id: string
-    points_enabled: boolean | null
-    published: boolean | null
-    points: number | null
-    required_variations_count: number | null
-    questions?: AssignmentQuestionPoints[] | null
-}
-
-interface AssignmentProgressRow {
-    student_id: string | null
-    assignment_id: string | null
-    earned_points: number | null
-}
 
 interface ClassroomCollection {
     id: string
@@ -112,82 +95,36 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     if (!classroom) notFound()
 
     const enrollmentsList = (enrollments || []) as ClassroomEnrollment[]
-    const assignmentsList = (assignments || []) as ClassroomAssignmentForPoints[]
+    const assignmentsList = assignments || []
     const collectionsList = (collections || []) as ClassroomCollection[]
     const classworkCollections = collectionsList.filter((collection) => collection.category === 'classwork')
     const homeworkCollections = collectionsList.filter((collection) => collection.category === 'homework' || !collection.category)
     const informationCollections = collectionsList.filter((collection) => collection.category === 'information')
 
-    const studentPointsById: Record<string, StudentPointsSummary> = {}
+    // Use the exact same function as the student progress panel to guarantee consistency
     const enrolledStudentIds = enrollmentsList
         .map((enrollment) => enrollment.student_id)
         .filter((studentId: unknown): studentId is string => typeof studentId === 'string' && studentId.length > 0)
 
-    const pointsAssignments = assignmentsList.filter((assignment) => assignment.points_enabled && assignment.published)
-    const pointsAssignmentIds: string[] = []
-    let classroomMaxPoints = 0
+    const studentPointsById: Record<string, StudentPointsSummary> = {}
 
-    pointsAssignments.forEach((assignment) => {
-        const requiredCount = Number(assignment.required_variations_count) || 0
-        const isVariation = requiredCount > 0
-        let maxPoints = Number(assignment.points) || 0
+    if (enrolledStudentIds.length > 0) {
+        const progressResults = await Promise.all(
+            enrolledStudentIds.map((studentId) => getStudentClassroomProgress(id, studentId))
+        )
 
-        if (isVariation && assignment.questions?.[0]) {
-            const pointsPerVariation = Number(assignment.questions[0].points) || 1
-            maxPoints = pointsPerVariation * requiredCount
-        }
-
-        classroomMaxPoints += maxPoints
-        if (typeof assignment.id === 'string') {
-            pointsAssignmentIds.push(assignment.id)
-        }
-    })
-
-    enrolledStudentIds.forEach((studentId) => {
-        studentPointsById[studentId] = {
-            earned: 0,
-            max: classroomMaxPoints
-        }
-    })
-
-    if (pointsAssignmentIds.length > 0 && enrolledStudentIds.length > 0) {
-        const supabaseAdmin = createAdminClient()
-        const { data: pointsProgress } = await supabaseAdmin
-            .from('assignment_progress')
-            .select('student_id, assignment_id, earned_points')
-            .in('assignment_id', pointsAssignmentIds)
-            .in('student_id', enrolledStudentIds)
-
-        const progressRows = (pointsProgress || []) as AssignmentProgressRow[]
-        if (progressRows.length > 0) {
-            const earnedByStudentAndAssignment = new Map<string, number>()
-            progressRows.forEach((progress) => {
-                const studentId = typeof progress.student_id === 'string' ? progress.student_id : null
-                const assignmentId = typeof progress.assignment_id === 'string' ? progress.assignment_id : null
-                if (!studentId || !assignmentId) return
-
-                const key = `${studentId}:${assignmentId}`
-                earnedByStudentAndAssignment.set(key, Number(progress.earned_points) || 0)
-            })
-
-            earnedByStudentAndAssignment.forEach((earnedPoints, key) => {
-                const studentId = key.split(':')[0]
-                if (!studentPointsById[studentId]) {
-                    studentPointsById[studentId] = { earned: 0, max: classroomMaxPoints }
+        enrolledStudentIds.forEach((studentId, index) => {
+            const result = progressResults[index]
+            if (result && typeof result === 'object' && 'totalPoints' in result) {
+                studentPointsById[studentId] = {
+                    earned: result.earnedPoints || 0,
+                    max: result.totalPoints || 0
                 }
-                studentPointsById[studentId].earned += earnedPoints
-            })
-        }
+            } else {
+                studentPointsById[studentId] = { earned: 0, max: 0 }
+            }
+        })
     }
-
-    // Add bonus points from enrollments
-    enrollmentsList.forEach((enrollment) => {
-        const studentId = enrollment.student_id
-        const bonus = (enrollment as any).bonus_points || 0
-        if (bonus > 0 && studentPointsById[studentId]) {
-            studentPointsById[studentId].earned += bonus
-        }
-    })
 
     // Fetch blocked students from tab monitoring violations
     let blockedStudentIds: string[] = []

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getClientIp } from '@/lib/ip'
+import { calculateAssignmentMaxPoints } from '@/lib/points'
 
 const HomeworkSubmissionEventSchema = z.object({
     questionId: z.string().uuid(),
@@ -859,16 +860,7 @@ export async function getCollectionResults(collectionId: string): Promise<{
     const exercises = assignments.map((a: any) => {
         const progress = progressMap.get(a.id)
         const isPointsExercise = a.points_enabled
-        const requiredCount = a.required_variations_count || 0
-        const isVariation = requiredCount > 0
-
-        let exercisePoints = isPointsExercise ? (a.points || 1) : 0
-
-        // If variation exercise, points should be (points of first variation * requiredCount)
-        if (isPointsExercise && isVariation && a.questions?.[0]) {
-            const pointsPerVariation = a.questions[0].points || 1
-            exercisePoints = pointsPerVariation * requiredCount
-        }
+        const exercisePoints = isPointsExercise ? calculateAssignmentMaxPoints(a) : 0
 
         if (isPointsExercise) {
             totalPoints += exercisePoints
@@ -966,16 +958,7 @@ export async function getStudentDashboardStats(): Promise<{
     assignments.forEach((a: any) => {
         const cid = a.classroom_id
         if (stats[cid]) {
-            const requiredCount = a.required_variations_count || 0
-            const isVariation = requiredCount > 0
-
-            // Use exercise-level points if set, otherwise calculate from question points
-            let max = a.points || 0
-
-            if (isVariation && a.questions?.[0]) {
-                const pointsPerVariation = a.questions[0].points || 1
-                max = pointsPerVariation * requiredCount
-            }
+            const max = calculateAssignmentMaxPoints(a)
 
             const earned = progressMap.get(a.id) || 0
             stats[cid].totalPoints += max
@@ -1089,14 +1072,7 @@ export async function getStudentPointsBreakdown(): Promise<{
 
         const entry = collectionsMap.get(collId)!
 
-        const requiredCount = a.required_variations_count || 0
-        const isVariation = requiredCount > 0
-        let max = a.points || 0
-
-        if (isVariation && a.questions?.[0]) {
-            const pointsPerVariation = a.questions[0].points || 1
-            max = pointsPerVariation * requiredCount
-        }
+        const max = calculateAssignmentMaxPoints(a)
 
         const earned = progressMap.get(a.id) || 0
         entry.totalPoints += max

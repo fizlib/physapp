@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { headers } from 'next/headers'
 import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 import { generateContentWithFallback } from '@/lib/gemini'
+import { calculateAssignmentMaxPoints } from '@/lib/points'
 
 // ... (keep existing code) ...
 
@@ -1581,15 +1582,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
             .map((a: any) => {
                 const earned = earnedPointsMap.get(a.id)
                 const submitted = submittedAnswersMap.get(a.id)
-                const requiredCount = a.required_variations_count || 0
-                const isVariation = requiredCount > 0
-
-                let totalPts = a.points || 0
-
-                if (isVariation && a.questions?.[0]) {
-                    const pointsPerVariation = a.questions[0].points || 1
-                    totalPts = pointsPerVariation * requiredCount
-                }
+                const totalPts = calculateAssignmentMaxPoints(a)
 
                 let status: 'correct' | 'incorrect' | 'unsubmitted' = 'unsubmitted'
 
@@ -1625,15 +1618,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
         // Calculate points for this collection
         collection.assignments.forEach((a: any) => {
             if (a.points_enabled && a.published) {
-                const requiredCount = a.required_variations_count || 0
-                const isVariation = requiredCount > 0
-
-                let max = a.points || 0
-
-                if (isVariation && a.questions?.[0]) {
-                    const pointsPerVariation = a.questions[0].points || 1
-                    max = pointsPerVariation * requiredCount
-                }
+                const max = calculateAssignmentMaxPoints(a)
 
                 classroomTotalPoints += max
                 classroomEarnedPoints += (earnedPointsMap.get(a.id) || 0)
@@ -3118,13 +3103,7 @@ export async function getStudentsForTestDialog(
     let maxPoints = 0
     if (pointedAssignments) {
         pointedAssignments.forEach((a: any) => {
-            const requiredCount = Number(a.required_variations_count) || 0
-            const isVariation = requiredCount > 0
-            let assignmentMax = Number(a.points) || 0
-            if (isVariation && a.questions?.[0]) {
-                const pointsPerVariation = Number(a.questions[0].points) || 1
-                assignmentMax = pointsPerVariation * requiredCount
-            }
+            let assignmentMax = calculateAssignmentMaxPoints(a)
             maxPoints += assignmentMax
         })
     }
