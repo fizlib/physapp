@@ -943,6 +943,7 @@ export async function getStudentDashboardStats(): Promise<{
         .in('classroom_id', schoolClassIds)
         .eq('published', true)
         .eq('points_enabled', true)
+        .not('collection_id', 'is', null)
 
     if (!assignments) return { success: true, stats: {} }
 
