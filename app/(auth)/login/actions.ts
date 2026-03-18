@@ -24,12 +24,15 @@ export async function login(formData: FormData) {
     const validated = AuthSchema.safeParse(data)
 
     if (!validated.success) {
-        return { error: 'Invalid email or password format.' }
+        return { error: 'Neteisingas el. pašto arba slaptažodžio formatas.' }
     }
 
     const { error } = await supabase.auth.signInWithPassword(data)
 
     if (error) {
+        if (error.message === 'Invalid login credentials') {
+            return { error: 'Neteisingi prisijungimo duomenys' }
+        }
         return { error: error.message }
     }
 
@@ -72,18 +75,18 @@ export async function signup(formData: FormData) {
 
     const registrationEnabledStr = await getSiteSetting('registration_enabled')
     if (registrationEnabledStr === 'false') {
-        return { error: 'Registration is currently closed.' }
+        return { error: 'Registracija šiuo metu uždaryta.' }
     }
 
     const validated = AuthSchema.safeParse({ email: data.email, password: data.password })
 
     if (!validated.success) {
-        return { error: 'Invalid email or password format.' }
+        return { error: 'Neteisingas el. pašto arba slaptažodžio formatas.' }
     }
 
     // Basic validation for name fields (since they are required in UI)
     if (!data.firstName || !data.lastName) {
-        return { error: 'Name and Surname are required.' }
+        return { error: 'Vardas ir pavardė yra privalomi.' }
     }
 
     const { error } = await supabase.auth.signUp({
@@ -99,6 +102,9 @@ export async function signup(formData: FormData) {
     })
 
     if (error) {
+        if (error.message === 'User already registered') {
+            return { error: 'Vartotojas jau užregistruotas.' }
+        }
         return { error: error.message }
     }
 

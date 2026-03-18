@@ -10,22 +10,22 @@ export async function changeInitialPassword(formData: FormData) {
     const confirmPassword = formData.get('confirmPassword') as string
 
     if (!password || !confirmPassword) {
-        return { success: false, error: 'Both fields are required' }
+        return { success: false, error: 'Abu laukai yra privalomi' }
     }
 
     if (password !== confirmPassword) {
-        return { success: false, error: 'Passwords do not match' }
+        return { success: false, error: 'Slaptažodžiai nesutampa' }
     }
 
     if (password.length < 6) {
-        return { success: false, error: 'Password must be at least 6 characters' }
+        return { success: false, error: 'Slaptažodis turi būti bent 6 simbolių' }
     }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        return { success: false, error: 'Not authenticated' }
+        return { success: false, error: 'Neprisijungta' }
     }
 
     // Update password
@@ -34,6 +34,10 @@ export async function changeInitialPassword(formData: FormData) {
     })
 
     if (updateError) {
+        // Check for same_password error code from Supabase
+        if ((updateError as any).code === 'same_password' || updateError.message?.toLowerCase().includes('same password')) {
+            return { success: false, error: 'Naujas slaptažodis negali sutapti su senuoju. Sugalvokite kitą slaptažodį.' }
+        }
         return { success: false, error: updateError.message }
     }
 
@@ -50,7 +54,7 @@ export async function changeInitialPassword(formData: FormData) {
 
     if (profileError) {
         console.error('Error updating profile:', profileError)
-        return { success: false, error: 'Failed to update profile status' }
+        return { success: false, error: 'Nepavyko atnaujinti profilio būsenos' }
     }
 
     // Revalidate everything
