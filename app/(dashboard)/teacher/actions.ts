@@ -1652,6 +1652,114 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
     }
 }
 
+/**
+ * Bulk-fetch earned/max points for ALL students in a classroom.
+ * Shares the expensive work (auth, classroom check, collections fetch)
+ * instead of repeating it per student like getStudentClassroomProgress does.
+ */
+export async function getBulkStudentPoints(
+    classroomId: string,
+    studentIds: string[]
+): Promise<Record<string, { earned: number; max: number }>> {
+    if (studentIds.length === 0) return {}
+
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return {}
+
+    // Verify teacher owns the classroom (once, not per student)
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) return {}
+
+    // Fetch collections + assignments ONCE (same query as getStudentClassroomProgress)
+    const { data: collections } = await supabase
+        .from('collections')
+        .select('*, assignments(id, order_index, points, points_enabled, published, required_variations_count, questions(points))')
+        .eq('classroom_id', classroomId)
+        .order('created_at', { ascending: false })
+
+    if (!collections) return {}
+
+    const allAssignments = collections.flatMap((c: any) => c.assignments || [])
+    const allAssignmentIds = allAssignments.map((a: any) => a.id)
+
+    // Pre-compute classroom total max points (same logic as original)
+    let classroomTotalPoints = 0
+    collections.forEach((collection: any) => {
+        collection.assignments.forEach((a: any) => {
+            if (a.points_enabled && a.published) {
+                classroomTotalPoints += calculateAssignmentMaxPoints(a)
+            }
+        })
+    })
+
+    const supabaseAdmin = createAdminClient()
+
+    // Fetch bonus points for all students in one query
+    const { data: enrollmentData } = await supabaseAdmin
+        .from('enrollments')
+        .select('student_id, bonus_points')
+        .eq('classroom_id', classroomId)
+        .in('student_id', studentIds)
+
+    const bonusByStudent = new Map<string, number>()
+    if (enrollmentData) {
+        for (const e of enrollmentData) {
+            bonusByStudent.set(e.student_id as string, e.bonus_points || 0)
+        }
+    }
+
+    // Fetch progress per student (same query as original, just in parallel)
+    const progressResults = await Promise.all(
+        studentIds.map(async (studentId) => {
+            if (allAssignmentIds.length === 0) return { studentId, earned: 0 }
+
+            const { data: progressData } = await supabaseAdmin
+                .from('assignment_progress')
+                .select('assignment_id, earned_points')
+                .in('assignment_id', allAssignmentIds)
+                .eq('student_id', studentId)
+
+            // Exact same earned points calculation as getStudentClassroomProgress
+            const earnedPointsMap = new Map<string, number>()
+            if (progressData) {
+                progressData.forEach((p: any) => {
+                    if (p.earned_points != null) earnedPointsMap.set(p.assignment_id, p.earned_points)
+                })
+            }
+
+            let earned = 0
+            collections.forEach((collection: any) => {
+                collection.assignments.forEach((a: any) => {
+                    if (a.points_enabled && a.published) {
+                        earned += (earnedPointsMap.get(a.id) || 0)
+                    }
+                })
+            })
+
+            return { studentId, earned }
+        })
+    )
+
+    // Build result
+    const result: Record<string, { earned: number; max: number }> = {}
+    for (const { studentId, earned } of progressResults) {
+        const bonus = bonusByStudent.get(studentId) || 0
+        result[studentId] = {
+            earned: earned + bonus,
+            max: classroomTotalPoints
+        }
+    }
+
+    return result
+}
+
 interface HomeworkSubmissionEventRow {
     id: string
     assignment_id: string | null

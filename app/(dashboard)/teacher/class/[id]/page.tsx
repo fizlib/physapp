@@ -13,7 +13,7 @@ import { ClassSettingsDialog } from "./ClassSettingsDialog"
 import { DeleteCollectionButton } from "./DeleteCollectionButton"
 import { TabMonitoringToggle } from "./TabMonitoringToggle"
 import { TeacherIpSync } from "../../TeacherIpSync"
-import { getStudentClassroomProgress } from "../../actions"
+import { getBulkStudentPoints } from "../../actions"
 
 interface StudentPointsSummary {
     earned: number
@@ -101,30 +101,14 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     const homeworkCollections = collectionsList.filter((collection) => collection.category === 'homework' || !collection.category)
     const informationCollections = collectionsList.filter((collection) => collection.category === 'information')
 
-    // Use the exact same function as the student progress panel to guarantee consistency
+    // Bulk-fetch points for all students in ~5 queries instead of N*5
     const enrolledStudentIds = enrollmentsList
         .map((enrollment) => enrollment.student_id)
         .filter((studentId: unknown): studentId is string => typeof studentId === 'string' && studentId.length > 0)
 
-    const studentPointsById: Record<string, StudentPointsSummary> = {}
-
-    if (enrolledStudentIds.length > 0) {
-        const progressResults = await Promise.all(
-            enrolledStudentIds.map((studentId) => getStudentClassroomProgress(id, studentId))
-        )
-
-        enrolledStudentIds.forEach((studentId, index) => {
-            const result = progressResults[index]
-            if (result && typeof result === 'object' && 'totalPoints' in result) {
-                studentPointsById[studentId] = {
-                    earned: result.earnedPoints || 0,
-                    max: result.totalPoints || 0
-                }
-            } else {
-                studentPointsById[studentId] = { earned: 0, max: 0 }
-            }
-        })
-    }
+    const studentPointsById: Record<string, StudentPointsSummary> = enrolledStudentIds.length > 0
+        ? await getBulkStudentPoints(id, enrolledStudentIds)
+        : {}
 
     // Fetch blocked students from tab monitoring violations
     let blockedStudentIds: string[] = []
