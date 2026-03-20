@@ -225,11 +225,19 @@ export function CollectionPlayer({
         let cancelled = false
         let timeout: ReturnType<typeof setTimeout> | null = null
 
-        const INITIAL_POLL_MS = 5000
-        const MAX_POLL_MS = 12000
+        const INITIAL_POLL_MS = 8000
+        const MAX_POLL_MS = 30000
         let currentDelayMs = INITIAL_POLL_MS
 
         const checkUnblock = async () => {
+            // Skip polling when tab is hidden — the student is blocked anyway
+            if (document.hidden) {
+                if (!cancelled) {
+                    timeout = setTimeout(checkUnblock, currentDelayMs)
+                }
+                return
+            }
+
             const result = await checkTabBlockStatus(classroomId)
             if (cancelled) return
 
@@ -379,15 +387,20 @@ export function CollectionPlayer({
 
     const [isReviewing, setIsReviewing] = useState(allDone)
 
+    // Whether server-side polling has anything to check
+    const needsServerPolling = testModePollingEnabled || tabMonitoringEnabled
+
     // Periodic check effect (IP, Time, and Test Mode)
     useEffect(() => {
         if (isCompleted || collection.category !== 'classwork') return
+        // If there's nothing server-side to check AND no scheduled end time, skip entirely
+        if (!needsServerPolling && !collection.scheduled_end_at) return
 
         let cancelled = false
         let timeout: ReturnType<typeof setTimeout> | null = null
 
-        const BASE_POLL_MS = 8000
-        const JITTER_MS = 2000
+        const BASE_POLL_MS = 15000
+        const JITTER_MS = 4000
 
         const check = async () => {
             // Time Check (local, no server round-trip needed)
@@ -398,6 +411,15 @@ export function CollectionPlayer({
                     setIsTimeUp(true)
                     return
                 }
+            }
+
+            // Skip server call when tab is hidden or when there's nothing server-side to check
+            if (!needsServerPolling || document.hidden) {
+                if (!cancelled) {
+                    const delayMs = BASE_POLL_MS + Math.floor(Math.random() * JITTER_MS)
+                    timeout = setTimeout(check, delayMs)
+                }
+                return
             }
 
             // Single request for IP restriction + test mode status
@@ -469,7 +491,7 @@ export function CollectionPlayer({
             cancelled = true
             if (timeout) clearTimeout(timeout)
         }
-    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModePollingEnabled])
+    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModePollingEnabled, needsServerPolling])
 
     // Fast lightweight test-status poller — only runs when test is NOT active.
     // Uses a minimal API endpoint that responds quickly even on Vercel cold starts.

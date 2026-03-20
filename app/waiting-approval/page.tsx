@@ -12,28 +12,51 @@ export default function WaitingApprovalPage() {
     const router = useRouter()
 
     useEffect(() => {
+        let cancelled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
+        const INITIAL_POLL_MS = 5000
+        const MAX_POLL_MS = 30000
+        let currentDelayMs = INITIAL_POLL_MS
+
         const checkStatus = async () => {
+            // Skip polling when tab is hidden to save CPU
+            if (document.hidden) {
+                if (!cancelled) {
+                    timeout = setTimeout(checkStatus, currentDelayMs)
+                }
+                return
+            }
+
             try {
                 const result = await checkApprovalStatus()
+                if (cancelled) return
                 if (result.approved) {
                     setStatus('approved')
                     router.push(result.role === 'teacher' ? '/teacher' : '/student')
+                    return
                 } else if (result.error) {
                     setStatus('error')
                     router.push('/login')
+                    return
                 }
             } catch (error) {
                 console.error("Failed to check approval status:", error)
+            }
+
+            if (!cancelled) {
+                const delay = currentDelayMs
+                currentDelayMs = Math.min(MAX_POLL_MS, Math.floor(currentDelayMs * 1.5))
+                timeout = setTimeout(checkStatus, delay)
             }
         }
 
         // Check immediately
         checkStatus()
 
-        // Poll every 5 seconds
-        const interval = setInterval(checkStatus, 5000)
-
-        return () => clearInterval(interval)
+        return () => {
+            cancelled = true
+            if (timeout) clearTimeout(timeout)
+        }
     }, [router])
 
     return (
