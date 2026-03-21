@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor, PenLine, Cpu } from "lucide-react"
+import { Plus, Loader2, Sparkles, Upload, FileImage, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Play, Monitor, PenLine, Cpu, FileText } from "lucide-react"
 import { generateExerciseFromImage, createAssignmentWithQuestion, uploadIllustration } from "../../actions"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,6 +47,8 @@ interface ExerciseData {
     required_variations_count?: number | null
     points_enabled?: boolean
     points?: number
+    theory_content?: string | null
+    theory_image_url?: string | null
 }
 
 function sanitizeSvg(svg: string): string {
@@ -143,7 +145,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [loading, setLoading] = useState(false)
     const [exerciseMode, setExerciseMode] = useState<'ai' | 'simulation' | 'manual'>('ai')
     const [selectedSimulation, setSelectedSimulation] = useState<string>(SIMULATIONS.filter(s => s.available)[0]?.id || '')
-    const [manualExerciseType, setManualExerciseType] = useState<'numerical' | 'multiple_choice'>('numerical')
+    const [manualExerciseType, setManualExerciseType] = useState<'numerical' | 'multiple_choice' | 'theory'>('numerical')
     const [manualImageFile, setManualImageFile] = useState<File | null>(null)
     const [manualImagePreview, setManualImagePreview] = useState<string | null>(null)
     const manualImageInputRef = useRef<HTMLInputElement>(null)
@@ -159,7 +161,8 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [variationCount, setVariationCount] = useState(6)
     const [variationType, setVariationType] = useState<'numbers' | 'descriptions'>('numbers')
     const [generationType, setGenerationType] = useState<'exact' | 'similar'>('exact')
-    const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice'>('auto')
+    const [aiExerciseType, setAiExerciseType] = useState<'auto' | 'numerical' | 'multiple_choice' | 'theory'>('auto')
+    const [theoryContent, setTheoryContent] = useState('')
     const [customInstructions, setCustomInstructions] = useState('')
     const [answersInSvg, setAnswersInSvg] = useState(false)
     const [passRequirement, setPassRequirement] = useState(2)
@@ -276,20 +279,33 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             const result = await generateExerciseFromImage(formData)
 
             if (result.success && result.data) {
-                // Ensure questions is an array
-                const questions = Array.isArray(result.data.questions)
-                    ? result.data.questions
-                    : [{ ...DEFAULT_QUESTION }] // Fallback
+                // Theory exercise result
+                if (aiExerciseType === 'theory' || result.data.theory_content) {
+                    setData(prev => ({
+                        ...prev,
+                        title: result.data.title || prev.title,
+                        theory_content: result.data.theory_content || '',
+                        questions: []
+                    }))
+                    setTheoryContent(result.data.theory_content || '')
+                    setStep('edit')
+                    toast.success("Theory extracted successfully!")
+                } else {
+                    // Ensure questions is an array
+                    const questions = Array.isArray(result.data.questions)
+                        ? result.data.questions
+                        : [{ ...DEFAULT_QUESTION }] // Fallback
 
-                setData(prev => ({
-                    ...prev,
-                    title: result.data.title || prev.title,
-                    questions: questions,
-                    required_variations_count: variationMode ? passRequirement : null,
-                    show_all_questions: !variationMode // Force paginated for variations
-                }))
-                setStep('edit')
-                toast.success("Exercise generated successfully!")
+                    setData(prev => ({
+                        ...prev,
+                        title: result.data.title || prev.title,
+                        questions: questions,
+                        required_variations_count: variationMode ? passRequirement : null,
+                        show_all_questions: !variationMode // Force paginated for variations
+                    }))
+                    setStep('edit')
+                    toast.success("Exercise generated successfully!")
+                }
             } else {
                 toast.error(result.error || "Failed to generate exercise")
             }
@@ -389,6 +405,17 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     }
 
     const handleManualCreate = () => {
+        if (manualExerciseType === 'theory') {
+            setData({
+                title: '',
+                questions: [],
+                show_all_questions: true,
+                theory_content: '',
+            })
+            setTheoryContent('')
+            setStep('edit')
+            return
+        }
         const defaultQuestion: QuestionData = {
             ...DEFAULT_QUESTION,
             type: manualExerciseType,
@@ -417,6 +444,58 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const handleSave = async () => {
         setLoading(true)
         try {
+            // Theory exercise save
+            const isTheory = !!(data.theory_content !== undefined && data.theory_content !== null && data.questions.length === 0)
+            if (isTheory) {
+                let theoryImageUrl: string | null = null
+                if (manualImageFile) {
+                    try {
+                        const compressedBlob = await compressImage(manualImageFile)
+                        const formData = new FormData()
+                        formData.append('image', compressedBlob, 'illustration.jpg')
+                        const uploadResult = await uploadIllustration(formData)
+                        if (uploadResult.success && uploadResult.url) {
+                            theoryImageUrl = uploadResult.url
+                        } else {
+                            toast.error(uploadResult.error || 'Failed to upload image')
+                            setLoading(false)
+                            return
+                        }
+                    } catch (err) {
+                        console.error('Image upload error:', err)
+                        toast.error('Failed to upload image')
+                        setLoading(false)
+                        return
+                    }
+                }
+
+                const exerciseData = {
+                    title: data.title,
+                    questions: [],
+                    show_all_questions: true,
+                    theory_content: theoryContent || data.theory_content,
+                    theory_image_url: theoryImageUrl,
+                }
+                const result = await createAssignmentWithQuestion(classroomId, exerciseData, collectionId)
+                if (result.success) {
+                    toast.success("Theory exercise created successfully!")
+                    setOpen(false)
+                    setStep('upload')
+                    setTheoryContent('')
+                    setManualImageFile(null)
+                    setManualImagePreview(null)
+                    setData({
+                        title: '',
+                        questions: [{ ...DEFAULT_QUESTION }],
+                        show_all_questions: true
+                    })
+                } else {
+                    toast.error(result.error || "Failed to save theory exercise")
+                }
+                setLoading(false)
+                return
+            }
+
             // If manual mode with image, upload it first
             let manualImageUrl: string | null = null
             if (exerciseMode === 'manual' && manualImageFile) {
@@ -635,6 +714,20 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                         />
                                         <Label htmlFor="manual-type-mc" className="text-sm font-normal cursor-pointer">
                                             Multiple Choice <span className="text-xs text-muted-foreground ml-1">(Options A–D)</span>
+                                        </Label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="radio"
+                                            id="manual-type-theory"
+                                            name="manualExerciseType"
+                                            value="theory"
+                                            checked={manualExerciseType === 'theory'}
+                                            onChange={() => setManualExerciseType('theory')}
+                                            className="accent-primary h-4 w-4"
+                                        />
+                                        <Label htmlFor="manual-type-theory" className="text-sm font-normal cursor-pointer">
+                                            Theory <span className="text-xs text-muted-foreground ml-1">(Text only, no answers)</span>
                                         </Label>
                                     </div>
                                 </div>
@@ -997,6 +1090,20 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                 Multiple Choice <span className="text-xs text-muted-foreground ml-1">(Options A-D)</span>
                                             </Label>
                                         </div>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                id="type-theory"
+                                                name="aiExerciseType"
+                                                value="theory"
+                                                checked={aiExerciseType === 'theory'}
+                                                onChange={() => setAiExerciseType('theory')}
+                                                className="accent-primary h-4 w-4"
+                                            />
+                                            <Label htmlFor="type-theory" className="text-sm font-normal cursor-pointer">
+                                                Theory <span className="text-xs text-muted-foreground ml-1">(Text only, no answers)</span>
+                                            </Label>
+                                        </div>
                                         {aiExerciseType === 'multiple_choice' && (
                                             <div className="flex items-center space-x-2 pl-4 pt-1 animate-in fade-in slide-in-from-top-1">
                                                 <Checkbox
@@ -1092,6 +1199,107 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                 )}
                             </Button>
                         </form>
+                    </div>
+                ) : data.theory_content !== undefined && data.theory_content !== null && data.questions.length === 0 ? (
+                    /* Theory Edit Form */
+                    <div className="space-y-6 py-4">
+                        <div className="flex items-center gap-3 text-purple-600">
+                            <div className="p-2 bg-purple-100 rounded-full">
+                                <FileText className="w-5 h-5" />
+                            </div>
+                            <h3 className="font-semibold">Theory Exercise</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="theory-title">Title</Label>
+                                <Input
+                                    id="theory-title"
+                                    value={data.title}
+                                    onChange={(e) => setData({ ...data, title: e.target.value })}
+                                    placeholder="e.g. Niutono dėsniai"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Theory Content (LaTeX)</Label>
+                                <textarea
+                                    className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    placeholder="Enter theory text here. Use $...$ for inline math and $$...$$ for display math."
+                                    value={theoryContent}
+                                    onChange={(e) => {
+                                        setTheoryContent(e.target.value)
+                                        setData(prev => ({ ...prev, theory_content: e.target.value }))
+                                    }}
+                                />
+                            </div>
+
+                            {/* Image Upload (optional) */}
+                            <div className="space-y-3 pt-2 border-t border-dashed">
+                                <Label className="text-sm font-semibold block">Image (Optional)</Label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    ref={manualImageInputRef}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) handleManualImageSelection(file)
+                                    }}
+                                />
+                                {!manualImagePreview ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-dashed"
+                                        onClick={() => manualImageInputRef.current?.click()}
+                                    >
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Upload Image
+                                    </Button>
+                                ) : (
+                                    <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                        <img
+                                            src={manualImagePreview}
+                                            alt="Theory image"
+                                            className="max-w-full max-h-full object-contain"
+                                        />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => manualImageInputRef.current?.click()}
+                                            >
+                                                Change
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setManualImageFile(null)
+                                                    setManualImagePreview(null)
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between pt-4">
+                            <Button variant="ghost" type="button" onClick={() => setStep('upload')}>
+                                Back
+                            </Button>
+                            <Button type="button" onClick={handleSave} disabled={loading || !data.title.trim()}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Theory
+                            </Button>
+                        </div>
                     </div>
                 ) : (
                     <div className="space-y-6 py-4">

@@ -19,7 +19,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { Card, CardContent } from "@/components/ui/card"
-import { GripVertical, BookOpen, Award } from "lucide-react"
+import { GripVertical, BookOpen, Award, FileText } from "lucide-react"
 import Link from "next/link"
 import { TogglePublishButton, RemoveExerciseButton } from "./CollectionManager"
 import { updateAssignmentOrder } from "../../../../actions"
@@ -90,7 +90,12 @@ function SortableItem({ assignment, index, classroomId, collectionId }: Sortable
                                 )}
                             </div>
                             <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
-                                {assignment.questions && (
+                                {assignment.theory_content ? (
+                                    <span className="flex items-center gap-1 text-purple-600">
+                                        <FileText className="h-3 w-3" />
+                                        Theory
+                                    </span>
+                                ) : assignment.questions && (
                                     <span>{assignment.questions.length || 'Unknown'} questions</span>
                                 )}
                                 <span>{assignment.category}</span>
@@ -209,7 +214,12 @@ export function SortableExerciseList({ initialAssignments, classroomId, collecti
                                         )}
                                     </div>
                                     <div className="flex items-center gap-4 text-xs text-muted-foreground mt-0.5">
-                                        {assignment.questions && (
+                                        {assignment.theory_content ? (
+                                            <span className="flex items-center gap-1 text-purple-600">
+                                                <FileText className="h-3 w-3" />
+                                                Theory
+                                            </span>
+                                        ) : assignment.questions && (
                                             <span>{assignment.questions.length || 'Unknown'} questions</span>
                                         )}
                                         <span>{assignment.category}</span>

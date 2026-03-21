@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload, Sparkles } from "lucide-react"
+import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload, Sparkles, FileText } from "lucide-react"
 import { updateAssignmentWithQuestion, uploadIllustration, generateVariationsFromExercise, editExerciseSvgWithPrompt } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -49,6 +49,8 @@ interface ExerciseData {
     points?: number
     exercise_type?: 'variations' | 'multipart'
     required_variations_count?: number | null
+    theory_content?: string | null
+    theory_image_url?: string | null
 }
 
 const compressImage = async (file: File): Promise<Blob> => {
@@ -161,6 +163,12 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
         required_variations_count: 1
     })
 
+    const [theoryContent, setTheoryContent] = useState('')
+    const [theoryImageFile, setTheoryImageFile] = useState<File | null>(null)
+    const [theoryImagePreview, setTheoryImagePreview] = useState<string | null>(null)
+    const theoryImageInputRef = useRef<HTMLInputElement>(null)
+    const isTheoryExercise = !!(initialData?.theory_content !== undefined && initialData?.theory_content !== null)
+
     const [customCount, setCustomCount] = useState<number>(1)
 
     const [pointsEnabled, setPointsEnabled] = useState(false)
@@ -219,6 +227,18 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
             setSvgPromptByQuestion({})
             setEditingSvgIndex(null)
             setApplySvgEditToAllVariations(true)
+
+            // Theory exercise data
+            if (initialData.theory_content !== undefined && initialData.theory_content !== null) {
+                setTheoryContent(initialData.theory_content || '')
+                setTheoryImagePreview(initialData.theory_image_url || null)
+                setData(prev => ({
+                    ...prev,
+                    theory_content: initialData.theory_content,
+                    theory_image_url: initialData.theory_image_url || null,
+                    questions: []
+                }))
+            }
         }
     }, [initialData, open])
 
@@ -378,6 +398,45 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     const handleSave = async () => {
         setLoading(true)
         try {
+            // Theory exercise save
+            if (isTheoryExercise) {
+                let theoryImageUrl = theoryImagePreview
+                if (theoryImageFile) {
+                    const formData = new FormData()
+                    try {
+                        const compressedBlob = await compressImage(theoryImageFile)
+                        formData.append('image', compressedBlob, 'illustration.jpg')
+                    } catch (err) {
+                        formData.append('image', theoryImageFile)
+                    }
+                    const uploadResult = await uploadIllustration(formData)
+                    if (uploadResult.success && uploadResult.url) {
+                        theoryImageUrl = uploadResult.url
+                    } else {
+                        toast.error(uploadResult.error || 'Failed to upload image')
+                        setLoading(false)
+                        return
+                    }
+                }
+                const saveData = {
+                    title: data.title,
+                    questions: [],
+                    show_all_questions: true,
+                    theory_content: theoryContent,
+                    theory_image_url: theoryImageUrl,
+                }
+                const result = await updateAssignmentWithQuestion(assignmentId, classroomId, saveData)
+                if (result.success) {
+                    toast.success("Theory updated successfully!")
+                    setOpen(false)
+                    router.refresh()
+                } else {
+                    toast.error(result.error || "Failed to update theory")
+                }
+                setLoading(false)
+                return
+            }
+
             // 5. Update Questions with new illustrations
             const updatedQuestions = [...data.questions]
 
@@ -451,6 +510,90 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                     <DialogTitle>Edit Exercise</DialogTitle>
                 </DialogHeader>
 
+                {isTheoryExercise ? (
+                    /* Theory Edit Form */
+                    <div className="space-y-6 py-4">
+                        <div className="flex items-center gap-3 text-purple-600">
+                            <div className="p-2 bg-purple-100 rounded-full">
+                                <FileText className="w-5 h-5" />
+                            </div>
+                            <h3 className="font-semibold">Theory Exercise</h3>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-theory-title">Title</Label>
+                                <Input
+                                    id="edit-theory-title"
+                                    value={data.title}
+                                    onChange={(e) => setData({ ...data, title: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Theory Content (LaTeX)</Label>
+                                <textarea
+                                    className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    placeholder="Enter theory text here..."
+                                    value={theoryContent}
+                                    onChange={(e) => {
+                                        setTheoryContent(e.target.value)
+                                        setData(prev => ({ ...prev, theory_content: e.target.value }))
+                                    }}
+                                />
+                            </div>
+
+                            {/* Image Upload */}
+                            <div className="space-y-3 pt-2 border-t border-dashed">
+                                <Label className="text-sm font-semibold block">Image (Optional)</Label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    ref={theoryImageInputRef}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0]
+                                        if (file) {
+                                            setTheoryImageFile(file)
+                                            const reader = new FileReader()
+                                            reader.onloadend = () => setTheoryImagePreview(reader.result as string)
+                                            reader.readAsDataURL(file)
+                                        }
+                                    }}
+                                />
+                                {!theoryImagePreview ? (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full border-dashed"
+                                        onClick={() => theoryImageInputRef.current?.click()}
+                                    >
+                                        <Upload className="mr-2 h-4 w-4" />
+                                        Upload Image
+                                    </Button>
+                                ) : (
+                                    <div className="relative group rounded-lg overflow-hidden border bg-white aspect-video flex items-center justify-center">
+                                        <img src={theoryImagePreview} alt="Theory image" className="max-w-full max-h-full object-contain" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                            <Button type="button" variant="secondary" size="sm" onClick={() => theoryImageInputRef.current?.click()}>Change</Button>
+                                            <Button type="button" variant="destructive" size="sm" onClick={() => { setTheoryImageFile(null); setTheoryImagePreview(null) }}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-4">
+                            <Button type="button" onClick={handleSave} disabled={loading || !data.title.trim()}>
+                                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Theory
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
                 <div className="space-y-6 py-4">
                     {/* Common Settings */}
                     <div className="space-y-4 border-b pb-4">
@@ -964,6 +1107,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                         </Button>
                     </div>
                 </div>
+                )}
             </DialogContent>
         </Dialog>
     )

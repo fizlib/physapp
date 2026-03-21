@@ -7,7 +7,7 @@ import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2, ExternalLink, Monitor } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2, ExternalLink, Monitor, FileText } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { logSolutionRevealClick, upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
@@ -420,6 +420,110 @@ export function StudentAssignmentInterface({
                                 ) : (
                                     <>
                                         {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Baigti užduotį"}
+                                        <CheckCircle2 className="h-4 w-4" />
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
+    // Theory exercise — render the theory content with optional image
+    if (assignment.theory_content) {
+        return (
+            <div className="space-y-8 max-w-3xl mx-auto">
+                {!compact && (
+                    <div className="flex items-center justify-between">
+                        <Button variant="ghost" size="sm" asChild className="-ml-3 text-muted-foreground hover:text-foreground">
+                            <Link href={`/student/class/${classId}`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Grįžti į klasę
+                            </Link>
+                        </Button>
+                    </div>
+                )}
+
+                <Card className="border-purple-500/30 bg-gradient-to-br from-purple-50/50 to-indigo-50/30">
+                    <CardHeader className="pb-4">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-purple-500/10 rounded-full">
+                                <FileText className="w-6 h-6 text-purple-500" />
+                            </div>
+                            <div>
+                                {exerciseNumber !== undefined && (
+                                    <p className="text-xs text-muted-foreground font-medium">Užduotis {exerciseNumber}</p>
+                                )}
+                                <CardTitle className="text-2xl">{assignment.title}</CardTitle>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6 pb-8">
+                        {/* Theory Image */}
+                        {assignment.theory_image_url && (
+                            <div className="rounded-lg overflow-hidden border bg-white flex items-center justify-center p-4">
+                                <img
+                                    src={assignment.theory_image_url}
+                                    alt="Theory illustration"
+                                    className="max-w-full max-h-[400px] object-contain"
+                                />
+                            </div>
+                        )}
+
+                        {/* Theory Content */}
+                        <div className="prose prose-sm max-w-none bg-white/80 rounded-lg p-6 border space-y-3">
+                            {(assignment.theory_content as string)
+                                .replace(/\\n/g, '\n')
+                                .split(/\n\s*\n|\n/)
+                                .filter((p: string) => p.trim())
+                                .map((paragraph: string, idx: number) => (
+                                    <div key={idx}>
+                                        <MathDisplay content={paragraph.trim()} />
+                                    </div>
+                                ))}
+                        </div>
+
+                        <div className={`mt-6 flex ${onPrevious ? 'justify-between w-full' : 'justify-center'}`}>
+                            {onPrevious && (
+                                <Button variant="outline" className="gap-2" onClick={onPrevious}>
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Atgal
+                                </Button>
+                            )}
+                            <Button
+                                disabled={isFinishing}
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                                onClick={async () => {
+                                    if (isFinishing) return
+                                    setIsFinishing(true)
+                                    try {
+                                        await upsertAssignmentProgress(
+                                            assignment.id,
+                                            [],
+                                            true,
+                                            0,
+                                            [],
+                                            {}
+                                        )
+                                        if (onFinish) {
+                                            onFinish()
+                                        } else {
+                                            router.push(`/student/class/${classId}`)
+                                        }
+                                    } catch (error) {
+                                        console.error("Failed to finish theory exercise:", error)
+                                        setIsFinishing(false)
+                                    }
+                                }}
+                            >
+                                {isFinishing ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <>
+                                        {onFinish ? (isLastExercise ? "Baigti" : "Kita užduotis") : "Perskaičiau"}
                                         <CheckCircle2 className="h-4 w-4" />
                                     </>
                                 )}

@@ -130,7 +130,9 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
             points_enabled: data.points_enabled || false,
             points: data.points_enabled ? (data.points || 1) : null,
             required_variations_count: data.required_variations_count || null,
-            simulation_url: data.simulation_url || null
+            simulation_url: data.simulation_url || null,
+            theory_content: data.theory_content || null,
+            theory_image_url: data.theory_image_url || null
         })
         .eq('id', assignmentId)
         .eq('classroom_id', classroomId)
@@ -450,7 +452,9 @@ const ExerciseSchema = z.object({
     required_variations_count: z.number().nullable().optional(),
     points_enabled: z.boolean().default(false).optional(),
     points: z.number().min(1).default(1).optional(),
-    simulation_url: z.string().nullable().optional()
+    simulation_url: z.string().nullable().optional(),
+    theory_content: z.string().nullable().optional(),
+    theory_image_url: z.string().nullable().optional()
 })
 
 export async function uploadIllustration(formData: FormData): Promise<{ success: boolean, url?: string, error?: string }> {
@@ -704,7 +708,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     const generationType = formData.get('generationType') as 'exact' | 'similar' || 'exact'
     const isVariationMode = variationCount > 1
     const variationType = formData.get('variationType') as 'numbers' | 'descriptions' || 'numbers'
-    const exerciseType = formData.get('exerciseType') as 'auto' | 'numerical' | 'multiple_choice' || 'auto'
+    const exerciseType = formData.get('exerciseType') as 'auto' | 'numerical' | 'multiple_choice' | 'theory' || 'auto'
     const answersInSvg = formData.get('answersInSvg') === 'true'
     const generateSolution = formData.get('generateSolution') === 'true'
     const useImageAsIllustration = formData.get('useImageAsIllustration') === 'true'
@@ -787,6 +791,37 @@ export async function generateExerciseFromImage(formData: FormData) {
     `;
 
     try {
+        // Theory mode: extract text content from image as LaTeX
+        if (exerciseType === 'theory') {
+            const theoryPrompt = `
+        Analyze this physics/math image and extract all theory content from it.
+        CRITICAL: All generated output text MUST be in the Lithuanian language.
+        
+        TASK: Extract the theory, definitions, formulas, explanations, and any textual content from this image.
+        
+        FORMATTING RULES (VERY IMPORTANT):
+        - Use plain text for regular content
+        - Use **bold** (markdown double asterisks) for headings and important terms — do NOT use \\textbf{} or other LaTeX text commands
+        - Use *italic* (markdown single asterisks) for emphasis
+        - Use $...$ for inline math expressions (e.g. $F = ma$, $v = \\frac{s}{t}$)
+        - Use $$...$$ for display/block math equations on their own line
+        - Use line breaks (\\n) to separate paragraphs
+        - Use numbered lists (1. 2. 3.) or bullet points (- ) for lists
+        - NEVER use \\textbf{}, \\textit{}, \\begin{}, \\item, or other LaTeX text-mode commands — only use LaTeX INSIDE $ delimiters for math
+        
+        ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
+        
+        Return JSON:
+        {
+            "title": "Short descriptive title for this theory section",
+            "theory_content": "Full formatted theory text extracted from the image"
+        }
+            `;
+
+            const data = await callGeminiForExercise(theoryPrompt, imagePart, model)
+            return { success: true, data: { title: data.title || '', theory_content: data.theory_content || '' } }
+        }
+
         if (generationMethod === 'batch' || !isVariationMode) {
             const prompt = `
         ${genericRules}
@@ -904,7 +939,9 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
             required_variations_count: data.required_variations_count || null,
             points_enabled: data.points_enabled || false,
             points: data.points_enabled ? (data.points || 1) : null,
-            simulation_url: data.simulation_url || null
+            simulation_url: data.simulation_url || null,
+            theory_content: data.theory_content || null,
+            theory_image_url: data.theory_image_url || null
         })
         .select()
         .single()
@@ -914,8 +951,8 @@ export async function createAssignmentWithQuestion(classroomId: string, exercise
         return { success: false, error: "Failed to create assignment" }
     }
 
-    // 4. Create Questions (skip for simulation exercises)
-    if (!data.simulation_url && data.questions && data.questions.length > 0) {
+    // 4. Create Questions (skip for simulation and theory exercises)
+    if (!data.simulation_url && !data.theory_content && data.questions && data.questions.length > 0) {
         const questionsToInsert = data.questions.map((q, index) => ({
             assignment_id: assignment.id,
             latex_text: q.latex_text,

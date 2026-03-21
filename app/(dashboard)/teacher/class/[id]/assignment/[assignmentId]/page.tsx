@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Check, CheckCircle2, XCircle, BookOpen } from "lucide-react"
+import { ArrowLeft, Check, CheckCircle2, XCircle, BookOpen, FileText } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
@@ -75,6 +75,47 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
                         </div>
                     </div>
                 </div>
+
+                {/* Theory Preview */}
+                {assignment.theory_content && (
+                    <div className="space-y-6">
+                        <Card className="border-purple-500/30 bg-gradient-to-br from-purple-50/50 to-indigo-50/30">
+                            <CardHeader className="pb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-purple-500/10 rounded-full">
+                                        <FileText className="w-5 h-5 text-purple-500" />
+                                    </div>
+                                    <div>
+                                        <CardTitle>Theory Content Preview</CardTitle>
+                                        <CardDescription>This is how the theory appears to students.</CardDescription>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                {assignment.theory_image_url && (
+                                    <div className="rounded-lg overflow-hidden border bg-white flex items-center justify-center p-4">
+                                        <img
+                                            src={assignment.theory_image_url}
+                                            alt="Theory illustration"
+                                            className="max-w-full max-h-[400px] object-contain"
+                                        />
+                                    </div>
+                                )}
+                                <div className="prose prose-sm max-w-none bg-white/80 rounded-lg p-6 border space-y-3">
+                                    {(assignment.theory_content as string)
+                                        .replace(/\\n/g, '\n')
+                                        .split(/\n\s*\n|\n/)
+                                        .filter((p: string) => p.trim())
+                                        .map((paragraph: string, idx: number) => (
+                                            <div key={idx}>
+                                                <MathDisplay content={paragraph.trim()} />
+                                            </div>
+                                        ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
 
                 <div className="grid gap-8">
                     {assignment.questions?.map((question: any, index: number) => (
