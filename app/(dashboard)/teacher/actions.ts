@@ -766,7 +766,8 @@ export async function generateExerciseFromImage(formData: FormData) {
   NOTATION: "Sunkio jėga" (Gravity force) MUST be written as F with a subscript "s" (F_s in LaTeX), and "Svoris" (Weight) MUST be written as P.
 
   ${useImageAsIllustration ? '- DO NOT generate diagram_svg/type.' : `
-  - Generate diagram_svg ONLY if the input image contains a diagram, graph, or schema. If the input image is text-only, set diagram_type and diagram_svg to null.
+  - Generate diagram_svg ONLY if the input image contains a diagram, graph, schema, or TABLE. If the input image is text-only (no tables/graphs), set diagram_type and diagram_svg to null.
+  - For TABLES: If the image contains a table, generate it as a visually appealing <svg> object (diagram_type: "scheme"), NOT as markdown embedded in latex_text. Ensure clear borders, centered text, and a distinct header row.
   - For VECTORS: Include gray grid, snap points, DRAW ARROWS above labels, position labels with offset.
   - CRITICAL: Inside <svg> tags, DO NOT use LaTeX syntax (e.g., no $ delimiters, no \\vec, no \\frac). Use plain text or Unicode characters for labels (e.g., use 'Fs' instead of '\\vec{F}_s').
   `}
