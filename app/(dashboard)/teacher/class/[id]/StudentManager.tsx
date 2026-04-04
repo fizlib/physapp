@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ChevronDown, ChevronUp, ShieldOff } from "lucide-react"
+import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ShieldOff } from "lucide-react"
 import Link from "next/link"
 import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
@@ -32,7 +32,6 @@ interface Enrollment {
     profiles: EnrollmentProfile | null
 }
 
-type PointsSortDirection = 'desc' | 'asc'
 
 interface StudentManagerProps {
     classroomId: string
@@ -51,7 +50,6 @@ function formatPoints(value: number): string {
 export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [] }: StudentManagerProps) {
     const router = useRouter()
     const [view, setView] = useState<'list' | 'add' | 'detail'>('list')
-    const [pointsSortDirection, setPointsSortDirection] = useState<PointsSortDirection>('desc')
     const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
@@ -111,11 +109,10 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     })
 
     const sortedEnrollments = useMemo(() => {
-        const getDisplayName = (enrollment: Enrollment): string => (
-            (enrollment.profiles?.first_name || enrollment.profiles?.last_name)
-                ? `${enrollment.profiles?.first_name || ''} ${enrollment.profiles?.last_name || ''}`.trim()
-                : enrollment.profiles?.email || "Unknown"
-        )
+        const getLastName = (enrollment: Enrollment): string =>
+            (enrollment.profiles?.last_name || '').toLowerCase()
+        const getFirstName = (enrollment: Enrollment): string =>
+            (enrollment.profiles?.first_name || '').toLowerCase()
 
         return [...initialEnrollments].sort((a, b) => {
             // Blocked students always at top
@@ -123,16 +120,12 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
             const bBlocked = blockedIds.has(b.student_id) ? 1 : 0
             if (aBlocked !== bBlocked) return bBlocked - aBlocked
 
-            const aEarned = Number(studentPointsById[a.student_id]?.earned) || 0
-            const bEarned = Number(studentPointsById[b.student_id]?.earned) || 0
-
-            if (aEarned !== bEarned) {
-                return pointsSortDirection === 'desc' ? bEarned - aEarned : aEarned - bEarned
-            }
-
-            return getDisplayName(a).localeCompare(getDisplayName(b))
+            // Alphabetical by surname, then first name (Lithuanian locale)
+            const lastNameCmp = getLastName(a).localeCompare(getLastName(b), 'lt')
+            if (lastNameCmp !== 0) return lastNameCmp
+            return getFirstName(a).localeCompare(getFirstName(b), 'lt')
         })
-    }, [initialEnrollments, studentPointsById, pointsSortDirection, blockedIds])
+    }, [initialEnrollments, blockedIds])
 
     if (view === 'add') {
         return (
@@ -284,21 +277,10 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
             <div className="rounded-md border border-border/40 bg-background shadow-sm">
                 <div className="p-4">
                     <div className="space-y-3">
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                             <span>Student</span>
-                            <button
-                                type="button"
-                                className="inline-flex items-center justify-end gap-1 text-right hover:text-foreground transition-colors"
-                                onClick={() => setPointsSortDirection((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
-                                title={`Sort by earned points (${pointsSortDirection === 'desc' ? 'high to low' : 'low to high'})`}
-                            >
-                                <span>Points</span>
-                                {pointsSortDirection === 'desc' ? (
-                                    <ChevronDown className="h-3.5 w-3.5" />
-                                ) : (
-                                    <ChevronUp className="h-3.5 w-3.5" />
-                                )}
-                            </button>
+                            <span className="text-right">Grade</span>
+                            <span className="text-right">Points</span>
                             <span className="text-right">Actions</span>
                         </div>
                         <div className="divide-y divide-border/40">
@@ -307,11 +289,18 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                     ? `${enrollment.profiles.first_name || ''} ${enrollment.profiles.last_name || ''}`.trim()
                                     : enrollment.profiles?.email || "Unknown"
                                 const pointSummary = studentPointsById[enrollment.student_id] || { earned: 0, max: 0 }
+                                const gradeValue = pointSummary.max > 0 ? Math.round((pointSummary.earned / pointSummary.max) * 10) : 0
+                                const getGradeColor = (g: number) => {
+                                    if (g >= 9) return 'text-emerald-600 bg-emerald-50'
+                                    if (g >= 7) return 'text-blue-600 bg-blue-50'
+                                    if (g >= 5) return 'text-amber-600 bg-amber-50'
+                                    return 'text-rose-600 bg-rose-50'
+                                }
 
                                 return (
                                     <div
                                         key={enrollment.id}
-                                        className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 py-3 px-2 group hover:bg-muted/30 transition-colors cursor-pointer rounded-md"
+                                        className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 py-3 px-2 group hover:bg-muted/30 transition-colors cursor-pointer rounded-md"
                                         onClick={() => {
                                             setSelectedStudent({ id: enrollment.student_id, name })
                                             setView('detail')
@@ -334,6 +323,11 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                                     {enrollment.profiles?.email}
                                                 </span>
                                             </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className={`inline-flex items-center justify-center font-mono text-sm font-bold tabular-nums rounded-md px-2 py-0.5 ${getGradeColor(gradeValue)}`}>
+                                                {gradeValue}
+                                            </span>
                                         </div>
                                         <div className="text-right">
                                             <span className="font-mono text-sm tabular-nums text-muted-foreground">
