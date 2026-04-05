@@ -9,11 +9,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Trash2, GripVertical, BookOpen, Eye, EyeOff, ChevronLeft, Loader2 } from "lucide-react"
+import { Plus, Trash2, GripVertical, BookOpen, Eye, EyeOff, ChevronLeft, Loader2, Check } from "lucide-react"
 import { addExerciseToCollection, removeExerciseFromCollection, toggleAssignmentPublish, getTeacherClassrooms, getClassroomCollections, getCollectionExercises } from "../../../../actions"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
 
@@ -82,6 +83,7 @@ export function CollectionManager({
     const [selectedCollectionId, setSelectedCollectionId] = useState<string>("")
 
     const [exercises, setExercises] = useState<{ id: string, title: string }[]>([])
+    const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(new Set())
 
     const loadClassrooms = async () => {
         setFetching(true)
@@ -127,8 +129,29 @@ export function CollectionManager({
 
     const handleCollectionSelect = (id: string) => {
         setSelectedCollectionId(id)
+        setSelectedExerciseIds(new Set())
         setStep(3)
         loadExercises(id)
+    }
+
+    const toggleExerciseSelection = (exerciseId: string) => {
+        setSelectedExerciseIds(prev => {
+            const next = new Set(prev)
+            if (next.has(exerciseId)) {
+                next.delete(exerciseId)
+            } else {
+                next.add(exerciseId)
+            }
+            return next
+        })
+    }
+
+    const toggleSelectAll = () => {
+        if (selectedExerciseIds.size === exercises.length) {
+            setSelectedExerciseIds(new Set())
+        } else {
+            setSelectedExerciseIds(new Set(exercises.map(ex => ex.id)))
+        }
     }
 
     const handleAdd = async (assignmentId: string) => {
@@ -149,6 +172,40 @@ export function CollectionManager({
         }
     }
 
+    const handleAddSelected = async () => {
+        if (selectedExerciseIds.size === 0) return
+
+        setLoading(true)
+        const ids = Array.from(selectedExerciseIds)
+        let successCount = 0
+        let failCount = 0
+
+        try {
+            for (const assignmentId of ids) {
+                const result = await addExerciseToCollection(classroomId, collectionId, assignmentId)
+                if (result.success) {
+                    successCount++
+                } else {
+                    failCount++
+                }
+            }
+
+            if (successCount > 0) {
+                toast.success(`${successCount} exercise${successCount > 1 ? 's' : ''} added to collection`)
+            }
+            if (failCount > 0) {
+                toast.error(`${failCount} exercise${failCount > 1 ? 's' : ''} failed to import`)
+            }
+
+            setOpen(false)
+            resetForm()
+        } catch (err) {
+            toast.error("Something went wrong")
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const resetForm = () => {
         setStep(1)
         setSelectedSourceClassId("")
@@ -156,7 +213,10 @@ export function CollectionManager({
         setClassrooms([])
         setCollections([])
         setExercises([])
+        setSelectedExerciseIds(new Set())
     }
+
+    const allSelected = exercises.length > 0 && selectedExerciseIds.size === exercises.length
 
     return (
         <Dialog open={open} onOpenChange={(o) => {
@@ -178,7 +238,10 @@ export function CollectionManager({
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => setStep(step === 3 ? 2 : 1)}
+                                onClick={() => {
+                                    setSelectedExerciseIds(new Set())
+                                    setStep(step === 3 ? 2 : 1)
+                                }}
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </Button>
@@ -186,7 +249,7 @@ export function CollectionManager({
                         <DialogTitle>
                             {step === 1 && "Select Classroom"}
                             {step === 2 && "Select Collection"}
-                            {step === 3 && "Select Exercise"}
+                            {step === 3 && "Select Exercises"}
                         </DialogTitle>
                     </div>
                 </DialogHeader>
@@ -254,21 +317,69 @@ export function CollectionManager({
                             )}
 
                             {step === 3 && (
-                                <div className="grid gap-2">
+                                <div className="space-y-3">
                                     {exercises.length > 0 ? (
-                                        exercises.map((ex) => (
-                                            <div key={ex.id} className="flex items-center justify-between p-3 border rounded-md hover:bg-muted/50">
-                                                <span className="font-medium text-sm truncate max-w-[200px]">{ex.title}</span>
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    onClick={() => handleAdd(ex.id)}
-                                                    disabled={loading}
-                                                >
-                                                    {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
-                                                </Button>
+                                        <>
+                                            {/* Select all / Import selected header */}
+                                            <div className="flex items-center justify-between pb-2 border-b">
+                                                <div className="flex items-center gap-2">
+                                                    <Checkbox
+                                                        id="select-all"
+                                                        checked={allSelected}
+                                                        onCheckedChange={toggleSelectAll}
+                                                    />
+                                                    <Label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
+                                                        Select all ({exercises.length})
+                                                    </Label>
+                                                </div>
+                                                {selectedExerciseIds.size > 0 && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleAddSelected}
+                                                        disabled={loading}
+                                                        className="gap-1.5"
+                                                    >
+                                                        {loading ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                        ) : (
+                                                            <Plus className="h-3 w-3" />
+                                                        )}
+                                                        Import {selectedExerciseIds.size} selected
+                                                    </Button>
+                                                )}
                                             </div>
-                                        ))
+
+                                            {/* Exercise list with checkboxes */}
+                                            <div className="grid gap-2">
+                                                {exercises.map((ex) => (
+                                                    <div
+                                                        key={ex.id}
+                                                        className={`flex items-center gap-3 p-3 border rounded-md hover:bg-muted/50 cursor-pointer transition-colors ${
+                                                            selectedExerciseIds.has(ex.id) ? "bg-primary/5 border-primary/30" : ""
+                                                        }`}
+                                                        onClick={() => toggleExerciseSelection(ex.id)}
+                                                    >
+                                                        <Checkbox
+                                                            checked={selectedExerciseIds.has(ex.id)}
+                                                            onCheckedChange={() => toggleExerciseSelection(ex.id)}
+                                                        />
+                                                        <span className="font-medium text-sm truncate flex-1">{ex.title}</span>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="shrink-0 text-xs h-7"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleAdd(ex.id)
+                                                            }}
+                                                            disabled={loading}
+                                                        >
+                                                            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
                                     ) : (
                                         <p className="text-sm text-muted-foreground text-center py-8 italic">
                                             No exercises found in this collection.

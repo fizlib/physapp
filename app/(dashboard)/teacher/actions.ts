@@ -1443,7 +1443,7 @@ export async function addExerciseToCollection(targetClassroomId: string, targetC
                 classroom_id: targetClassroomId,
                 collection_id: targetCollectionId,
                 title: sourceAss.title,
-                published: false, // Default to unpublished in the new home
+                published: true, // Import as published
                 order_index: nextOrderIndex,
                 show_all_questions: sourceAss.show_all_questions,
                 required_variations_count: sourceAss.required_variations_count,
