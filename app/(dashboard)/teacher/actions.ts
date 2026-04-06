@@ -3721,3 +3721,131 @@ export async function addBonusPointsToAll(
     revalidatePath(`/teacher/class/${classroomId}`)
     return { success: true }
 }
+
+export async function getClassroomStudents(classroomId: string) {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) return []
+
+    const { data, error } = await supabase
+        .from('enrollments')
+        .select('student_id, profiles:student_id(first_name, last_name, email)')
+        .eq('classroom_id', classroomId)
+
+    if (error) {
+        console.error('Error fetching classroom students:', error)
+        return []
+    }
+
+    return (data || []).map((e: any) => ({
+        id: e.student_id,
+        first_name: e.profiles?.first_name || null,
+        last_name: e.profiles?.last_name || null,
+        email: e.profiles?.email || null,
+    }))
+}
+
+export async function importStudentsFromClass(targetClassroomId: string, sourceClassroomId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns BOTH classrooms
+    const { data: targetClassroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', targetClassroomId)
+        .single()
+
+    if (!targetClassroom || targetClassroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage target classroom" }
+    }
+
+    const { data: sourceClassroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', sourceClassroomId)
+        .single()
+
+    if (!sourceClassroom || sourceClassroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage source classroom" }
+    }
+
+    // Fetch all enrollments from the source class
+    const { data: sourceEnrollments, error: fetchError } = await supabase
+        .from('enrollments')
+        .select('student_id')
+        .eq('classroom_id', sourceClassroomId)
+
+    if (fetchError) {
+        console.error('Error fetching source enrollments:', fetchError)
+        return { success: false, error: "Failed to fetch students from source class" }
+    }
+
+    if (!sourceEnrollments || sourceEnrollments.length === 0) {
+        return { success: false, error: "No students found in the source class" }
+    }
+
+    const studentIds = sourceEnrollments.map(e => e.student_id)
+
+    // Fetch existing enrollments in target to avoid duplicates
+    const { data: existingEnrollments } = await supabase
+        .from('enrollments')
+        .select('student_id')
+        .eq('classroom_id', targetClassroomId)
+        .in('student_id', studentIds)
+
+    const alreadyEnrolledIds = new Set((existingEnrollments || []).map(e => e.student_id))
+
+    // Delete all enrollments from source class
+    const { error: deleteError } = await supabase
+        .from('enrollments')
+        .delete()
+        .eq('classroom_id', sourceClassroomId)
+
+    if (deleteError) {
+        console.error('Error deleting source enrollments:', deleteError)
+        return { success: false, error: "Failed to remove students from source class" }
+    }
+
+    // Insert students into target class (skip those already enrolled)
+    const newEnrollments = studentIds
+        .filter(id => !alreadyEnrolledIds.has(id))
+        .map(studentId => ({
+            student_id: studentId,
+            classroom_id: targetClassroomId,
+        }))
+
+    if (newEnrollments.length > 0) {
+        const supabaseAdmin = createAdminClient()
+        const { error: insertError } = await supabaseAdmin
+            .from('enrollments')
+            .insert(newEnrollments)
+
+        if (insertError) {
+            console.error('Error inserting target enrollments:', insertError)
+            return { success: false, error: "Failed to add students to this class" }
+        }
+    }
+
+    const movedCount = studentIds.length
+    const skippedCount = alreadyEnrolledIds.size
+
+    revalidatePath(`/teacher/class/${targetClassroomId}`)
+    revalidatePath(`/teacher/class/${sourceClassroomId}`)
+    return {
+        success: true,
+        message: `Moved ${movedCount} student(s)${skippedCount > 0 ? ` (${skippedCount} already enrolled, skipped)` : ''}`
+    }
+}
