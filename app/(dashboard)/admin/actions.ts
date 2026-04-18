@@ -631,3 +631,58 @@ export async function adminGetActiveBypass(userId: string) {
     }
 }
 
+export async function adminSendMessage(studentId: string, title: string, content: string) {
+    try {
+        const admin = await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        if (!title.trim() || !content.trim()) {
+            return { success: false, error: 'Title and content are required' }
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('student_messages')
+            .insert({
+                student_id: studentId,
+                sender_id: admin.id,
+                title: title.trim(),
+                content: content.trim(),
+            })
+            .select()
+            .single()
+
+        if (error) {
+            console.error('Error sending message:', error)
+            return { success: false, error: 'Failed to send message' }
+        }
+
+        return { success: true, message: data }
+    } catch (error) {
+        console.error('Unexpected error in adminSendMessage:', error)
+        return { success: false, error: 'Internal server error' }
+    }
+}
+
+export async function adminGetStudentMessages(studentId: string) {
+    try {
+        await checkAdmin()
+        const supabaseAdmin = createAdminClient()
+
+        const { data, error } = await supabaseAdmin
+            .from('student_messages')
+            .select('*')
+            .eq('student_id', studentId)
+            .order('created_at', { ascending: false })
+
+        if (error) {
+            console.error('Error fetching student messages:', error)
+            return { messages: [], error: 'Failed to fetch messages' }
+        }
+
+        return { messages: data || [] }
+    } catch (error) {
+        console.error('Unexpected error in adminGetStudentMessages:', error)
+        return { messages: [], error: 'Internal server error' }
+    }
+}
+

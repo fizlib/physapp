@@ -1,6 +1,7 @@
 'use client'
 
-import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress, adminGetUserCollections, adminSetIpBypass, adminGetActiveBypass, adminResetPassword } from "./actions"
+import { AdminUser, adminApproveUser, adminBulkApproveUsers, adminBulkDeleteUsers, adminCreateUser, adminDeleteUser, adminGenerateMagicLink, adminResetUserProgress, adminGetUserCollections, adminSetIpBypass, adminGetActiveBypass, adminResetPassword, adminSendMessage, adminGetStudentMessages } from "./actions"
+import { MarkdownEditor } from "@/components/ui/markdown-editor"
 import { CopyButton } from "@/components/ui/copy-button"
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
@@ -16,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X, ChevronLeft, ChevronRight, Search } from "lucide-react"
+import { Check, Loader2, Plus, Trash2, ArrowLeft, User, Copy, X, ChevronLeft, ChevronRight, Search, Mail, Send } from "lucide-react"
 import { toast } from "sonner"
 import {
     Dialog,
@@ -85,10 +86,18 @@ export function UserList({
     const [selectedCollectionId, setSelectedCollectionId] = useState<string>("")
     const [isLoadingCollections, setIsLoadingCollections] = useState(false)
 
+    // Messaging state
+    const [messageTitle, setMessageTitle] = useState("")
+    const [messageContent, setMessageContent] = useState("")
+    const [isSendingMessage, setIsSendingMessage] = useState(false)
+    const [studentMessages, setStudentMessages] = useState<any[]>([])
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+
     useEffect(() => {
         if (selectedUser && selectedUser.role === 'student') {
             fetchUserCollections(selectedUser.id)
             fetchActiveBypasses(selectedUser.id)
+            fetchStudentMessages(selectedUser.id)
         }
     }, [selectedUser])
 
@@ -130,6 +139,39 @@ export function UserList({
             toast.error('An error occurred')
         } finally {
             setIsSettingBypass(false)
+        }
+    }
+
+    const fetchStudentMessages = async (userId: string) => {
+        setIsLoadingMessages(true)
+        try {
+            const result = await adminGetStudentMessages(userId)
+            if (result.messages) {
+                setStudentMessages(result.messages)
+            }
+        } finally {
+            setIsLoadingMessages(false)
+        }
+    }
+
+    const handleSendMessage = async () => {
+        if (!selectedUser || !messageTitle.trim() || !messageContent.trim()) return
+
+        setIsSendingMessage(true)
+        try {
+            const result = await adminSendMessage(selectedUser.id, messageTitle, messageContent)
+            if (result.success) {
+                toast.success('Message sent successfully')
+                setMessageTitle("")
+                setMessageContent("")
+                fetchStudentMessages(selectedUser.id)
+            } else {
+                toast.error(result.error || 'Failed to send message')
+            }
+        } catch (error) {
+            toast.error('An error occurred')
+        } finally {
+            setIsSendingMessage(false)
         }
     }
 
@@ -582,6 +624,87 @@ export function UserList({
                                             </p>
                                         )}
                                     </div>
+                                </div>
+                            )}
+
+                            {selectedUser.role === 'student' && (
+                                <div className="border-t pt-6 mt-6">
+                                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                        <Mail className="h-5 w-5" />
+                                        Send Message
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="message-title">Title</Label>
+                                            <Input
+                                                id="message-title"
+                                                value={messageTitle}
+                                                onChange={(e) => setMessageTitle(e.target.value)}
+                                                placeholder="Message title..."
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Content (Markdown)</Label>
+                                            <MarkdownEditor
+                                                value={messageContent}
+                                                onChange={setMessageContent}
+                                                placeholder="Write your message in markdown..."
+                                                minHeight="150px"
+                                            />
+                                        </div>
+                                        <Button
+                                            onClick={handleSendMessage}
+                                            disabled={isSendingMessage || !messageTitle.trim() || !messageContent.trim()}
+                                        >
+                                            {isSendingMessage ? (
+                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Send className="h-4 w-4 mr-2" />
+                                            )}
+                                            Send Message
+                                        </Button>
+                                    </div>
+
+                                    {/* Previously sent messages */}
+                                    {studentMessages.length > 0 && (
+                                        <div className="mt-6 space-y-3">
+                                            <h4 className="text-sm font-medium text-muted-foreground">Sent Messages</h4>
+                                            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                                {studentMessages.map((msg) => (
+                                                    <div
+                                                        key={msg.id}
+                                                        className={`rounded-md border p-3 text-sm ${
+                                                            msg.is_read
+                                                                ? 'bg-muted/30 border-border/50'
+                                                                : 'bg-violet-50 border-violet-200'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="font-medium truncate">{msg.title}</span>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                {msg.is_read ? (
+                                                                    <Badge variant="outline" className="text-[10px] bg-green-50 text-green-600 border-green-200">Read</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-600 border-violet-200">Unread</Badge>
+                                                                )}
+                                                                <span className="text-[10px] text-muted-foreground">
+                                                                    {new Date(msg.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{msg.content}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isLoadingMessages && (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Loading messages...
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </CardContent>

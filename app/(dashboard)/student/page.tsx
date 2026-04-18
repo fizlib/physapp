@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
@@ -6,6 +7,7 @@ import { BookOpen } from "lucide-react"
 import { getStudentDashboardStats, getStudentPointsBreakdown } from "./actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
 import { PointsBreakdown } from "@/components/student/PointsBreakdown"
+import { MessageButton } from "@/components/student/MessageButton"
 
 
 export default async function StudentDashboard() {
@@ -25,10 +27,18 @@ export default async function StudentDashboard() {
         .select('*')
         .order('created_at', { ascending: false })
 
-    const [{ stats }, { breakdown }] = await Promise.all([
+    const [{ stats }, { breakdown }, messagesResult] = await Promise.all([
         getStudentDashboardStats(),
-        getStudentPointsBreakdown()
+        getStudentPointsBreakdown(),
+        createAdminClient()
+            .from('student_messages')
+            .select('id, title, created_at, is_read')
+            .eq('student_id', user.id)
+            .eq('is_hidden', false)
+            .order('created_at', { ascending: false })
     ])
+
+    const unreadMessages = messagesResult.data
 
 
     return (
@@ -48,7 +58,24 @@ export default async function StudentDashboard() {
                     </div>
                 </div>
 
+                {/* Unread Admin Messages */}
+                {unreadMessages && unreadMessages.length > 0 && (
+                    <div className="w-full md:w-[calc((100%-1.5rem)/2)] lg:w-[calc((100%-3rem)/3)]">
+                        <div className="flex flex-col gap-3">
+                            {unreadMessages.map((msg: any) => (
+                                <MessageButton
+                                    key={msg.id}
+                                    messageId={msg.id}
+                                    title={msg.title}
+                                    createdAt={msg.created_at}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+
                     {classrooms?.map((classroom) => (
                         <div key={classroom.id} className="flex flex-col gap-4">
                             {classroom.type === 'school_class' && stats && stats[classroom.id] && stats[classroom.id].totalPoints > 0 && (

@@ -1180,3 +1180,42 @@ export async function checkTabBlockStatus(classroomId: string): Promise<{
 
     return { success: true, blocked: !!violation }
 }
+
+export async function markMessageAsRead(messageId: string): Promise<ActionState> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { error } = await supabase
+        .from('student_messages')
+        .update({ is_read: true })
+        .eq('id', messageId)
+        .eq('student_id', user.id)
+
+    if (error) {
+        console.error("Error marking message as read:", error)
+        return { success: false, error: "Failed to mark message as read" }
+    }
+
+    return { success: true }
+}
+
+export async function hideMessage(messageId: string): Promise<ActionState> {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const { error } = await createAdminClient()
+        .from('student_messages')
+        .update({ is_hidden: true })
+        .eq('id', messageId)
+        .eq('student_id', user.id)
+
+    if (error) {
+        console.error("Error hiding message:", error)
+        return { success: false, error: "Failed to hide message" }
+    }
+
+    return { success: true }
+}
