@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Trash2, ArrowRight, ChevronDown, CheckCircle2, Droplet, RotateCcw, Lock, Unlock } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowRight, ChevronDown, CheckCircle2, Droplet, RotateCcw, Lock, Unlock } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
     Dialog,
@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 
 const SVG_WIDTH = 800;
 const SVG_HEIGHT = 600;
-const MAX_LEVEL = 5; // Padidintas lygių skaičius
+const MAX_LEVEL = 5;
 
 export default function CommunicatingVesselsSimulation() {
     const [level, setLevel] = useState(1);
@@ -32,13 +32,17 @@ export default function CommunicatingVesselsSimulation() {
     const [tiltedLeft, setTiltedLeft] = useState(false);
     const [tiltedRight, setTiltedRight] = useState(false);
 
-    // --- Lygis 3 (Naujas: Fontanas) ---
-    const [liftOffset, setLiftOffset] = useState(0); // 0 iki 100
+    // --- Lygis 3 (Patobulintas: Susivienodinantys lygiai, siauresnė anga, ilgiau veikiantis fontanas) ---
+    const [liftOffset, setLiftOffset] = useState(0); // 0 iki 200 pikselių
+    const [l3WaterVolume, setL3WaterVolume] = useState(455); // Bendras vandens kiekis (didesnis dėl platesnio indo)
+    const [isDraggingL3, setIsDraggingL3] = useState(false);
+    const dragStart = useRef({ y: 0, offset: 0 });
+    const l3OffsetRef = useRef(liftOffset);
 
-    // --- Lygis 4 (Senas 3) ---
+    // --- Lygis 4 ---
     const [oilAmount, setOilAmount] = useState(0);
 
-    // --- Lygis 5 (Senas 4) ---
+    // --- Lygis 5 ---
     const [tanks, setTanks] = useState([300, 0, 150]);
     const [v1Open, setV1Open] = useState(false);
     const [v2Open, setV2Open] = useState(false);
@@ -65,7 +69,7 @@ export default function CommunicatingVesselsSimulation() {
     // 1 Lygio animacija
     useEffect(() => {
         if (level !== 1 || !isTapOpen) return;
-        let animationFrameId: number;
+        let animationFrameId;
 
         const loop = () => {
             setFillLevel(prev => {
@@ -91,10 +95,43 @@ export default function CommunicatingVesselsSimulation() {
         }
     }, [tilt, level]);
 
-    // 5 Lygio fizika (Senas 4)
+    // 3 Lygio fizika (Vandens lėtas nutekėjimas ir sistemų susilyginimas)
+    useEffect(() => {
+        l3OffsetRef.current = liftOffset;
+    }, [liftOffset]);
+
+    useEffect(() => {
+        if (level !== 3) return;
+        let animationFrameId;
+        const loop = () => {
+            setL3WaterVolume(prev => {
+                const currentOffset = l3OffsetRef.current;
+                const AR_AL = 2.5; // Dešiniojo indo ploto santykis su kairiuoju
+                let currentHL = (prev <= currentOffset) ? prev : (prev + AR_AL * currentOffset) / (1 + AR_AL);
+
+                // Jei kairiojo indo lygis viršija angos aukštį (200px), vanduo trykšta ir tūris mažėja.
+                if (currentHL > 200) {
+                    const excess = currentHL - 200;
+                    if (excess < 0.1) {
+                        // Tolygus sustabdymas: kai lygis labai arti 200, užfiksuojame idealų tūrį
+                        const targetPrev = 200 * (1 + AR_AL) - AR_AL * currentOffset;
+                        return Math.max(0, Math.min(prev, targetPrev));
+                    }
+                    const spill = excess * 0.01;
+                    return Math.max(0, prev - spill);
+                }
+                return prev;
+            });
+            animationFrameId = requestAnimationFrame(loop);
+        };
+        loop();
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [level]);
+
+    // 5 Lygio fizika
     useEffect(() => {
         if (level !== 5) return;
-        let animationFrameId: number;
+        let animationFrameId;
         const K = 0.05;
         const AREAS = [1.0, 1.5, 0.8];
 
@@ -125,14 +162,14 @@ export default function CommunicatingVesselsSimulation() {
     const canProceed = useMemo(() => {
         if (level === 1) return fillLevel >= 50;
         if (level === 2) return tiltedLeft && tiltedRight;
-        if (level === 3) return liftOffset >= 80;
+        if (level === 3) return l3WaterVolume < 450; // Paskatinti stebėti ištekėjimą
         if (level === 4) return oilAmount >= 80;
         if (level === 5) {
             const [t1, t2, t3] = tanks;
             return v1Open && v2Open && Math.abs(t1 - t2) < 1 && Math.abs(t2 - t3) < 1;
         }
         return false;
-    }, [level, fillLevel, tiltedLeft, tiltedRight, liftOffset, oilAmount, tanks, v1Open, v2Open]);
+    }, [level, fillLevel, tiltedLeft, tiltedRight, l3WaterVolume, oilAmount, tanks, v1Open, v2Open]);
 
     const clearAll = () => {
         if (level === 1) {
@@ -144,7 +181,10 @@ export default function CommunicatingVesselsSimulation() {
             setTiltedLeft(false);
             setTiltedRight(false);
         }
-        if (level === 3) setLiftOffset(0);
+        if (level === 3) {
+            setLiftOffset(0);
+            setL3WaterVolume(455);
+        }
         if (level === 4) setOilAmount(0);
         if (level === 5) {
             setTanks([300, 0, 150]);
@@ -157,14 +197,22 @@ export default function CommunicatingVesselsSimulation() {
     const l1WaterY = 480 - (fillLevel / 100) * 380;
     const l2WaterY = 480 - 0.6 * 380;
 
-    // 3 Lygio matmenys ir fizika
-    const l3Offset = (liftOffset / 100) * 200; // kiek pikselių pakeltas indas
-    const l3RawHL = 130 + l3Offset / 2; // skysčio aukštis matuojant nuo kairio indo dugno
-    const l3HL = Math.min(l3RawHL, 200); // 200px maksimali talpa, nes anga yra ties Y=250 (450 - 250 = 200)
-    const l3HR = 260 - l3RawHL; // skysčio aukštis dešiniajame inde
-    const l3LeftWaterY = 450 - l3HL;
-    const l3FountainH = Math.max(0, l3RawHL - 200);
-    const l3JetHeight = l3FountainH * 3;
+    // 3 Lygio matmenys
+    let l3HL, l3HR;
+    const AR_AL = 2.5; // Dešiniojo indo ploto santykis su kairiuoju
+    if (l3WaterVolume <= liftOffset) {
+        l3HL = l3WaterVolume;
+        l3HR = 0;
+    } else {
+        l3HL = (l3WaterVolume + AR_AL * liftOffset) / (1 + AR_AL);
+        l3HR = (l3WaterVolume - liftOffset) / (1 + AR_AL);
+    }
+
+    const displayHL = Math.min(l3HL, 200); // Kairys indas išsilieja ties 200px
+    const l3LeftWaterY = 450 - displayHL;
+    const l3FountainH = Math.max(0, l3HL - 200);
+    // Didesnis srovės aukštis dėl stipresnio spaudimo per mažą angutę, su ribojimu
+    const l3JetHeight = Math.min(240, l3FountainH * 3.5);
 
     // 4 Lygio matmenys (U vamzdelis)
     const dx = 0.4 * oilAmount;
@@ -177,7 +225,6 @@ export default function CommunicatingVesselsSimulation() {
     const GLASS_PATH_OUTER = "M 120,100 L 120,480 L 680,480 Q 800,290 680,100";
     const GLASS_PATH_INNER_R = "M 600,100 Q 720,290 600,420 L 420,420 L 340,260 L 420,100";
     const GLASS_PATH_INNER_L = "M 340,100 L 260,260 L 340,420 L 200,420 L 200,100";
-
     const L4_CLIP_PATH = "M 250,100 L 250,450 L 550,450 L 480,250 L 550,100 L 500,100 L 430,250 L 500,400 L 300,400 L 300,100 Z";
 
     return (
@@ -237,7 +284,7 @@ export default function CommunicatingVesselsSimulation() {
                 )}
                 {level === 3 && (
                     <p className="text-sm text-muted-foreground">
-                        <span className="font-semibold text-foreground">3 lygis:</span> Kelkite dešinįjį indą su vandeniu. Kadangi lygiai bando susivienodinti, vanduo galiausiai ištrykš pro kairiojo indo angą!
+                        <span className="font-semibold text-foreground">3 lygis:</span> Kelkite dešinįjį indą su vandeniu. Vanduo ištrykš pro angą, kol kairiojo ir dešiniojo skysčio paviršiai visiškai susivienodins ir išsilygins horizontalioje plokštumoje!
                     </p>
                 )}
                 {level === 4 && (
@@ -278,17 +325,10 @@ export default function CommunicatingVesselsSimulation() {
                     </div>
                 )}
                 {level === 3 && (
-                    <div className="flex items-center gap-4 w-full max-w-sm">
-                        <span className="text-sm font-medium w-max text-right text-muted-foreground whitespace-nowrap">Kėlimo aukštis:</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={liftOffset}
-                            onChange={(e) => setLiftOffset(Number(e.target.value))}
-                            className="flex-1 cursor-pointer accent-primary"
-                        />
+                    <div className="flex items-center justify-center w-full">
+                        <span className="text-sm font-medium text-muted-foreground bg-white/50 dark:bg-black/20 px-4 py-1.5 rounded-full border border-border/50 shadow-sm">
+                            👆 Tempkite dešinįjį indą su pelyte aukštyn ir žemyn
+                        </span>
                     </div>
                 )}
                 {level === 4 && (
@@ -316,7 +356,7 @@ export default function CommunicatingVesselsSimulation() {
                 <svg
                     viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
                     preserveAspectRatio="xMidYMid meet"
-                    className="w-full h-full max-w-[800px] select-none drop-shadow-sm"
+                    className="w-full h-full max-w-[800px] select-none drop-shadow-sm touch-none"
                 >
                     <defs>
                         <clipPath id="vessels-clip">
@@ -326,15 +366,16 @@ export default function CommunicatingVesselsSimulation() {
                             <path d={L4_CLIP_PATH} />
                         </clipPath>
 
-                        <linearGradient id="waterDepth" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
-                            <stop offset="30%" stopColor="#2563eb" stopOpacity="0.9" />
-                            <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.95" />
+                        {/* Šviesesnis ir vizualiai malonesnis vandens gradientas */}
+                        <linearGradient id="waterDepth" x1="0" y1="0" x2="0" y2="500" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stopColor="#7dd3fc" stopOpacity="1" />
+                            <stop offset="30%" stopColor="#38bdf8" stopOpacity="1" />
+                            <stop offset="100%" stopColor="#2563eb" stopOpacity="1" />
                         </linearGradient>
 
-                        <linearGradient id="oilDepth" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#fde047" stopOpacity="0.85" />
-                            <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.95" />
+                        <linearGradient id="oilDepth" x1="0" y1="0" x2="0" y2="500" gradientUnits="userSpaceOnUse">
+                            <stop offset="0%" stopColor="#fde047" stopOpacity="1" />
+                            <stop offset="100%" stopColor="#ca8a04" stopOpacity="1" />
                         </linearGradient>
 
                         <linearGradient id="tubeHighlight" x1="0" y1="0" x2="1" y2="0">
@@ -444,7 +485,7 @@ export default function CommunicatingVesselsSimulation() {
                         <g className="tap-system">
                             {isTapOpen && (
                                 <g>
-                                    <rect x="152" y="80" width="16" height={Math.max(0, l1WaterY - 80)} fill="#38bdf8" opacity="0.8" />
+                                    <rect x="152" y="80" width="16" height={Math.max(0, l1WaterY - 80)} fill="url(#waterDepth)" opacity="0.9" />
                                     <line x1="160" y1="80" x2="160" y2={l1WaterY} stroke="rgba(255,255,255,0.8)" strokeWidth="4" strokeDasharray="10 10" className="animate-water" />
                                 </g>
                             )}
@@ -457,67 +498,116 @@ export default function CommunicatingVesselsSimulation() {
                         </g>
                     )}
 
-                    {/* Lygis 3: Laisvas fontanas iš uždaro indo */}
+                    {/* Lygis 3: Laisvas fontanas iš uždaro indo su tūrio mažėjimu ir drag and drop */}
                     {level === 3 && (
                         <g>
                             {/* Lankstaus vamzdelio kontūras (fonas) */}
                             <path
-                                d={`M 250 450 C 250 550, 550 ${550 - l3Offset}, 550 ${450 - l3Offset}`}
+                                d={`M 250 450 C 250 550, 550 ${550 - liftOffset}, 550 ${450 - liftOffset}`}
                                 fill="none" stroke="currentColor" strokeWidth="44"
                                 className="text-slate-400 dark:text-slate-600"
                             />
-                            {/* Lankstaus vamzdelio vidus (vanduo) */}
+                            {/* Lankstaus vamzdelio vidus */}
                             <path
-                                d={`M 250 450 C 250 550, 550 ${550 - l3Offset}, 550 ${450 - l3Offset}`}
+                                d={`M 250 450 C 250 550, 550 ${550 - liftOffset}, 550 ${450 - liftOffset}`}
                                 fill="none" stroke="url(#waterDepth)" strokeWidth="36"
                             />
 
                             {/* Kairysis (Stacionarus, žemas, su anga viršuje) */}
                             <g>
-                                <rect x="202" y={l3LeftWaterY} width="96" height={450 - l3LeftWaterY} fill="url(#waterDepth)" />
-                                {l3HL > 0 && <rect x="202" y={l3LeftWaterY} width="96" height="4" fill="rgba(255, 255, 255, 0.65)" />}
+                                <rect x="202" y={l3LeftWaterY} width="96" height={displayHL + 2} fill="url(#waterDepth)" />
 
-                                {/* Kairio indo kontūrai (Turi viršutinį stogą, palikta maža skylutė ties 250, taip pat apačioje skylė vamzdžiui) */}
-                                <path d="M 240 250 L 200 250 L 200 450 L 228 450" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
-                                <path d="M 272 450 L 300 450 L 300 250 L 260 250" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
+                                {/* Išmanus balto paviršiaus atvaizdavimas, prisitaikantis prie angos */}
+                                {l3HL > 0 && displayHL < 200 && (
+                                    <rect x="202" y={l3LeftWaterY} width="96" height="4" fill="rgba(255, 255, 255, 0.65)" />
+                                )}
+                                {displayHL >= 200 && (
+                                    <g fill="rgba(255, 255, 255, 0.65)">
+                                        <rect x="202" y="250" width="44" height="4" />
+                                        <rect x="254" y="250" width="44" height="4" />
+                                    </g>
+                                )}
+
+                                {/* Kairio indo kontūrai su SIAURESNE anga viduryje (X: 246 iki 254) */}
+                                <path d="M 246 250 L 200 250 L 200 450 L 228 450" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
+                                <path d="M 272 450 L 300 450 L 300 250 L 254 250" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
 
                                 {/* Stiklo atspindys */}
                                 <g fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="4" pointerEvents="none">
                                     <path d="M 206 250 L 206 444" />
                                 </g>
 
-                                {/* Fontano Animacija (Pasiekiama, kai spaudimas tampa per didelis) */}
-                                {l3FountainH > 0 && (
+                                {/* Fontano Animacija (Realistiškesnė) */}
+                                {l3FountainH > 0.05 && (
                                     <g strokeLinecap="round">
-                                        {/* Pagrindinė srovė į viršų */}
-                                        <line x1="250" y1="250" x2="250" y2={250 - l3JetHeight} stroke="url(#waterDepth)" strokeWidth="8" opacity="0.9" />
-                                        <line x1="250" y1="250" x2="250" y2={250 - l3JetHeight} stroke="rgba(255,255,255,0.5)" strokeWidth="4" />
+                                        {/* Pagrindinė srovė į viršų iš siauros angos, platesnė apačioje ir plonėjanti viršuje */}
+                                        <path d={`M 247 250 Q 250 ${250 - l3JetHeight * 0.5} 250 ${250 - l3JetHeight}`} fill="none" stroke="url(#waterDepth)" strokeWidth="5" opacity="0.9" />
+                                        <path d={`M 253 250 Q 250 ${250 - l3JetHeight * 0.5} 250 ${250 - l3JetHeight}`} fill="none" stroke="url(#waterDepth)" strokeWidth="5" opacity="0.9" />
+                                        <line x1="250" y1="250" x2="250" y2={250 - l3JetHeight} stroke="rgba(255,255,255,0.8)" strokeWidth="4" />
 
-                                        {/* Krintančios srovės lankai */}
-                                        <path d={`M 250 ${250 - l3JetHeight * 0.8} Q 220 ${250 - l3JetHeight * 1.2} 180 ${250 - l3JetHeight * 0.1}`} fill="none" stroke="#38bdf8" strokeWidth="3" strokeDasharray="4 4" className="animate-water" />
-                                        <path d={`M 250 ${250 - l3JetHeight * 0.8} Q 280 ${250 - l3JetHeight * 1.2} 320 ${250 - l3JetHeight * 0.1}`} fill="none" stroke="#38bdf8" strokeWidth="3" strokeDasharray="4 4" className="animate-water" />
+                                        {/* Pagrindo purslai (vidinė dalis) */}
+                                        <path d={`M 250 ${250 - l3JetHeight * 0.8} Q 235 ${250 - l3JetHeight * 1.05} 210 250`} fill="none" stroke="url(#waterDepth)" strokeWidth="3" strokeDasharray="3 5" className="animate-water" />
+                                        <path d={`M 250 ${250 - l3JetHeight * 0.8} Q 265 ${250 - l3JetHeight * 1.05} 290 250`} fill="none" stroke="url(#waterDepth)" strokeWidth="3" strokeDasharray="3 5" className="animate-water" />
+
+                                        {/* Platesni lankai, kad fontanas atrodytų vešlesnis */}
+                                        <path d={`M 250 ${250 - l3JetHeight * 0.95} Q 215 ${250 - l3JetHeight * 1.15} 190 250`} fill="none" stroke="url(#waterDepth)" strokeWidth="2.5" strokeDasharray="2 6" className="animate-water" />
+                                        <path d={`M 250 ${250 - l3JetHeight * 0.95} Q 285 ${250 - l3JetHeight * 1.15} 310 250`} fill="none" stroke="url(#waterDepth)" strokeWidth="2.5" strokeDasharray="2 6" className="animate-water" />
+
+                                        {/* Atsitiktiniai lašai su greita animacija */}
+                                        <line x1="250" y1="250" x2="250" y2={250 - l3JetHeight} stroke="rgba(255,255,255,0.5)" strokeWidth="8" strokeDasharray="4 14" className="animate-water" />
+                                        
+                                        {/* Vandens baseinėlis ant angos, kur kaupiasi ir krenta sugrįžtantis vanduo */}
+                                        <ellipse cx="250" cy="250" rx={Math.min(46, l3FountainH * 1.5)} ry="3" fill="rgba(255, 255, 255, 0.5)" />
                                     </g>
                                 )}
                             </g>
 
-                            {/* Dešinysis Indas (Kilnojamas) */}
-                            <g transform={`translate(0, ${-l3Offset})`}>
-                                <rect x="502" y={450 - l3HR} width="96" height={l3HR} fill="url(#waterDepth)" />
-                                {l3HR > 0 && <rect x="502" y={450 - l3HR} width="96" height="4" fill="rgba(255, 255, 255, 0.65)" />}
+                            {/* Dešinysis Indas (Kilnojamas pelės vilkimu, platesnis) */}
+                            <g transform={`translate(0, ${-liftOffset})`}>
+                                <rect x="452" y={450 - l3HR} width="246" height={l3HR + 2} fill="url(#waterDepth)" />
+                                {l3HR > 0 && <rect x="452" y={450 - l3HR} width="246" height="4" fill="rgba(255, 255, 255, 0.65)" />}
 
-                                {/* Dešiniojo indo kontūrai (Anga tik apačioje vamzdžiui) */}
-                                <path d="M 500 150 L 500 450 L 528 450" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
-                                <path d="M 572 450 L 600 450 L 600 150" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
+                                {/* Dešiniojo indo kontūrai (platesni) */}
+                                <path d="M 450 150 L 450 450 L 528 450" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
+                                <path d="M 572 450 L 700 450 L 700 150" fill="none" stroke="currentColor" strokeWidth="4" className="text-slate-400 dark:text-slate-600" strokeLinejoin="round" />
 
                                 {/* Stiklo atspindys */}
                                 <g fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="4" pointerEvents="none">
-                                    <path d="M 506 150 L 506 444" />
+                                    <path d="M 456 150 L 456 444" />
                                 </g>
+
+                                {/* Rodyklės (UI Hint), rodančios, kad indą galima traukti */}
+                                <g opacity={isDraggingL3 ? 0 : 0.6} className="pointer-events-none transition-opacity">
+                                    <path d="M 720 280 L 720 320 M 710 290 L 720 280 L 730 290 M 710 310 L 720 320 L 730 310" stroke="currentColor" strokeWidth="3" fill="none" className="text-muted-foreground" strokeLinecap="round" strokeLinejoin="round" />
+                                </g>
+
+                                {/* Nematoma interaktyvi sritis vilkimui */}
+                                <rect
+                                    x="430" y="100" width="290" height="400"
+                                    fill="transparent"
+                                    style={{ cursor: isDraggingL3 ? 'grabbing' : 'grab' }}
+                                    onPointerDown={(e) => {
+                                        e.currentTarget.setPointerCapture(e.pointerId);
+                                        setIsDraggingL3(true);
+                                        dragStart.current = { y: e.clientY, offset: liftOffset };
+                                    }}
+                                    onPointerMove={(e) => {
+                                        if (!isDraggingL3) return;
+                                        const deltaY = e.clientY - dragStart.current.y;
+                                        let newOffset = dragStart.current.offset - deltaY;
+                                        newOffset = Math.max(0, Math.min(200, newOffset));
+                                        setLiftOffset(newOffset);
+                                    }}
+                                    onPointerUp={(e) => {
+                                        e.currentTarget.releasePointerCapture(e.pointerId);
+                                        setIsDraggingL3(false);
+                                    }}
+                                />
                             </g>
                         </g>
                     )}
 
-                    {/* Level 4: U-vamzdelis (Buvęs 3 lygis) */}
+                    {/* Level 4: U-vamzdelis */}
                     {level === 4 && (
                         <g>
                             <g clipPath="url(#l4-clip)">
@@ -564,7 +654,7 @@ export default function CommunicatingVesselsSimulation() {
                         </g>
                     )}
 
-                    {/* Level 5: 3 Skirtingo dydžio rezervuarai (Buvęs 4 lygis) */}
+                    {/* Level 5: 3 Skirtingo dydžio rezervuarai */}
                     {level === 5 && (
                         <g>
                             <g>
