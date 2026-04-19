@@ -73,7 +73,7 @@ export function useLevel3(active: boolean): LevelReturn {
         controls: (
             <div className="flex items-center justify-center w-full">
                 <span className="text-sm font-medium text-muted-foreground bg-white/50 dark:bg-black/20 px-4 py-1.5 rounded-full border border-border/50 shadow-sm">
-                    👆 Tempkite dešinįjį indą su pelyte aukštyn ir žemyn
+                    👆 Tempkite dešinįjį indą aukštyn ir žemyn
                 </span>
             </div>
         ),
