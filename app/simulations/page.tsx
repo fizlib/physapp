@@ -16,12 +16,17 @@ import { SIMULATIONS as SIMULATION_DATA } from '@/lib/simulations';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
     'center-of-mass': <Target className="w-8 h-8 text-blue-500" />,
+    'communicating-vessels': <Waves className="w-8 h-8 text-cyan-500" />,
 };
 
 const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
     'center-of-mass': {
         gradient: 'from-blue-500/20 to-indigo-500/20',
         borderColor: 'group-hover:border-blue-500/50',
+    },
+    'communicating-vessels': {
+        gradient: 'from-cyan-500/20 to-blue-500/20',
+        borderColor: 'group-hover:border-cyan-500/50',
     },
 };
 

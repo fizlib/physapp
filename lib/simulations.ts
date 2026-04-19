@@ -14,5 +14,12 @@ export const SIMULATIONS: SimulationInfo[] = [
         description: 'Tyrinėkite masės pasiskirstymą ir jo įtaką objekto svorio centrui bei pusiausvyrai.',
         href: '/simulations/center-of-mass',
         available: true
+    },
+    {
+        id: 'communicating-vessels',
+        title: 'Susisiekiančiųjų indų dėsniai',
+        description: 'Tyrinėkite skysčių pusiausvyrą susisiekiančiuose induose, stebėkite paviršiaus horizontalumą ir skirtingų tankių skysčių balansą.',
+        href: '/simulations/communicating-vessels',
+        available: true
     }
 ]
