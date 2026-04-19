@@ -68,8 +68,8 @@ export function useLevel1(active: boolean): LevelReturn {
 
                 <g>
                     {/* Tikslo linija */}
-                    <line x1="80" y1="280" x2="720" y2="280" stroke="var(--destructive)" strokeWidth="2" strokeDasharray="8,8" opacity="0.6" />
-                    <text x="90" y="270" fill="var(--destructive)" fontSize="14" fontWeight="bold">Tikslas (50%)</text>
+                    <line x1="0" y1="280" x2="720" y2="280" stroke="var(--destructive)" strokeWidth="2" strokeDasharray="8,8" opacity="0.6" />
+                    <text x="2" y="270" fill="var(--destructive)" fontSize="14" fontWeight="bold">Tikslas (50%)</text>
 
                     <g clipPath="url(#vessels-clip)">
                         <rect
