@@ -179,7 +179,7 @@ export function TestInterface({
                                     mcqOption.trim().startsWith('<svg') ? (
                                         <div
                                             className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
-                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption) }}
+                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(mcqOption, `submitted_opt`) }}
                                         />
                                     ) : (
                                         <MathDisplay content={mcqOption} />
@@ -207,7 +207,7 @@ export function TestInterface({
                                         correctMcqOption.trim().startsWith('<svg') ? (
                                             <div
                                                 className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
-                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(correctMcqOption) }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(correctMcqOption, `correct_opt`) }}
                                             />
                                         ) : (
                                             <MathDisplay content={correctMcqOption} />
@@ -282,7 +282,7 @@ export function TestInterface({
                                         {opt.trim().startsWith('<svg') ? (
                                             <div
                                                 className="w-full max-h-[140px] py-1 flex items-center justify-start [&>svg]:max-w-full [&>svg]:max-h-[130px]"
-                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(opt) }}
+                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(opt, `mcq_opt_${i}`) }}
                                             />
                                         ) : (
                                             <MathDisplay content={opt} />

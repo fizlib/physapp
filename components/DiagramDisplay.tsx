@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from "react"
 import {
     Dialog,
     DialogContent,
@@ -19,9 +20,14 @@ interface DiagramDisplayProps {
 }
 
 export function DiagramDisplay({ diagramType, diagramSvg, diagramImageUrl }: DiagramDisplayProps) {
+    // useId() must be called unconditionally (before any early returns) per React hooks rules.
+    // It produces a stable, unique ID per component instance to prevent SVG ID collisions.
+    const reactId = useId()
+    const svgUid = reactId.replace(/[^a-zA-Z0-9]/g, '')
+
     if (!diagramImageUrl && !diagramSvg) return null
 
-    const sanitizedSvg = diagramSvg ? sanitizeSvg(diagramSvg) : null
+    const sanitizedSvg = diagramSvg ? sanitizeSvg(diagramSvg, svgUid) : null
     const title = diagramImageUrl ? 'Iliustracija' : (diagramType === 'graph' ? 'Grafikas' : 'Schema')
 
     return (

@@ -23,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Plus, PenSquare, Check, Trash2, BookOpen, Award, ChevronUp, ChevronDown, Upload, Sparkles, FileText } from "lucide-react"
 import { updateAssignmentWithQuestion, uploadIllustration, generateVariationsFromExercise, editExerciseSvgWithPrompt } from "../../../../actions"
 import { toast } from "sonner"
+import { sanitizeSvg } from "@/lib/svg-utils"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -105,26 +106,6 @@ const compressImage = async (file: File): Promise<Blob> => {
     });
 };
 
-function sanitizeSvg(svg: string): string {
-    let result = svg
-    result = result.replace(/&lt;/g, '<')
-    result = result.replace(/&gt;/g, '>')
-    result = result.replace(/&amp;/g, '&')
-    result = result.replace(/&quot;/g, '"')
-    result = result.replace(/&#39;/g, "'")
-    result = result.replace(/&#x27;/g, "'")
-    result = result.replace(/&#x2F;/g, '/')
-    result = result.replace(/\\n/g, '\n')
-    result = result.replace(/\\r/g, '')
-    result = result.trim()
-
-    // Add width and height to SVG if not present (needed for proper rendering)
-    if (result.includes('<svg') && !result.match(/<svg[^>]*\swidth\s*=/i)) {
-        result = result.replace(/<svg/i, '<svg width="100%" height="auto" style="max-height: 300px;"')
-    }
-
-    return result
-}
 
 const DEFAULT_QUESTION: QuestionData = {
     type: 'numerical',
@@ -1004,7 +985,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
                                                     <div className="border rounded-lg p-4 bg-white flex items-center justify-center min-h-[150px]">
                                                         {q.diagram_svg?.trim() ? (
                                                             <div
-                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!, `edit_q${index}`) }}
                                                                 className="w-full max-w-[300px]"
                                                             />
                                                         ) : (

@@ -17,6 +17,7 @@ import { generateExerciseFromImage, createAssignmentWithQuestion, uploadIllustra
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SIMULATIONS } from "@/lib/simulations"
+import { sanitizeSvg } from "@/lib/svg-utils"
 
 const GEMINI_MODELS = [
     { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
@@ -51,26 +52,6 @@ interface ExerciseData {
     theory_image_url?: string | null
 }
 
-function sanitizeSvg(svg: string): string {
-    let result = svg
-    result = result.replace(/&lt;/g, '<')
-    result = result.replace(/&gt;/g, '>')
-    result = result.replace(/&amp;/g, '&')
-    result = result.replace(/&quot;/g, '"')
-    result = result.replace(/&#39;/g, "'")
-    result = result.replace(/&#x27;/g, "'")
-    result = result.replace(/&#x2F;/g, '/')
-    result = result.replace(/\\n/g, '\n')
-    result = result.replace(/\\r/g, '')
-    result = result.trim()
-
-    // Add width and height to SVG if not present (needed for proper rendering)
-    if (result.includes('<svg') && !result.match(/<svg[^>]*\swidth\s*=/i)) {
-        result = result.replace(/<svg/i, '<svg width="100%" height="auto" style="max-height: 300px;"')
-    }
-
-    return result
-}
 
 const compressImage = async (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -1477,7 +1458,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                         {q.options?.[i]?.trim().startsWith('<svg') && (
                                                             <div
                                                                 className="absolute right-12 top-1/2 -translate-y-1/2 w-8 h-8 pointer-events-none opacity-50 bg-white border rounded p-0.5 overflow-hidden flex items-center justify-center scale-150 origin-right"
-                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.options[i]) }}
+                                                                dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.options[i], `create_opt_${index}_${i}`) }}
                                                             />
                                                         )}
                                                         <Button
@@ -1552,7 +1533,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                                         />
                                                     ) : q.diagram_svg?.trim() ? (
                                                         <div
-                                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!) }}
+                                                            dangerouslySetInnerHTML={{ __html: sanitizeSvg(q.diagram_svg!, `create_q${index}`) }}
                                                             className="w-full max-w-[300px]"
                                                         />
                                                     ) : (
