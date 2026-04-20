@@ -15,6 +15,8 @@ export function useLevel4(active: boolean): LevelReturn {
     const [v2Open, setV2Open] = useState(false);
     const [gate1Open, setGate1Open] = useState(false);
     const [gate2Open, setGate2Open] = useState(false);
+    const [shake1, setShake1] = useState(false);
+    const [shake2, setShake2] = useState(false);
 
     // Fizikos ir laivo judėjimo ciklas
     useEffect(() => {
@@ -66,6 +68,24 @@ export function useLevel4(active: boolean): LevelReturn {
     const disableG1 = !gate1Open && Math.abs(chamberLevel - 350) > 1;
     const disableG2 = !gate2Open && Math.abs(chamberLevel - 150) > 1;
 
+    const handleG1Click = () => {
+        if (disableG1) {
+            setShake1(true);
+            setTimeout(() => setShake1(false), 400); // clear after animation
+        } else {
+            setGate1Open(!gate1Open);
+        }
+    };
+
+    const handleG2Click = () => {
+        if (disableG2) {
+            setShake2(true);
+            setTimeout(() => setShake2(false), 400); // clear after animation
+        } else {
+            setGate2Open(!gate2Open);
+        }
+    };
+
     // Animacijų rodymo logika
     const isFlowing1 = v1Open && Math.abs(chamberLevel - 350) > 0.5;
     const isFlowing2 = v2Open && Math.abs(chamberLevel - 150) > 0.5;
@@ -86,6 +106,8 @@ export function useLevel4(active: boolean): LevelReturn {
             setV2Open(false);
             setGate1Open(false);
             setGate2Open(false);
+            setShake1(false);
+            setShake2(false);
         },
         description: (
             <p className="text-sm text-muted-foreground">
@@ -102,10 +124,10 @@ export function useLevel4(active: boolean): LevelReturn {
                         {v1Open ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Sklendė 1
                     </button>
                     <button
-                        onClick={() => !disableG1 && setGate1Open(!gate1Open)}
-                        disabled={disableG1}
-                        className={`px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all ${gate1Open ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/50' : 'bg-background'} ${disableG1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted hover:shadow-sm'}`}
+                        onClick={handleG1Click}
+                        className={`px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all ${gate1Open ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/50' : 'bg-background'} ${disableG1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted hover:shadow-sm'} ${shake1 ? 'animate-shake text-destructive' : ''}`}
                         title={disableG1 ? "Vandens lygiai nelygūs - vartų atidaryti negalima!" : ""}
+                        aria-disabled={disableG1}
                     >
                         Žemutiniai vartai
                     </button>
@@ -119,10 +141,10 @@ export function useLevel4(active: boolean): LevelReturn {
                         {v2Open ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />} Sklendė 2
                     </button>
                     <button
-                        onClick={() => !disableG2 && setGate2Open(!gate2Open)}
-                        disabled={disableG2}
-                        className={`px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all ${gate2Open ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/50' : 'bg-background'} ${disableG2 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted hover:shadow-sm'}`}
+                        onClick={handleG2Click}
+                        className={`px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-all ${gate2Open ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/50' : 'bg-background'} ${disableG2 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted hover:shadow-sm'} ${shake2 ? 'animate-shake text-destructive' : ''}`}
                         title={disableG2 ? "Vandens lygiai nelygūs - vartų atidaryti negalima!" : ""}
+                        aria-disabled={disableG2}
                     >
                         Aukštutiniai vartai
                     </button>
@@ -167,11 +189,27 @@ export function useLevel4(active: boolean): LevelReturn {
                 </g>
 
                 {/* Vartai (piešiami po vandens, todėl dengia vandens persidengimus) */}
-                <rect x="240" y={gate1Open ? -60 : 140} width="10" height="310" fill="#334155" style={{ transition: 'y 1s ease-in-out' }} />
-                <rect x="235" y={gate1Open ? -60 : 140} width="20" height="10" fill="#1e293b" style={{ transition: 'y 1s ease-in-out' }} />
+                <g 
+                    cursor={disableG1 ? "not-allowed" : "pointer"} 
+                    onClick={handleG1Click}
+                    className={`${shake1 ? "animate-shake" : ""} ${!disableG1 ? "hover:opacity-80 transition-opacity" : ""}`}
+                >
+                    <title>{disableG1 ? "Vandens lygiai nelygūs - vartų atidaryti negalima!" : "Žemutiniai vartai"}</title>
+                    <rect x="240" y={gate1Open ? -60 : 140} width="10" height="310" fill="#334155" style={{ transition: 'y 1s ease-in-out' }} />
+                    <rect x="235" y={gate1Open ? -60 : 140} width="20" height="10" fill="#1e293b" style={{ transition: 'y 1s ease-in-out' }} />
+                    <rect x="220" y={gate1Open ? -60 : 140} width="50" height="310" fill="transparent" />
+                </g>
 
-                <rect x="540" y={gate2Open ? -310 : 140} width="10" height="410" fill="#334155" style={{ transition: 'y 1.5s ease-in-out' }} />
-                <rect x="535" y={gate2Open ? -310 : 140} width="20" height="10" fill="#1e293b" style={{ transition: 'y 1.5s ease-in-out' }} />
+                <g 
+                    cursor={disableG2 ? "not-allowed" : "pointer"} 
+                    onClick={handleG2Click}
+                    className={`${shake2 ? "animate-shake" : ""} ${!disableG2 ? "hover:opacity-80 transition-opacity" : ""}`}
+                >
+                    <title>{disableG2 ? "Vandens lygiai nelygūs - vartų atidaryti negalima!" : "Aukštutiniai vartai"}</title>
+                    <rect x="540" y={gate2Open ? -310 : 140} width="10" height="410" fill="#334155" style={{ transition: 'y 1.5s ease-in-out' }} />
+                    <rect x="535" y={gate2Open ? -310 : 140} width="20" height="10" fill="#1e293b" style={{ transition: 'y 1.5s ease-in-out' }} />
+                    <rect x="520" y={gate2Open ? -310 : 140} width="50" height="410" fill="transparent" />
+                </g>
 
                 {/* Vartų stulpai */}
                 <path d="M 230,140 L 260,140 L 255,20 L 235,20 Z" fill="#94a3b8" opacity="0.8" />
