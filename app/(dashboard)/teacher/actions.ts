@@ -2648,7 +2648,10 @@ export async function importCollection(targetClassroomId: string, sourceCollecti
                         show_all_questions: sourceAss.show_all_questions,
                         required_variations_count: sourceAss.required_variations_count,
                         points_enabled: sourceAss.points_enabled,
-                        points: sourceAss.points
+                        points: sourceAss.points,
+                        simulation_url: sourceAss.simulation_url || null,
+                        theory_content: sourceAss.theory_content || null,
+                        theory_image_url: sourceAss.theory_image_url || null
                     })
                     .select()
                     .single()

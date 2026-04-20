@@ -17,11 +17,10 @@ import { useLevel1 } from './components/Level1';
 import { useLevel2 } from './components/Level2';
 import { useLevel3 } from './components/Level3';
 import { useLevel4 } from './components/Level4';
-import { useLevel5 } from './components/Level5';
 
 const SVG_WIDTH = 800;
 const SVG_HEIGHT = 600;
-const MAX_LEVEL = 5;
+const MAX_LEVEL = 4;
 
 export default function CommunicatingVesselsSimulation() {
     const [level, setLevel] = useState(1);
@@ -35,9 +34,8 @@ export default function CommunicatingVesselsSimulation() {
     const l2 = useLevel2(level === 2);
     const l3 = useLevel3(level === 3);
     const l4 = useLevel4(level === 4);
-    const l5 = useLevel5(level === 5);
 
-    const levels = useMemo(() => [l1, l2, l3, l4, l5], [l1, l2, l3, l4, l5]);
+    const levels = useMemo(() => [l1, l2, l3, l4], [l1, l2, l3, l4]);
     const current = levels[level - 1];
 
     useEffect(() => {
