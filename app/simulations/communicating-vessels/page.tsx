@@ -201,7 +201,7 @@ export default function CommunicatingVesselsSimulation() {
                             Simuliacija baigta!
                         </DialogTitle>
                         <DialogDescription className="text-base pt-2">
-                            Puikiai padirbėta! Sėkmingai išnagrinėjote susisiekiančiųjų indų savybes skirtingose situacijose, atradote skysčių paviršiaus horizontalumo ir nevienodų tankių balansavimo principus.
+                            Puikiai padirbėta! Sėkmingai išnagrinėjote susisiekiančiųjų indų savybes skirtingose situacijose.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4 text-muted-foreground">

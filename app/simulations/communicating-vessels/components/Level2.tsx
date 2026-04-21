@@ -31,7 +31,7 @@ export function useLevel2(active: boolean): LevelReturn {
         },
         description: (
             <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">2 lygis:</span> Pakreipkite indų sistemą į kairę ir į dešinę (&gt;20°). Stebėkite skysčio paviršiaus horizontalumą nepriklausomai nuo indo formos.
+                <span className="font-semibold text-foreground">2 lygis:</span> Pakreipkite indų sistemą į kairę ir į dešinę (&gt;20°). Stebėkite vienodą skysčio lygį nepriklausomai nuo indo padėties.
             </p>
         ),
         controls: (
