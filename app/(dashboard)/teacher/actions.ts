@@ -44,6 +44,12 @@ const SubmitTeacherManualPointsAnswerSchema = z.object({
     isCorrect: z.boolean(),
 })
 
+const AddBonusPointsSchema = z.object({
+    classroomId: z.string().uuid(),
+    amount: z.number().int().min(1),
+    studentIds: z.array(z.string().uuid()).min(1),
+})
+
 import { getClientIp } from '@/lib/ip'
 
 export async function createClassroom(formData: FormData) {
@@ -3663,36 +3669,40 @@ export async function getExerciseSubmissions(
     }
 }
 
-export async function addBonusPointsToAll(
+export async function addBonusPointsToStudents(
     classroomId: string,
-    amount: number
+    amount: number,
+    studentIds: string[]
 ): Promise<ActionState> {
+    const validated = AddBonusPointsSchema.safeParse({ classroomId, amount, studentIds })
+    if (!validated.success) {
+        return { success: false, error: "Invalid bonus points request" }
+    }
+
+    const selectedStudentIds = [...new Set(validated.data.studentIds)]
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    if (!Number.isFinite(amount) || amount < 1) {
-        return { success: false, error: "Amount must be at least 1" }
-    }
-
     // Verify teacher owns the classroom
     const { data: classroom } = await supabase
         .from('classrooms')
         .select('teacher_id')
-        .eq('id', classroomId)
+        .eq('id', validated.data.classroomId)
         .single()
 
     if (!classroom || classroom.teacher_id !== user.id) {
         return { success: false, error: "Unauthorized to manage this classroom" }
     }
 
-    // Fetch current enrollments, increment bonus_points
+    // Fetch selected enrollments, then increment bonus_points
     const supabaseAdmin = createAdminClient()
     const { data: enrollments, error: fetchError } = await supabaseAdmin
         .from('enrollments')
-        .select('id, bonus_points')
-        .eq('classroom_id', classroomId)
+        .select('id, student_id, bonus_points')
+        .eq('classroom_id', validated.data.classroomId)
+        .in('student_id', selectedStudentIds)
 
     if (fetchError) {
         console.error(fetchError)
@@ -3700,13 +3710,18 @@ export async function addBonusPointsToAll(
     }
 
     if (!enrollments || enrollments.length === 0) {
-        return { success: false, error: "No students enrolled in this classroom" }
+        return { success: false, error: "No selected students are enrolled in this classroom" }
+    }
+
+    const enrolledStudentIds = new Set(enrollments.map((enrollment) => enrollment.student_id))
+    if (selectedStudentIds.some((studentId) => !enrolledStudentIds.has(studentId))) {
+        return { success: false, error: "One or more selected students are not enrolled in this classroom" }
     }
 
     // Update each enrollment's bonus_points
     const updates = enrollments.map((enrollment) => ({
         id: enrollment.id,
-        bonus_points: (enrollment.bonus_points || 0) + amount
+        bonus_points: (enrollment.bonus_points || 0) + validated.data.amount
     }))
 
     for (const update of updates) {
@@ -3721,8 +3736,16 @@ export async function addBonusPointsToAll(
         }
     }
 
-    revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath(`/teacher/class/${validated.data.classroomId}`)
     return { success: true }
+}
+
+export async function addBonusPointsToAll(
+    classroomId: string,
+    amount: number
+): Promise<ActionState> {
+    const students = await getClassroomStudents(classroomId)
+    return addBonusPointsToStudents(classroomId, amount, students.map((student) => student.id))
 }
 
 export async function getClassroomStudents(classroomId: string) {
