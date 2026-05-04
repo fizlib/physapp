@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Clock, Layers, CheckCircle2, Lock, ShieldAlert } from "lucide-react"
+import { ArrowLeft, Layers, CheckCircle2, ShieldAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { getClientIp } from "@/lib/ip"
 import { FileText } from "lucide-react"
@@ -36,7 +36,6 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 category,
                 created_at,
                 scheduled_date,
-                scheduled_end_at,
                 slides_url,
                 theory_content,
                 info_content,
@@ -48,7 +47,6 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                 )
             `)
             .eq('classroom_id', id)
-            .or(`scheduled_date.is.null,scheduled_date.lte.${nowIso}`)
             .order('created_at', { ascending: false }),
         createAdminClient()
             .from('ip_bypasses')
@@ -169,12 +167,11 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                             {collections.filter((c: any) => c.category === 'classwork').map((collection: any) => {
                                                 const hasBypass = activeBypasses?.some((b: any) => b.collection_id === collection.id)
                                                 const isRestrictedByIp = isIpRestricted && !hasBypass
-                                                const isTimeUp = collection.scheduled_end_at && new Date() > new Date(collection.scheduled_end_at)
-                                                const isLocked = isRestrictedByIp || isTimeUp
+                                                const displayDate = collection.scheduled_date || collection.created_at
 
                                                 return (
-                                                    <Card key={collection.id} className={`group relative transition-all bg-secondary/10 ${isLocked ? 'opacity-75 cursor-not-allowed' : 'cursor-pointer hover:border-primary/50'}`}>
-                                                        {!isLocked && (
+                                                    <Card key={collection.id} className={`group relative transition-all bg-secondary/10 ${isRestrictedByIp ? 'opacity-75 cursor-not-allowed' : 'cursor-pointer hover:border-primary/50'}`}>
+                                                        {!isRestrictedByIp && (
                                                             <Link
                                                                 href={`/student/class/${id}/collection/${collection.id}`}
                                                                 aria-label={`Open collection: ${collection.title}`}
@@ -186,26 +183,11 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 <div className="space-y-1.5 flex-1 pr-4">
                                                                     <div className="flex items-center gap-2">
                                                                         <h3 className="font-semibold leading-none">{collection.title}</h3>
-                                                                        {isLocked && <Lock className="h-3 w-3 text-red-500" />}
                                                                     </div>
-                                                                    <div className="text-xs text-muted-foreground flex flex-col gap-1">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span>{totalAssignmentCounts.get(collection.id) || 0} Užduotys</span>
-                                                                            <span>•</span>
-                                                                            <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
-                                                                        </div>
-                                                                        {collection.scheduled_date && (
-                                                                            <div className="flex items-center gap-1.5 text-primary">
-                                                                                <Clock className="h-3 w-3" />
-                                                                                <span>
-                                                                                    {new Date(collection.scheduled_date).toLocaleDateString('lt-LT', { weekday: 'short', month: 'short', day: 'numeric' })}
-                                                                                    {" "}{new Date(collection.scheduled_date).toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' })}
-                                                                                    {collection.scheduled_end_at && (
-                                                                                        <> - {new Date(collection.scheduled_end_at).toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' })}</>
-                                                                                    )}
-                                                                                </span>
-                                                                            </div>
-                                                                        )}
+                                                                    <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                                                        <span>{totalAssignmentCounts.get(collection.id) || 0} Užduotys</span>
+                                                                        <span>•</span>
+                                                                        <span>Paskelbta {new Date(displayDate).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
                                                                     </div>
                                                                 </div>
                                                                 <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">Darbas klasėje</span>
@@ -230,7 +212,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                 </div>
                                                             </div>
 
-                                                            {/* Lock messages */}
+                                                            {/* IP restriction message */}
                                                             {isRestrictedByIp && (
                                                                 <div className="flex items-center gap-2 text-red-600 bg-red-50/50 px-3 py-2 rounded-md border border-red-100/50">
                                                                     <ShieldAlert className="h-3.5 w-3.5" />
@@ -270,7 +252,7 @@ export default async function StudentClassroomPage({ params }: { params: Promise
                                                                     <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                                                                         <span>{collection.assignments?.length || 0} Užduotys</span>
                                                                         <span>•</span>
-                                                                        <span>Paskelbta {new Date(collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
+                                                                        <span>Paskelbta {new Date(collection.scheduled_date || collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}</span>
                                                                     </div>
                                                                 </div>
                                                                 <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full shrink-0">Namų darbai</span>

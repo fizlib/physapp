@@ -395,13 +395,9 @@ export default async function StudentCollectionPage({ params }: { params: Promis
         studentIp !== classroom.allowed_ip &&
         !bypass
 
-    const isTimeUp = collection.category === 'classwork' &&
-        collection.scheduled_end_at &&
-        new Date() > new Date(collection.scheduled_end_at)
-
     const isTabBlocked = !!tabViolationResult.data
 
-    // For IP restriction and time-up: render static block pages (no polling needed)
+    // For IP restriction: render static block page (no polling needed)
     // For tab blocking: pass to client component so it can poll for unblock
 
     if (isRestricted) {
@@ -423,30 +419,6 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                         <Link href={`/student/class/${id}`}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Back to Classroom
-                        </Link>
-                    </Button>
-                </div>
-            </div>
-        )
-    }
-
-    if (isTimeUp) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
-                    <div className="mx-auto w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
-                        <Lock className="h-10 w-10 text-amber-600" />
-                    </div>
-                    <div className="space-y-2">
-                        <h1 className="text-2xl font-bold tracking-tight">Pamokos laikas baigėsi</h1>
-                        <p className="text-muted-foreground">
-                            Pamokos laikas baigėsi.
-                        </p>
-                    </div>
-                    <Button asChild variant="outline" className="w-full">
-                        <Link href={`/student/class/${id}`}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Grįžti į klasę
                         </Link>
                     </Button>
                 </div>

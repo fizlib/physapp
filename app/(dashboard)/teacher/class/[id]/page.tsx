@@ -302,19 +302,9 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                                     ? `${collection.assignments.length} Exercise(s)`
                                                                     : "Empty collection"}
                                                             </div>
-                                                            {collection.scheduled_date ? (
-                                                                <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded pointer-events-none">
-                                                                    📅 {new Date(collection.scheduled_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                                                                    {" "}{new Date(collection.scheduled_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                                                                    {collection.scheduled_end_at && (
-                                                                        <> - {new Date(collection.scheduled_end_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</>
-                                                                    )}
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
-                                                                    Created {new Date(collection.created_at).toLocaleDateString()}
-                                                                </div>
-                                                            )}
+                                                            <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
+                                                                    Paskelbta {new Date(collection.scheduled_date || collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}
+                                                            </div>
                                                             <div className="relative z-10 pointer-events-auto pt-1">
                                                                 <TabMonitoringToggle
                                                                     classroomId={id}
@@ -358,7 +348,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                                     : "Empty collection"}
                                                             </div>
                                                             <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
-                                                                Created {new Date(collection.created_at).toLocaleDateString()}
+                                                                Paskelbta {new Date(collection.scheduled_date || collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}
                                                             </div>
                                                         </CardContent>
                                                     </Card>
@@ -396,7 +386,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                                     : "No content yet"}
                                                             </div>
                                                             <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
-                                                                Created {new Date(collection.created_at).toLocaleDateString()}
+                                                                Paskelbta {new Date(collection.scheduled_date || collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}
                                                             </div>
                                                         </CardContent>
                                                     </Card>
@@ -434,7 +424,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                                                             : "Empty collection"}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground pt-2 pointer-events-none">
-                                                        Created {new Date(collection.created_at).toLocaleDateString()}
+                                                        Paskelbta {new Date(collection.scheduled_date || collection.created_at).toLocaleDateString('lt-LT', { month: 'short', day: 'numeric' })}
                                                     </div>
                                                 </CardContent>
                                             </Card>

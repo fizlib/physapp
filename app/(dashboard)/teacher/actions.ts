@@ -1246,7 +1246,7 @@ export async function updateCollection(classroomId: string, collectionId: string
         title: title,
         category: category,
         scheduled_date: category === 'information' ? null : (scheduledDate || null),
-        scheduled_end_at: category === 'information' ? null : (scheduledEndDate || null),
+        scheduled_end_at: null, // Time-based locking removed; always clear end time
         info_content: category === 'information' ? (infoContent || null) : null,
         info_button_color: category === 'information' ? (infoButtonColor || 'neutral') : null,
         info_pdf_url: category === 'information' ? (infoPdfUrl !== undefined ? (infoPdfUrl || null) : undefined) : null

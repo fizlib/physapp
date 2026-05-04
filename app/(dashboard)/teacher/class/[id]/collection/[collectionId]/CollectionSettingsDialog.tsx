@@ -18,7 +18,7 @@ import { Settings, Loader2, Trash2, AlertTriangle, Check, FileText, Upload, X, L
 import { updateCollection, deleteCollection, uploadCollectionSlides, listCollectionSlides } from "../../../../actions"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { LessonCalendar } from "@/components/teacher/LessonCalendar"
+
 import { MarkdownEditor } from "@/components/ui/markdown-editor"
 
 interface LessonSlot {
@@ -71,10 +71,8 @@ export function CollectionSettingsDialog({
     const [infoPdfUrl, setInfoPdfUrl] = useState<string | null>(currentInfoPdfUrl || null)
     const [uploadingInfoPdf, setUploadingInfoPdf] = useState(false)
 
-    // Calendar state
-    const [selectedDate, setSelectedDate] = useState<Date | null>(currentScheduledDate ? new Date(currentScheduledDate) : null)
-    const [selectedTime, setSelectedTime] = useState<string>("")
-    const [selectedEndTime, setSelectedEndTime] = useState<string>("")
+    // Lesson date state (simple date, no time)
+    const [lessonDate, setLessonDate] = useState<string>(currentScheduledDate ? new Date(currentScheduledDate).toISOString().split('T')[0] : '')
     const [slidesUrl, setSlidesUrl] = useState<string | null>(currentSlidesUrl || null)
     const [uploading, setUploading] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
@@ -82,7 +80,6 @@ export function CollectionSettingsDialog({
     const [libraryFiles, setLibraryFiles] = useState<{ name: string, url: string }[]>([])
     const [fetchingLibrary, setFetchingLibrary] = useState(false)
     const [deleteExercises, setDeleteExercises] = useState(false)
-    const [useScheduling, setUseScheduling] = useState(!!currentScheduledDate)
     const [tabMonitoringEnabled, setTabMonitoringEnabled] = useState(!!currentTabMonitoringEnabled)
     const [autoDisableTabMonitoring, setAutoDisableTabMonitoring] = useState(currentAutoDisableTabMonitoring !== false)
 
@@ -92,32 +89,7 @@ export function CollectionSettingsDialog({
         if (open) {
             setTitle(currentTitle)
             setCategory(currentCategory)
-            if (currentScheduledDate) {
-                const date = new Date(currentScheduledDate)
-                setSelectedDate(date)
-                const hours = date.getHours().toString().padStart(2, '0')
-                const minutes = date.getMinutes().toString().padStart(2, '0')
-                setSelectedTime(`${hours}:${minutes}`)
-
-                if (currentScheduledEndAt) {
-                    const endDate = new Date(currentScheduledEndAt)
-                    const endHours = endDate.getHours().toString().padStart(2, '0')
-                    const endMinutes = endDate.getMinutes().toString().padStart(2, '0')
-                    setSelectedEndTime(`${endHours}:${endMinutes}`)
-                } else {
-                    // Default to +45 mins
-                    const defaultEnd = new Date(date)
-                    defaultEnd.setMinutes(defaultEnd.getMinutes() + 45)
-                    const endHours = defaultEnd.getHours().toString().padStart(2, '0')
-                    const endMinutes = defaultEnd.getMinutes().toString().padStart(2, '0')
-                    setSelectedEndTime(`${endHours}:${endMinutes}`)
-                }
-            } else {
-                setSelectedDate(null)
-                setSelectedTime("")
-                setSelectedEndTime("")
-            }
-            setUseScheduling(!!currentScheduledDate)
+            setLessonDate(currentScheduledDate ? new Date(currentScheduledDate).toISOString().split('T')[0] : '')
             setSlidesUrl(currentSlidesUrl || null)
             setInfoContent(currentInfoContent || "")
             setInfoButtonColor(currentInfoButtonColor || 'neutral')
@@ -126,29 +98,19 @@ export function CollectionSettingsDialog({
             setTabMonitoringEnabled(!!currentTabMonitoringEnabled)
             setAutoDisableTabMonitoring(currentAutoDisableTabMonitoring !== false)
         }
-    }, [open, currentTitle, currentCategory, currentScheduledDate, currentScheduledEndAt, currentSlidesUrl, currentTabMonitoringEnabled, currentAutoDisableTabMonitoring])
+    }, [open, currentTitle, currentCategory, currentScheduledDate, currentSlidesUrl, currentTabMonitoringEnabled, currentAutoDisableTabMonitoring])
 
     const handleSave = async () => {
         setLoading(true)
         try {
-            // Build scheduled date if classwork with schedule selected
+            // Build scheduled date from the lesson date (date only, no time)
             let scheduledDate: string | undefined
-            let scheduledEndDate: string | undefined
-            if (category === 'classwork' && useScheduling && selectedDate && selectedTime) {
-                const [hours, minutes] = selectedTime.split(':').map(Number)
-                const dateWithTime = new Date(selectedDate)
-                dateWithTime.setHours(hours, minutes, 0, 0)
-                scheduledDate = dateWithTime.toISOString()
-
-                if (selectedEndTime) {
-                    const [endHours, endMinutes] = selectedEndTime.split(':').map(Number)
-                    const endDateWithTime = new Date(selectedDate)
-                    endDateWithTime.setHours(endHours, endMinutes, 0, 0)
-                    scheduledEndDate = endDateWithTime.toISOString()
-                }
+            if (category !== 'information' && lessonDate) {
+                // Store as ISO string at midnight
+                scheduledDate = new Date(lessonDate + 'T00:00:00').toISOString()
             }
 
-            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, scheduledEndDate, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined, category !== 'information' ? theoryContent : undefined, category === 'information' ? infoPdfUrl : undefined)
+            const result = await updateCollection(classroomId, collectionId, title, category, scheduledDate, slidesUrl, undefined, tabMonitoringEnabled, autoDisableTabMonitoring, category === 'information' ? infoContent : undefined, category === 'information' ? infoButtonColor : undefined, category !== 'information' ? theoryContent : undefined, category === 'information' ? infoPdfUrl : undefined)
             if (result.success) {
                 toast.success("Collection settings updated")
                 setOpen(false)
@@ -191,14 +153,8 @@ export function CollectionSettingsDialog({
         setFetchingLibrary(false)
     }
 
-    const showCalendar = category === 'classwork'
     const hasChanges = title !== currentTitle || category !== currentCategory || slidesUrl !== (currentSlidesUrl || null)
-        || useScheduling !== (!!currentScheduledDate)
-        || (category === 'classwork' && useScheduling &&
-            ((selectedDate?.toISOString() !== (currentScheduledDate ? new Date(currentScheduledDate).toISOString() : undefined))
-                || (selectedTime !== (currentScheduledDate ? new Date(currentScheduledDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
-                || (selectedEndTime !== (currentScheduledEndAt ? new Date(currentScheduledEndAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ""))
-            ))
+        || lessonDate !== (currentScheduledDate ? new Date(currentScheduledDate).toISOString().split('T')[0] : '')
         || tabMonitoringEnabled !== !!currentTabMonitoringEnabled
         || autoDisableTabMonitoring !== (currentAutoDisableTabMonitoring !== false)
         || infoButtonColor !== (currentInfoButtonColor || 'neutral')
@@ -214,7 +170,7 @@ export function CollectionSettingsDialog({
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className={`${showCalendar ? 'sm:max-w-xl' : 'sm:max-w-md'} max-h-[90vh] overflow-y-auto`}>
+            <DialogContent className={`sm:max-w-md max-h-[90vh] overflow-y-auto`}>
                 <DialogHeader>
                     <DialogTitle>Collection Settings</DialogTitle>
                     <DialogDescription>
@@ -512,59 +468,18 @@ export function CollectionSettingsDialog({
                     </div>
 
                     <div className="h-px bg-border" />
-                    {category === 'classwork' && (
-                        <div className="space-y-4 pt-2 border-t text-sm">
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="enable-scheduling"
-                                    checked={useScheduling}
-                                    onCheckedChange={(checked) => setUseScheduling(!!checked)}
-                                />
-                                <Label htmlFor="enable-scheduling" className="font-medium cursor-pointer">
-                                    Nustatyti pamokos laiką
-                                </Label>
-                            </div>
-
-                            {useScheduling && (
-                                <div className="space-y-3 pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    <LessonCalendar
-                                        lessonSchedule={lessonSchedule}
-                                        initialDate={selectedDate}
-                                        initialTime={selectedTime}
-                                        onSelect={(date, time) => {
-                                            setSelectedDate(date)
-                                            setSelectedTime(time)
-                                            if (time) {
-                                                const [h, m] = time.split(':').map(Number)
-                                                const d = new Date()
-                                                d.setHours(h, m, 0, 0)
-                                                d.setMinutes(d.getMinutes() + 45)
-                                                const eh = d.getHours().toString().padStart(2, '0')
-                                                const em = d.getMinutes().toString().padStart(2, '0')
-                                                setSelectedEndTime(`${eh}:${em}`)
-                                            }
-                                        }}
-                                    />
-
-                                    {selectedDate && selectedTime && (
-                                        <div className="space-y-3 pt-4 border-t">
-                                            <Label htmlFor="lesson-end-time" className="text-sm font-medium">Lesson Ends At</Label>
-                                            <div className="flex items-center gap-3">
-                                                <Input
-                                                    id="lesson-end-time"
-                                                    type="time"
-                                                    value={selectedEndTime}
-                                                    onChange={(e) => setSelectedEndTime(e.target.value)}
-                                                    className="w-32"
-                                                />
-                                                <span className="text-xs text-muted-foreground">
-                                                    Students will be locked out after this time.
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                    {category !== 'information' && (
+                        <div className="space-y-3 pt-2 border-t text-sm">
+                            <Label htmlFor="lesson-date" className="font-medium">Pamokos data</Label>
+                            <Input
+                                id="lesson-date"
+                                type="date"
+                                value={lessonDate}
+                                onChange={(e) => setLessonDate(e.target.value)}
+                                disabled={loading}
+                                className="w-44"
+                            />
+                            <p className="text-xs text-muted-foreground">Ši data bus rodoma mokiniams ir mokytojams.</p>
                         </div>
                     )}
 

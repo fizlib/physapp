@@ -146,7 +146,6 @@ export function CollectionPlayer({
     const [maxReachedIndex, setMaxReachedIndex] = useState(initialMaxReached) // For homework sequential unlock
     const [isCompleted, setIsCompleted] = useState(allDone)
     const [restrictionData, setRestrictionData] = useState<{ isRestricted: boolean, studentIp?: string }>({ isRestricted: false })
-    const [isTimeUp, setIsTimeUp] = useState(false)
     const [isWaitingForUnlock, setIsWaitingForUnlock] = useState(false)
     const [waitingForAssignmentId, setWaitingForAssignmentId] = useState<string | null>(null)
     const { width, height } = useWindowSize()
@@ -343,18 +342,11 @@ export function CollectionPlayer({
     }
 
     const handleAssignmentFinish = async () => {
-        // Double check IP and Time before moving to next assignment
+        // Double check IP before moving to next assignment
         const result = await checkIpAccess(classroomId, collection.category, collection.id)
         if (result.isRestricted) {
             setRestrictionData(result)
             return
-        }
-
-        if (collection.category === 'classwork' && collection.scheduled_end_at) {
-            if (new Date() > new Date(collection.scheduled_end_at)) {
-                setIsTimeUp(true)
-                return
-            }
         }
 
         // For homework: update maxReachedIndex when completing an exercise
@@ -392,9 +384,7 @@ export function CollectionPlayer({
 
     // Periodic check effect (IP, Time, and Test Mode)
     useEffect(() => {
-        if (isCompleted || collection.category !== 'classwork') return
-        // If there's nothing server-side to check AND no scheduled end time, skip entirely
-        if (!needsServerPolling && !collection.scheduled_end_at) return
+        if (!needsServerPolling) return
 
         let cancelled = false
         let timeout: ReturnType<typeof setTimeout> | null = null
@@ -403,16 +393,6 @@ export function CollectionPlayer({
         const JITTER_MS = 4000
 
         const check = async () => {
-            // Time Check (local, no server round-trip needed)
-            if (collection.scheduled_end_at) {
-                const now = new Date()
-                const end = new Date(collection.scheduled_end_at)
-                if (now > end) {
-                    setIsTimeUp(true)
-                    return
-                }
-            }
-
             // Skip server call when tab is hidden or when there's nothing server-side to check
             if (!needsServerPolling || document.hidden) {
                 if (!cancelled) {
@@ -491,7 +471,7 @@ export function CollectionPlayer({
             cancelled = true
             if (timeout) clearTimeout(timeout)
         }
-    }, [classroomId, collection.category, isCompleted, collection.scheduled_end_at, collection.id, isTestModeActive, testModePollingEnabled, needsServerPolling])
+    }, [classroomId, collection.category, isCompleted, collection.id, isTestModeActive, testModePollingEnabled, needsServerPolling])
 
     // Fast lightweight test-status poller — only runs when test is NOT active.
     // Uses a minimal API endpoint that responds quickly even on Vercel cold starts.
@@ -696,29 +676,7 @@ export function CollectionPlayer({
         )
     }
 
-    if (isTimeUp) {
-        return (
-            <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-                <div className="max-w-md w-full text-center space-y-6 animate-in fade-in zoom-in duration-300">
-                    <div className="mx-auto w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center">
-                        <Lock className="h-10 w-10 text-amber-600" />
-                    </div>
-                    <div className="space-y-2">
-                        <h1 className="text-2xl font-bold tracking-tight">Pamokos laikas baigėsi</h1>
-                        <p className="text-muted-foreground">
-                            Jūsų pateikti atsakymai išsaugoti.
-                        </p>
-                    </div>
-                    <Button asChild variant="outline" className="w-full">
-                        <Link href={`/student/class/${classroomId}`}>
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Grįžti į klasę
-                        </Link>
-                    </Button>
-                </div>
-            </div>
-        )
-    }
+
 
     if (tabBlocked) {
         return (
