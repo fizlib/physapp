@@ -1678,16 +1678,23 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
         }
     })
 
-    // Add bonus points from enrollment
+    // Add bonus points from enrollment and check cheater flag
     const { data: enrollment } = await supabaseAdmin
         .from('enrollments')
-        .select('bonus_points')
+        .select('bonus_points, is_cheater')
         .eq('classroom_id', classroomId)
         .eq('student_id', studentId)
         .maybeSingle()
 
     const bonusPoints = enrollment?.bonus_points || 0
-    classroomEarnedPoints += bonusPoints
+    const isCheater = !!enrollment?.is_cheater
+
+    // If cheater-flagged, zero out exercise points but keep bonus
+    if (isCheater) {
+        classroomEarnedPoints = bonusPoints
+    } else {
+        classroomEarnedPoints += bonusPoints
+    }
 
     return {
         collections: collectionsWithProgress,
@@ -1745,17 +1752,19 @@ export async function getBulkStudentPoints(
 
     const supabaseAdmin = createAdminClient()
 
-    // Fetch bonus points for all students in one query
+    // Fetch bonus points and cheater flag for all students in one query
     const { data: enrollmentData } = await supabaseAdmin
         .from('enrollments')
-        .select('student_id, bonus_points')
+        .select('student_id, bonus_points, is_cheater')
         .eq('classroom_id', classroomId)
         .in('student_id', studentIds)
 
     const bonusByStudent = new Map<string, number>()
+    const cheaterSet = new Set<string>()
     if (enrollmentData) {
         for (const e of enrollmentData) {
             bonusByStudent.set(e.student_id as string, e.bonus_points || 0)
+            if (e.is_cheater) cheaterSet.add(e.student_id as string)
         }
     }
 
@@ -1791,12 +1800,13 @@ export async function getBulkStudentPoints(
         })
     )
 
-    // Build result
+    // Build result — cheater-flagged students show only bonus points
     const result: Record<string, { earned: number; max: number }> = {}
     for (const { studentId, earned } of progressResults) {
         const bonus = bonusByStudent.get(studentId) || 0
+        const isCheater = cheaterSet.has(studentId)
         result[studentId] = {
-            earned: earned + bonus,
+            earned: isCheater ? bonus : earned + bonus,
             max: classroomTotalPoints
         }
     }
@@ -3235,10 +3245,10 @@ export async function getStudentsForTestDialog(
         return { success: false, error: "Unauthorized" }
     }
 
-    // Fetch enrolled students
+    // Fetch enrolled students (include cheater flag)
     const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments')
-        .select('student_id, profiles:student_id(id, first_name, last_name)')
+        .select('student_id, is_cheater, profiles:student_id(id, first_name, last_name)')
         .eq('classroom_id', classroomId)
 
     if (enrollError || !enrollments) {
@@ -3299,6 +3309,7 @@ export async function getStudentsForTestDialog(
         const profile = enrollment.profiles
         const studentId = profile?.id || enrollment.student_id
         const progress = progressByStudent[studentId]
+        const isCheater = !!enrollment.is_cheater
         // Consider "has completed" only if they have progress at all and all pointed exercises are completed
         const hasProgress = !!progress
         const completedAllPointed = hasProgress && progress.completed && pointedIds.length > 0
@@ -3308,7 +3319,7 @@ export async function getStudentsForTestDialog(
             firstName: profile?.first_name || null,
             lastName: profile?.last_name || null,
             hasCompleted: completedAllPointed,
-            earnedPoints: progress?.earned || 0,
+            earnedPoints: isCheater ? 0 : (progress?.earned || 0),
             maxPoints,
         }
     })
@@ -3874,4 +3885,54 @@ export async function importStudentsFromClass(targetClassroomId: string, sourceC
         success: true,
         message: `Moved ${movedCount} student(s)${skippedCount > 0 ? ` (${skippedCount} already enrolled, skipped)` : ''}`
     }
+}
+
+export async function toggleCheaterMark(
+    classroomId: string,
+    studentId: string
+): Promise<{ success: boolean; isCheater?: boolean; error?: string }> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    // Verify teacher owns the classroom
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized" }
+    }
+
+    // Fetch current cheater state
+    const supabaseAdmin = createAdminClient()
+    const { data: enrollment, error: fetchError } = await supabaseAdmin
+        .from('enrollments')
+        .select('is_cheater')
+        .eq('classroom_id', classroomId)
+        .eq('student_id', studentId)
+        .maybeSingle()
+
+    if (fetchError || !enrollment) {
+        return { success: false, error: "Student not enrolled in this classroom" }
+    }
+
+    const newValue = !enrollment.is_cheater
+
+    const { error: updateError } = await supabaseAdmin
+        .from('enrollments')
+        .update({ is_cheater: newValue })
+        .eq('classroom_id', classroomId)
+        .eq('student_id', studentId)
+
+    if (updateError) {
+        console.error('Failed to toggle cheater mark:', updateError)
+        return { success: false, error: "Failed to update cheater status" }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    return { success: true, isCheater: newValue }
 }

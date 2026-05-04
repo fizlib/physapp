@@ -59,7 +59,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             .single(),
         supabase
             .from('enrollments')
-            .select('*, bonus_points, profiles:student_id(id, role, first_name, last_name, email, created_at)')
+            .select('*, bonus_points, is_cheater, profiles:student_id(id, role, first_name, last_name, email, created_at)')
             .eq('classroom_id', id)
             .order('created_at', { ascending: false }),
         supabase
@@ -130,6 +130,11 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             blockedStudentIds = [...new Set(violations?.map(v => v.student_id) || [])]
         }
     }
+
+    // Build cheater student IDs from enrollments
+    const cheaterStudentIds = enrollmentsList
+        .filter((e: any) => !!e.is_cheater)
+        .map((e: any) => e.student_id)
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -254,6 +259,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                             isTeacherAdmin={isTeacherAdmin}
                             studentPointsById={studentPointsById}
                             blockedStudentIds={blockedStudentIds}
+                            cheaterStudentIds={cheaterStudentIds}
                         />
                     )}
 

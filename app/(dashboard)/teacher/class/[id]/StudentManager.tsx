@@ -4,9 +4,9 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ShieldOff } from "lucide-react"
+import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ShieldOff, AlertTriangle } from "lucide-react"
 import Link from "next/link"
-import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom } from "../../actions"
+import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom, toggleCheaterMark } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
 import { StudentProgressPanel } from "./StudentProgressPanel"
@@ -40,6 +40,7 @@ interface StudentManagerProps {
     isTeacherAdmin: boolean
     studentPointsById: Record<string, { earned: number, max: number }>
     blockedStudentIds?: string[]
+    cheaterStudentIds?: string[]
 }
 
 function formatPoints(value: number): string {
@@ -48,7 +49,7 @@ function formatPoints(value: number): string {
     return value.toFixed(2).replace(/\.?0+$/, "")
 }
 
-export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [] }: StudentManagerProps) {
+export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [], cheaterStudentIds: initialCheaterIds = [] }: StudentManagerProps) {
     const router = useRouter()
     const [view, setView] = useState<'list' | 'add' | 'detail'>('list')
     const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
@@ -59,6 +60,8 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set(initialBlockedIds))
     const [unblockingId, setUnblockingId] = useState<string | null>(null)
     const [unblockingAll, setUnblockingAll] = useState(false)
+    const [cheaterIds, setCheaterIds] = useState<Set<string>>(new Set(initialCheaterIds))
+    const [togglingCheaterId, setTogglingCheaterId] = useState<string | null>(null)
 
     const fetchUnassignedStudents = async () => {
         setIsLoading(true)
@@ -121,12 +124,17 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
             const bBlocked = blockedIds.has(b.student_id) ? 1 : 0
             if (aBlocked !== bBlocked) return bBlocked - aBlocked
 
+            // Cheater students next
+            const aCheater = cheaterIds.has(a.student_id) ? 1 : 0
+            const bCheater = cheaterIds.has(b.student_id) ? 1 : 0
+            if (aCheater !== bCheater) return bCheater - aCheater
+
             // Alphabetical by surname, then first name (Lithuanian locale)
             const lastNameCmp = getLastName(a).localeCompare(getLastName(b), 'lt')
             if (lastNameCmp !== 0) return lastNameCmp
             return getFirstName(a).localeCompare(getFirstName(b), 'lt')
         })
-    }, [initialEnrollments, blockedIds])
+    }, [initialEnrollments, blockedIds, cheaterIds])
 
     if (view === 'add') {
         return (
@@ -320,6 +328,9 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                                     {blockedIds.has(enrollment.student_id) && (
                                                         <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-semibold">Blocked</span>
                                                     )}
+                                                    {cheaterIds.has(enrollment.student_id) && (
+                                                        <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">Cheater</span>
+                                                    )}
                                                 </span>
                                                 <span className="font-mono text-[10px] text-muted-foreground opacity-70">
                                                     {enrollment.profiles?.email}
@@ -382,6 +393,46 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                                     </Link>
                                                 </Button>
                                             )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className={cheaterIds.has(enrollment.student_id)
+                                                    ? "text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                    : "text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
+                                                }
+                                                disabled={togglingCheaterId === enrollment.student_id}
+                                                onClick={async () => {
+                                                    setTogglingCheaterId(enrollment.student_id)
+                                                    try {
+                                                        const result = await toggleCheaterMark(classroomId, enrollment.student_id)
+                                                        if (result.success) {
+                                                            setCheaterIds(prev => {
+                                                                const next = new Set(prev)
+                                                                if (result.isCheater) {
+                                                                    next.add(enrollment.student_id)
+                                                                } else {
+                                                                    next.delete(enrollment.student_id)
+                                                                }
+                                                                return next
+                                                            })
+                                                            router.refresh()
+                                                        } else {
+                                                            console.error('Failed to toggle cheater:', result.error)
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Failed to toggle cheater mark:', err)
+                                                    } finally {
+                                                        setTogglingCheaterId(null)
+                                                    }
+                                                }}
+                                            >
+                                                {togglingCheaterId === enrollment.student_id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <AlertTriangle className={`h-4 w-4 ${cheaterIds.has(enrollment.student_id) ? 'fill-red-600' : ''}`} />
+                                                )}
+                                                <span className="sr-only">Toggle cheater mark</span>
+                                            </Button>
                                             <RemoveStudentButton
                                                 studentId={enrollment.student_id}
                                                 classroomId={classroomId}

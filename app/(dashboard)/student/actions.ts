@@ -828,6 +828,24 @@ export async function getCollectionResults(collectionId: string): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
+    // Fetch collection's classroom_id and check cheater flag
+    const { data: collection } = await supabase
+        .from('collections')
+        .select('classroom_id')
+        .eq('id', collectionId)
+        .single()
+
+    let isCheater = false
+    if (collection?.classroom_id) {
+        const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('is_cheater')
+            .eq('classroom_id', collection.classroom_id)
+            .eq('student_id', user.id)
+            .maybeSingle()
+        isCheater = !!enrollment?.is_cheater
+    }
+
     // Fetch assignments in collection with their progress
     const { data: assignments } = await supabase
         .from('assignments')
@@ -864,7 +882,7 @@ export async function getCollectionResults(collectionId: string): Promise<{
 
         if (isPointsExercise) {
             totalPoints += exercisePoints
-            if (progress?.earned_points != null) {
+            if (progress?.earned_points != null && !isCheater) {
                 earnedPoints += progress.earned_points
             }
         }
@@ -874,9 +892,9 @@ export async function getCollectionResults(collectionId: string): Promise<{
             title: a.title,
             pointsEnabled: isPointsExercise,
             points: exercisePoints,
-            earnedPoints: progress?.earned_points ?? null,
+            earnedPoints: isCheater ? 0 : (progress?.earned_points ?? null),
             submittedAnswer: progress?.submitted_answer ?? null,
-            isCorrect: progress?.earned_points != null ? progress.earned_points > 0 : null
+            isCorrect: isCheater ? false : (progress?.earned_points != null ? progress.earned_points > 0 : null)
         }
     })
 
@@ -900,12 +918,13 @@ export async function getStudentDashboardStats(): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // 1. Get enrolled classrooms
+    // 1. Get enrolled classrooms (including cheater flag)
     const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`
             classroom_id,
             bonus_points,
+            is_cheater,
             classrooms (
                 id,
                 type
@@ -966,12 +985,17 @@ export async function getStudentDashboardStats(): Promise<{
         }
     })
 
-    // Add bonus points from enrollments
+    // Add bonus points from enrollments and apply cheater flag
     enrollments.forEach((e: any) => {
         const cid = e.classroom_id
         const bonus = e.bonus_points || 0
-        if (bonus > 0 && stats[cid]) {
-            stats[cid].earnedPoints += bonus
+        if (stats[cid]) {
+            if (e.is_cheater) {
+                // Cheater: zero out exercise points, keep only bonus
+                stats[cid].earnedPoints = bonus
+            } else if (bonus > 0) {
+                stats[cid].earnedPoints += bonus
+            }
         }
     })
 
@@ -996,12 +1020,13 @@ export async function getStudentPointsBreakdown(): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // 1. Get enrolled classrooms
+    // 1. Get enrolled classrooms (including cheater flag)
     const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`
             classroom_id,
             bonus_points,
+            is_cheater,
             classrooms (
                 id,
                 type
@@ -1089,6 +1114,7 @@ export async function getStudentPointsBreakdown(): Promise<{
         const collectionsMap = classroomCollections.get(cid)!
         const enrollment = schoolClassEnrollments.find((e: any) => e.classroom_id === cid)
         const bonusPoints = enrollment?.bonus_points || 0
+        const isCheater = !!enrollment?.is_cheater
 
         breakdown[cid] = {
             bonusPoints,
@@ -1098,7 +1124,7 @@ export async function getStudentPointsBreakdown(): Promise<{
                     id,
                     title: data.title,
                     totalPoints: data.totalPoints,
-                    earnedPoints: data.earnedPoints,
+                    earnedPoints: isCheater ? 0 : data.earnedPoints,
                 }))
         }
     })
