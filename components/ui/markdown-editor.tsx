@@ -143,6 +143,31 @@ export function MarkdownEditor({ value, onChange, placeholder, disabled, minHeig
     )
 }
 
+type MarkdownNode = {
+    type: string
+    value?: string
+    children?: MarkdownNode[]
+}
+
+function remarkHtmlLineBreaks() {
+    return (tree: MarkdownNode) => {
+        replaceHtmlLineBreaks(tree)
+    }
+}
+
+function replaceHtmlLineBreaks(node: MarkdownNode) {
+    if (!node.children) return
+
+    node.children = node.children.map((child) => {
+        if (child.type === "html" && child.value && /^<br\s*\/?>$/i.test(child.value.trim())) {
+            return { type: "break" }
+        }
+
+        replaceHtmlLineBreaks(child)
+        return child
+    })
+}
+
 /** Renders markdown content with GFM support (tables, strikethrough, etc.) */
 export function MarkdownContent({ content, className }: { content: string; className?: string }) {
     return (
@@ -156,7 +181,7 @@ export function MarkdownContent({ content, className }: { content: string; class
             prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5
             prose-hr:my-4
             ${className || ""}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown remarkPlugins={[remarkGfm, remarkHtmlLineBreaks]}>
                 {content}
             </ReactMarkdown>
         </div>
