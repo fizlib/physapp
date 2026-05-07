@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface QuestionData {
+    id?: string
     type: 'numerical' | 'multiple_choice'
     latex_text: string
     correct_value?: number | null
@@ -172,6 +173,7 @@ export function EditExerciseDialog({ classroomId, assignmentId, initialData, col
     useEffect(() => {
         if (initialData && open) {
             const mappedQuestions = initialData.questions?.map((q: any) => ({
+                id: q.id,
                 type: q.question_type || 'numerical',
                 latex_text: q.latex_text || '',
                 correct_value: q.correct_value,

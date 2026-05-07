@@ -527,6 +527,7 @@ function ExerciseReviewPanel({
 
             onManualSubmissionApplied({
                 submittedAnswers: result.submittedAnswers,
+                earnedPointsPerPart: result.earnedPointsPerPart,
                 earnedPoints: result.earnedPoints,
                 isCompleted: result.isCompleted
             })
@@ -791,4 +792,3 @@ function ExerciseReviewPanel({
         </div>
     )
 }
-

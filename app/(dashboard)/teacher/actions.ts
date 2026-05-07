@@ -52,6 +52,215 @@ const AddBonusPointsSchema = z.object({
 
 import { getClientIp } from '@/lib/ip'
 
+type PointQuestion = {
+    id: string
+    created_at?: string | null
+    question_type: string
+    correct_value?: number | string | null
+    tolerance_percent?: number | string | null
+    correct_answer?: string | null
+    points?: number | string | null
+}
+
+type PointProgressRow = {
+    id: string
+    submitted_answers: unknown
+    earned_points_per_part: unknown
+}
+
+type ProgressSubmissionRow = {
+    student_id: string
+    submitted_answers: unknown
+    earned_points_per_part: unknown
+}
+
+function sortQuestionsByCreatedAt<T extends { created_at?: string | null }>(questions: T[]): T[] {
+    return [...questions].sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
+        return aTime - bTime
+    })
+}
+
+function isRecordObject(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function toSubmittedAnswerMap(value: unknown): Record<string, string> {
+    if (!isRecordObject(value)) return {}
+
+    return Object.entries(value).reduce<Record<string, string>>((acc, [key, answer]) => {
+        if (!key || answer === undefined) return acc
+        acc[key] = answer === null ? '' : String(answer)
+        return acc
+    }, {})
+}
+
+function toEarnedPointsMap(value: unknown): Record<string, number> {
+    if (!isRecordObject(value)) return {}
+
+    return Object.entries(value).reduce<Record<string, number>>((acc, [key, points]) => {
+        if (!key) return acc
+        const numericPoints = Number(points)
+        acc[key] = Number.isFinite(numericPoints) ? numericPoints : 0
+        return acc
+    }, {})
+}
+
+function recordsEqual<T extends string | number>(left: Record<string, T>, right: Record<string, T>) {
+    const leftEntries = Object.entries(left)
+    const rightEntries = Object.entries(right)
+    if (leftEntries.length !== rightEntries.length) return false
+
+    return leftEntries.every(([key, value]) => right[key] === value)
+}
+
+function parseMaybeNumber(value: number | string | null | undefined): number | null {
+    if (value === null || value === undefined || value === '') return null
+    const parsed = typeof value === 'number' ? value : Number(String(value).replace(',', '.'))
+    return Number.isFinite(parsed) ? parsed : null
+}
+
+function getQuestionPoints(question: PointQuestion): number {
+    const points = Number(question.points)
+    return Number.isFinite(points) && points > 0 ? points : 1
+}
+
+function isSubmittedAnswerCorrect(question: PointQuestion, submittedAnswer: string): boolean {
+    if (submittedAnswer.trim() === '') return false
+
+    if (question.question_type === 'numerical') {
+        const answerValue = parseMaybeNumber(submittedAnswer)
+        const correctValue = parseMaybeNumber(question.correct_value)
+        if (answerValue === null || correctValue === null) return false
+
+        const tolerancePercent = parseMaybeNumber(question.tolerance_percent) ?? 0
+        const margin = Math.abs(correctValue * (tolerancePercent / 100))
+        return Math.abs(answerValue - correctValue) <= margin
+    }
+
+    if (question.question_type === 'multiple_choice') {
+        return submittedAnswer.trim().toUpperCase() === (question.correct_answer || '').trim().toUpperCase()
+    }
+
+    return false
+}
+
+function sumEarnedPoints(earnedPointsPerPart: Record<string, number>): number {
+    return Object.values(earnedPointsPerPart).reduce((sum, points) => sum + points, 0)
+}
+
+function isPointProgressCompleted(
+    submittedAnswers: Record<string, string>,
+    questions: PointQuestion[],
+    requiredVariationsCount?: number | null
+): boolean {
+    const submittedCount = Object.keys(submittedAnswers).length
+    const requiredCount = Number(requiredVariationsCount) || 0
+
+    return requiredCount > 0
+        ? submittedCount >= requiredCount
+        : submittedCount >= questions.length
+}
+
+function normalizePointProgressForQuestions(
+    submittedAnswersInput: unknown,
+    earnedPointsInput: unknown,
+    questionsInput: PointQuestion[]
+) {
+    const questions = sortQuestionsByCreatedAt(questionsInput)
+    const rawSubmittedAnswers = toSubmittedAnswerMap(submittedAnswersInput)
+    const rawEarnedPoints = toEarnedPointsMap(earnedPointsInput)
+    const currentQuestionIds = new Set(questions.map((question) => question.id))
+    const submittedAnswers: Record<string, string> = {}
+    const orphanedAnswers: Array<[string, string]> = []
+
+    for (const [questionId, answer] of Object.entries(rawSubmittedAnswers)) {
+        if (currentQuestionIds.has(questionId)) {
+            submittedAnswers[questionId] = answer
+        } else {
+            orphanedAnswers.push([questionId, answer])
+        }
+    }
+
+    const unansweredQuestions = questions.filter((question) => submittedAnswers[question.id] === undefined)
+    const canMapAllLegacyAnswers = Object.keys(submittedAnswers).length === 0
+        && orphanedAnswers.length === questions.length
+    const canMapSingleLegacyAnswer = orphanedAnswers.length === 1
+        && unansweredQuestions.length === 1
+
+    if (canMapAllLegacyAnswers || canMapSingleLegacyAnswer) {
+        orphanedAnswers.slice(0, unansweredQuestions.length).forEach(([, answer], index) => {
+            submittedAnswers[unansweredQuestions[index].id] = answer
+        })
+    }
+
+    const earnedPointsPerPart: Record<string, number> = {}
+    for (const question of questions) {
+        if (submittedAnswers[question.id] === undefined) continue
+        earnedPointsPerPart[question.id] = isSubmittedAnswerCorrect(question, submittedAnswers[question.id])
+            ? getQuestionPoints(question)
+            : 0
+    }
+
+    return {
+        submittedAnswers,
+        earnedPointsPerPart,
+        changed: !recordsEqual(rawSubmittedAnswers, submittedAnswers) || !recordsEqual(rawEarnedPoints, earnedPointsPerPart)
+    }
+}
+
+async function recalculateAssignmentPointProgress(
+    supabaseAdmin: ReturnType<typeof createAdminClient>,
+    assignmentId: string,
+    questions: PointQuestion[],
+    requiredVariationsCount?: number | null
+): Promise<{ success: boolean, error?: string }> {
+    const { data: progressRows, error: progressFetchError } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('id, submitted_answers, earned_points_per_part')
+        .eq('assignment_id', assignmentId)
+
+    if (progressFetchError) {
+        console.error("Point progress fetch error", progressFetchError)
+        return { success: false, error: "Failed to fetch student progress for recalculation" }
+    }
+
+    try {
+        await Promise.all(((progressRows || []) as PointProgressRow[]).map(async (progress) => {
+            const normalizedProgress = normalizePointProgressForQuestions(
+                progress.submitted_answers,
+                progress.earned_points_per_part,
+                questions
+            )
+            const totalEarnedPoints = sumEarnedPoints(normalizedProgress.earnedPointsPerPart)
+            const isCompleted = isPointProgressCompleted(
+                normalizedProgress.submittedAnswers,
+                questions,
+                requiredVariationsCount
+            )
+
+            const { error: updateError } = await supabaseAdmin
+                .from('assignment_progress')
+                .update({
+                    submitted_answers: normalizedProgress.submittedAnswers,
+                    earned_points_per_part: normalizedProgress.earnedPointsPerPart,
+                    earned_points: totalEarnedPoints,
+                    is_completed: isCompleted,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', progress.id)
+
+            if (updateError) throw updateError
+        }))
+    } catch (error) {
+        console.error("Point progress recalculation error", error)
+        return { success: false, error: "Failed to recalculate student points" }
+    }
+
+    return { success: true }
+}
+
 export async function createClassroom(formData: FormData) {
     const supabase = await createClient()
 
@@ -100,7 +309,7 @@ const UpdateAssignmentTitleSchema = z.object({
     title: z.string().min(1),
 })
 
-export async function updateAssignmentWithQuestion(assignmentId: string, classroomId: string, exerciseData: any): Promise<ActionState> {
+export async function updateAssignmentWithQuestion(assignmentId: string, classroomId: string, exerciseData: unknown): Promise<ActionState> {
     const supabase = await createClient()
 
     // 1. Verify Auth
@@ -148,47 +357,104 @@ export async function updateAssignmentWithQuestion(assignmentId: string, classro
         return { success: false, error: "Failed to update assignment" }
     }
 
-    // 5. Update Questions
-    // Strategy: Delete existing questions and re-insert (simplest for multi-part changes)
-    // Warning: This wipes submissions for these questions.
-
-    // First, delete old questions
-    const { error: deleteError } = await supabase
+    // 5. Update Questions while preserving ids that existing student progress is keyed to.
+    const { data: existingQuestions, error: existingQuestionsError } = await supabase
         .from('questions')
-        .delete()
+        .select('id')
         .eq('assignment_id', assignmentId)
 
-    if (deleteError) {
-        console.error("Delete Questions Error", deleteError)
-        return { success: false, error: "Failed to update questions (delete step)" }
+    if (existingQuestionsError) {
+        console.error("Fetch Existing Questions Error", existingQuestionsError)
+        return { success: false, error: "Failed to update questions (fetch step)" }
     }
 
-    // Then insert new questions
-    const questionsToInsert = data.questions.map((q, index) => ({
+    const existingQuestionIds = new Set((existingQuestions || []).map((question) => question.id))
+    const retainedQuestionIds = new Set<string>()
+    const orderedCreatedAtBase = Date.now()
+
+    const buildQuestionPayload = (q: (typeof data.questions)[number], index: number) => ({
         assignment_id: assignmentId,
         latex_text: q.latex_text,
         question_type: q.type,
         correct_value: q.type === 'numerical' ? q.correct_value : null,
         tolerance_percent: q.type === 'numerical' ? q.tolerance : null,
-        // @ts-ignore
         options: q.type === 'multiple_choice' ? q.options : null,
-        // @ts-ignore
         correct_answer: q.type === 'multiple_choice' ? q.correct_answer : null,
-        // Save diagram for all questions/variations
         diagram_type: q.diagram_type || null,
         diagram_svg: q.diagram_svg || null,
         diagram_image_url: q.diagram_image_url || null,
         solution_text: q.solution_text || null,
-        points: q.points || 1
-    }))
+        points: q.points || 1,
+        created_at: new Date(orderedCreatedAtBase + index).toISOString()
+    })
 
-    const { error: insertError } = await supabase
-        .from('questions')
-        .insert(questionsToInsert)
+    for (const [index, question] of data.questions.entries()) {
+        const payload = buildQuestionPayload(question, index)
+        const existingQuestionId = question.id
+        const shouldUpdateExistingQuestion = typeof existingQuestionId === 'string'
+            && existingQuestionIds.has(existingQuestionId)
+            && !retainedQuestionIds.has(existingQuestionId)
 
-    if (insertError) {
-        console.error("Insert Questions Error", insertError)
-        return { success: false, error: "Failed to update questions (insert step)" }
+        if (shouldUpdateExistingQuestion && existingQuestionId) {
+            retainedQuestionIds.add(existingQuestionId)
+            const { error: updateQuestionError } = await supabase
+                .from('questions')
+                .update(payload)
+                .eq('id', existingQuestionId)
+                .eq('assignment_id', assignmentId)
+
+            if (updateQuestionError) {
+                console.error("Update Question Error", updateQuestionError)
+                return { success: false, error: "Failed to update questions (update step)" }
+            }
+        } else {
+            const { error: insertQuestionError } = await supabase
+                .from('questions')
+                .insert(payload)
+
+            if (insertQuestionError) {
+                console.error("Insert Question Error", insertQuestionError)
+                return { success: false, error: "Failed to update questions (insert step)" }
+            }
+        }
+    }
+
+    const questionIdsToDelete = [...existingQuestionIds].filter((questionId) => !retainedQuestionIds.has(questionId))
+    if (questionIdsToDelete.length > 0) {
+        const { error: deleteQuestionError } = await supabase
+            .from('questions')
+            .delete()
+            .eq('assignment_id', assignmentId)
+            .in('id', questionIdsToDelete)
+
+        if (deleteQuestionError) {
+            console.error("Delete Removed Questions Error", deleteQuestionError)
+            return { success: false, error: "Failed to update questions (delete step)" }
+        }
+    }
+
+    if (data.points_enabled) {
+        const supabaseAdmin = createAdminClient()
+        const { data: updatedQuestions, error: updatedQuestionsError } = await supabaseAdmin
+            .from('questions')
+            .select('id, created_at, question_type, correct_value, tolerance_percent, correct_answer, points')
+            .eq('assignment_id', assignmentId)
+
+        if (updatedQuestionsError) {
+            console.error("Fetch Updated Questions Error", updatedQuestionsError)
+            return { success: false, error: "Failed to fetch updated questions for recalculation" }
+        }
+
+        const recalculationResult = await recalculateAssignmentPointProgress(
+            supabaseAdmin,
+            assignmentId,
+            sortQuestionsByCreatedAt((updatedQuestions || []) as PointQuestion[]),
+            data.required_variations_count
+        )
+
+        if (!recalculationResult.success) {
+            return { success: false, error: recalculationResult.error }
+        }
     }
 
     revalidatePath(`/teacher/class/${classroomId}/assignment/${assignmentId}`)
@@ -462,6 +728,7 @@ export async function updateClassroomName(classroomId: string, name: string): Pr
 }
 
 const QuestionSchema = z.object({
+    id: z.string().uuid().optional(),
     type: z.enum(['numerical', 'multiple_choice']),
     latex_text: z.string(),
     correct_value: z.number().nullable().optional(),
@@ -2118,16 +2385,23 @@ export async function getStudentAssignmentSubmissionForTeacher(
         const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
         return aTime - bTime
     })
+    const normalizedProgress = normalizePointProgressForQuestions(
+        progress?.submitted_answers,
+        progress?.earned_points_per_part,
+        orderedQuestions as PointQuestion[]
+    )
 
     return {
         assignment: {
             ...assignment,
             questions: orderedQuestions
         },
-        submittedAnswers: progress?.submitted_answers || {},
-        earnedPointsPerPart: progress?.earned_points_per_part || {},
-        earnedPoints: progress?.earned_points || 0,
-        isCompleted: !!progress?.is_completed
+        submittedAnswers: normalizedProgress.submittedAnswers,
+        earnedPointsPerPart: normalizedProgress.earnedPointsPerPart,
+        earnedPoints: sumEarnedPoints(normalizedProgress.earnedPointsPerPart),
+        isCompleted: assignment.points_enabled
+            ? isPointProgressCompleted(normalizedProgress.submittedAnswers, orderedQuestions as PointQuestion[], assignment.required_variations_count)
+            : !!progress?.is_completed
     }
 }
 
@@ -2140,6 +2414,7 @@ export async function submitTeacherManualPointsAnswer(
     isCorrect: boolean
 ): Promise<ActionState & {
     submittedAnswers?: Record<string, string>
+    earnedPointsPerPart?: Record<string, number>
     earnedPoints?: number
     isCompleted?: boolean
 }> {
@@ -2181,6 +2456,11 @@ export async function submitTeacherManualPointsAnswer(
             required_variations_count,
             questions(
                 id,
+                created_at,
+                question_type,
+                correct_value,
+                tolerance_percent,
+                correct_answer,
                 points
             )
         `)
@@ -2196,7 +2476,7 @@ export async function submitTeacherManualPointsAnswer(
         return { success: false, error: "Manual submission is available only for point exercises" }
     }
 
-    const questions = Array.isArray(assignment.questions) ? assignment.questions : []
+    const questions = sortQuestionsByCreatedAt(Array.isArray(assignment.questions) ? assignment.questions as PointQuestion[] : [])
     const selectedQuestion = questions.find((question) => question.id === payload.questionId)
 
     if (!selectedQuestion) {
@@ -2211,31 +2491,24 @@ export async function submitTeacherManualPointsAnswer(
         .eq('assignment_id', payload.assignmentId)
         .maybeSingle()
 
-    const submittedAnswers: Record<string, string> = existingProgress?.submitted_answers && typeof existingProgress.submitted_answers === 'object'
-        ? { ...existingProgress.submitted_answers }
-        : {}
-
-    const earnedPointsPerPart: Record<string, number> = existingProgress?.earned_points_per_part && typeof existingProgress.earned_points_per_part === 'object'
-        ? { ...existingProgress.earned_points_per_part }
-        : {}
-
+    const normalizedProgress = normalizePointProgressForQuestions(
+        existingProgress?.submitted_answers,
+        existingProgress?.earned_points_per_part,
+        questions
+    )
+    const submittedAnswers: Record<string, string> = { ...normalizedProgress.submittedAnswers }
+    const earnedPointsPerPart: Record<string, number> = { ...normalizedProgress.earnedPointsPerPart }
     const completedIndices: number[] = Array.isArray(existingProgress?.completed_question_indices)
         ? existingProgress.completed_question_indices
         : []
 
     submittedAnswers[payload.questionId] = payload.submittedAnswer
 
-    const pointsPerPart = selectedQuestion.points || 1
-    earnedPointsPerPart[payload.questionId] = payload.isCorrect ? pointsPerPart : 0
+    const pointsPerPart = getQuestionPoints(selectedQuestion)
+    earnedPointsPerPart[payload.questionId] = isSubmittedAnswerCorrect(selectedQuestion, payload.submittedAnswer) ? pointsPerPart : 0
 
-    const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
-    const submittedCount = Object.keys(submittedAnswers).length
-    const totalQuestions = questions.length
-    const requiredVariationsCount = assignment.required_variations_count || 0
-
-    const isFullyCompleted = requiredVariationsCount > 0
-        ? submittedCount >= requiredVariationsCount
-        : submittedCount >= totalQuestions
+    const totalEarnedPoints = sumEarnedPoints(earnedPointsPerPart)
+    const isFullyCompleted = isPointProgressCompleted(submittedAnswers, questions, assignment.required_variations_count)
 
     const { error: upsertError } = await supabaseAdmin
         .from('assignment_progress')
@@ -2262,6 +2535,7 @@ export async function submitTeacherManualPointsAnswer(
     return {
         success: true,
         submittedAnswers,
+        earnedPointsPerPart,
         earnedPoints: totalEarnedPoints,
         isCompleted: isFullyCompleted
     }
@@ -2301,6 +2575,11 @@ export async function overrideAnswerCorrectness(
             required_variations_count,
             questions(
                 id,
+                created_at,
+                question_type,
+                correct_value,
+                tolerance_percent,
+                correct_answer,
                 points
             )
         `)
@@ -2312,7 +2591,7 @@ export async function overrideAnswerCorrectness(
         return { success: false, error: "Exercise not found" }
     }
 
-    const questions = Array.isArray(assignment.questions) ? assignment.questions : []
+    const questions = sortQuestionsByCreatedAt(Array.isArray(assignment.questions) ? assignment.questions as PointQuestion[] : [])
     const selectedQuestion = questions.find((q) => q.id === questionId)
 
     if (!selectedQuestion) {
@@ -2327,35 +2606,30 @@ export async function overrideAnswerCorrectness(
         .eq('assignment_id', assignmentId)
         .maybeSingle()
 
-    const submittedAnswers: Record<string, string> = existingProgress?.submitted_answers && typeof existingProgress.submitted_answers === 'object'
-        ? { ...existingProgress.submitted_answers }
-        : {}
+    const normalizedProgress = normalizePointProgressForQuestions(
+        existingProgress?.submitted_answers,
+        existingProgress?.earned_points_per_part,
+        questions
+    )
+    const submittedAnswers: Record<string, string> = { ...normalizedProgress.submittedAnswers }
 
     // Verify the student actually submitted an answer for this question
     if (submittedAnswers[questionId] === undefined) {
         return { success: false, error: "Student has not submitted an answer for this question" }
     }
 
-    const earnedPointsPerPart: Record<string, number> = existingProgress?.earned_points_per_part && typeof existingProgress.earned_points_per_part === 'object'
-        ? { ...existingProgress.earned_points_per_part }
-        : {}
+    const earnedPointsPerPart: Record<string, number> = { ...normalizedProgress.earnedPointsPerPart }
 
     const completedIndices: number[] = Array.isArray(existingProgress?.completed_question_indices)
         ? existingProgress.completed_question_indices
         : []
 
     // Override: award full points for this question
-    const pointsPerPart = selectedQuestion.points || 1
+    const pointsPerPart = getQuestionPoints(selectedQuestion)
     earnedPointsPerPart[questionId] = pointsPerPart
 
-    const totalEarnedPoints = Object.values(earnedPointsPerPart).reduce((sum, pts) => sum + pts, 0)
-    const submittedCount = Object.keys(submittedAnswers).length
-    const totalQuestions = questions.length
-    const requiredVariationsCount = assignment.required_variations_count || 0
-
-    const isFullyCompleted = requiredVariationsCount > 0
-        ? submittedCount >= requiredVariationsCount
-        : submittedCount >= totalQuestions
+    const totalEarnedPoints = sumEarnedPoints(earnedPointsPerPart)
+    const isFullyCompleted = isPointProgressCompleted(submittedAnswers, questions, assignment.required_variations_count)
 
     const { error: upsertError } = await supabaseAdmin
         .from('assignment_progress')
@@ -3599,7 +3873,8 @@ export async function getExerciseSubmissions(
                 latex_text,
                 correct_value,
                 tolerance_percent,
-                correct_answer
+                correct_answer,
+                points
             )
         `)
         .eq('id', assignmentId)
@@ -3630,15 +3905,22 @@ export async function getExerciseSubmissions(
     // Fetch all progress rows for this assignment using admin client (bypasses RLS)
     const { data: progressRows } = await supabaseAdmin
         .from('assignment_progress')
-        .select('student_id, submitted_answers')
+        .select('student_id, submitted_answers, earned_points_per_part')
         .eq('assignment_id', assignmentId)
         .in('student_id', studentIds)
 
     // Build lookup for progress
     const progressByStudent = new Map<string, Record<string, string>>()
-    progressRows?.forEach((p: any) => {
-        if (p.submitted_answers && typeof p.submitted_answers === 'object' && Object.keys(p.submitted_answers).length > 0) {
-            progressByStudent.set(p.student_id, p.submitted_answers)
+    const typedProgressRows = (progressRows || []) as ProgressSubmissionRow[]
+    typedProgressRows.forEach((p) => {
+        const normalizedProgress = normalizePointProgressForQuestions(
+            p.submitted_answers,
+            p.earned_points_per_part,
+            orderedQuestions as PointQuestion[]
+        )
+
+        if (Object.keys(normalizedProgress.submittedAnswers).length > 0) {
+            progressByStudent.set(p.student_id, normalizedProgress.submittedAnswers)
         }
     })
 
