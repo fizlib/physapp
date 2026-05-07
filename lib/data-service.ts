@@ -10,14 +10,15 @@ export const getCachedUser = cache(async () => {
 })
 
 // Cached Student Classroom Fetcher
-// Returns the first classroom ID the student is enrolled in
+// Returns the active classroom ID for the student
 export const getCachedStudentClassroom = cache(async (userId: string) => {
     const supabase = await createClient()
     const { data: enrollment } = await supabase
         .from('enrollments')
         .select('classroom_id')
         .eq('student_id', userId)
-        .single()
+        .eq('is_active_classroom', true)
+        .maybeSingle()
     return enrollment?.classroom_id
 })
 

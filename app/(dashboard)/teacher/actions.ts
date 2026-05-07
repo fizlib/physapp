@@ -301,6 +301,7 @@ export async function addStudent(prevState: any, formData: FormData): Promise<Ac
     }
 
     revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath('/student')
     return { success: true, message: result?.message }
 }
 
@@ -376,23 +377,49 @@ export async function enrollStudent(studentId: string, classroomId: string): Pro
     }
 
     revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath('/student')
     return { success: true, message: result?.message }
 }
 
-export async function getUnassignedStudents() {
+export async function getStudentsNotInClassroom(classroomId: string) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return []
 
-    const { data, error } = await supabase.rpc('get_unassigned_students')
+    const { data, error } = await supabase.rpc('get_students_not_in_classroom', {
+        p_classroom_id: classroomId
+    })
 
     if (error) {
-        console.error('Error fetching unassigned students:', error)
+        console.error('Error fetching students not in classroom:', error)
         return []
     }
 
     return data
+}
+
+export async function setStudentActiveClassroom(classroomId: string, studentId: string): Promise<ActionState> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data, error } = await supabase.rpc('set_active_classroom', {
+        p_student_id: studentId,
+        p_classroom_id: classroomId
+    })
+
+    if (error) return { success: false, error: error.message }
+
+    const result = data && data[0]
+    if (result && !result.success) {
+        return { success: false, error: result.message }
+    }
+
+    revalidatePath(`/teacher/class/${classroomId}`)
+    revalidatePath('/student')
+    return { success: true, message: result?.message }
 }
 
 const UpdateClassroomNameSchema = z.object({
@@ -3792,7 +3819,7 @@ export async function getClassroomStudents(classroomId: string) {
     }))
 }
 
-export async function importStudentsFromClass(targetClassroomId: string, sourceClassroomId: string): Promise<ActionState> {
+export async function importStudentsFromClass(targetClassroomId: string, sourceClassroomId: string, setAsActive: boolean = false): Promise<ActionState> {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -3845,18 +3872,8 @@ export async function importStudentsFromClass(targetClassroomId: string, sourceC
 
     const alreadyEnrolledIds = new Set((existingEnrollments || []).map(e => e.student_id))
 
-    // Delete all enrollments from source class
-    const { error: deleteError } = await supabase
-        .from('enrollments')
-        .delete()
-        .eq('classroom_id', sourceClassroomId)
-
-    if (deleteError) {
-        console.error('Error deleting source enrollments:', deleteError)
-        return { success: false, error: "Failed to remove students from source class" }
-    }
-
     // Insert students into target class (skip those already enrolled)
+    // Note: Students remain in the source class (copy, not move)
     const newEnrollments = studentIds
         .filter(id => !alreadyEnrolledIds.has(id))
         .map(studentId => ({
@@ -3864,8 +3881,9 @@ export async function importStudentsFromClass(targetClassroomId: string, sourceC
             classroom_id: targetClassroomId,
         }))
 
+    const supabaseAdmin = createAdminClient()
+
     if (newEnrollments.length > 0) {
-        const supabaseAdmin = createAdminClient()
         const { error: insertError } = await supabaseAdmin
             .from('enrollments')
             .insert(newEnrollments)
@@ -3876,14 +3894,36 @@ export async function importStudentsFromClass(targetClassroomId: string, sourceC
         }
     }
 
-    const movedCount = studentIds.length
+    // If setAsActive, update active classroom for ALL source students now in target
+    // (includes both newly inserted and previously existing duplicates)
+    if (setAsActive) {
+        for (const studentId of studentIds) {
+            const { data, error } = await supabase.rpc('set_active_classroom', {
+                p_student_id: studentId,
+                p_classroom_id: targetClassroomId
+            })
+
+            const result = data && data[0]
+
+            if (error || !result?.success) {
+                console.error('Error setting active classroom during import:', error || result?.message)
+                return {
+                    success: false,
+                    error: result?.message || error?.message || "Failed to set active classroom"
+                }
+            }
+        }
+    }
+
+    const importedCount = newEnrollments.length
     const skippedCount = alreadyEnrolledIds.size
 
     revalidatePath(`/teacher/class/${targetClassroomId}`)
     revalidatePath(`/teacher/class/${sourceClassroomId}`)
+    revalidatePath('/student')
     return {
         success: true,
-        message: `Moved ${movedCount} student(s)${skippedCount > 0 ? ` (${skippedCount} already enrolled, skipped)` : ''}`
+        message: `Imported ${importedCount} student(s)${skippedCount > 0 ? ` (${skippedCount} already enrolled, skipped)` : ''}${setAsActive ? ' — set as active classroom' : ''}`
     }
 }
 

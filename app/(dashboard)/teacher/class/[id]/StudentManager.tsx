@@ -4,9 +4,9 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ShieldOff, AlertTriangle } from "lucide-react"
+import { ArrowLeft, UserPlus, Search, Loader2, Users, Shield, ShieldOff, AlertTriangle, Star } from "lucide-react"
 import Link from "next/link"
-import { getUnassignedStudents, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom, toggleCheaterMark } from "../../actions"
+import { getStudentsNotInClassroom, enrollStudent, unblockStudentFromClassroom, unblockAllStudentsInClassroom, toggleCheaterMark, setStudentActiveClassroom } from "../../actions"
 import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
 import { StudentProgressPanel } from "./StudentProgressPanel"
@@ -30,6 +30,7 @@ interface EnrollmentProfile {
 interface Enrollment {
     id: string
     student_id: string
+    is_active_classroom: boolean
     profiles: EnrollmentProfile | null
 }
 
@@ -41,6 +42,7 @@ interface StudentManagerProps {
     studentPointsById: Record<string, { earned: number, max: number }>
     blockedStudentIds?: string[]
     cheaterStudentIds?: string[]
+    activeClassroomByStudent: Record<string, { id: string, name: string }>
 }
 
 function formatPoints(value: number): string {
@@ -49,7 +51,7 @@ function formatPoints(value: number): string {
     return value.toFixed(2).replace(/\.?0+$/, "")
 }
 
-export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [], cheaterStudentIds: initialCheaterIds = [] }: StudentManagerProps) {
+export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin, studentPointsById, blockedStudentIds: initialBlockedIds = [], cheaterStudentIds: initialCheaterIds = [], activeClassroomByStudent }: StudentManagerProps) {
     const router = useRouter()
     const [view, setView] = useState<'list' | 'add' | 'detail'>('list')
     const [unassignedStudents, setUnassignedStudents] = useState<Student[]>([])
@@ -62,14 +64,15 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     const [unblockingAll, setUnblockingAll] = useState(false)
     const [cheaterIds, setCheaterIds] = useState<Set<string>>(new Set(initialCheaterIds))
     const [togglingCheaterId, setTogglingCheaterId] = useState<string | null>(null)
+    const [settingActiveId, setSettingActiveId] = useState<string | null>(null)
 
-    const fetchUnassignedStudents = async () => {
+    const fetchStudentsNotInClassroom = async () => {
         setIsLoading(true)
         try {
-            const data = await getUnassignedStudents()
+            const data = await getStudentsNotInClassroom(classroomId)
             setUnassignedStudents(data || [])
         } catch (error) {
-            console.error("Failed to fetch unassigned students:", error)
+            console.error("Failed to fetch students:", error)
         } finally {
             setIsLoading(false)
         }
@@ -78,7 +81,7 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
     const handleSwitchToAdd = () => {
         setSelectedStudent(null)
         setView('add')
-        fetchUnassignedStudents()
+        fetchStudentsNotInClassroom()
     }
 
     const handleBackToList = () => {
@@ -102,6 +105,22 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
             console.error("Failed to enroll student:", error)
         } finally {
             setAddingId(null)
+        }
+    }
+
+    const handleSetActive = async (studentId: string) => {
+        setSettingActiveId(studentId)
+        try {
+            const result = await setStudentActiveClassroom(classroomId, studentId)
+            if (result.success) {
+                router.refresh()
+            } else {
+                console.error(result.error)
+            }
+        } catch (error) {
+            console.error("Failed to set active classroom:", error)
+        } finally {
+            setSettingActiveId(null)
         }
     }
 
@@ -168,7 +187,7 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                             </div>
                         ) : filteredStudents.length === 0 ? (
                             <div className="text-center py-8 text-muted-foreground">
-                                {searchQuery ? "No matching students found." : "No unassigned students available."}
+                                {searchQuery ? "No matching students found." : "No students available to add."}
                             </div>
                         ) : (
                             <div className="divide-y divide-border/40">
@@ -307,6 +326,9 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                     return 'text-rose-600 bg-rose-50'
                                 }
 
+                                const activeInfo = activeClassroomByStudent[enrollment.student_id]
+                                const isActiveHere = enrollment.is_active_classroom
+
                                 return (
                                     <div
                                         key={enrollment.id}
@@ -332,8 +354,15 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                                         <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">Cheater</span>
                                                     )}
                                                 </span>
-                                                <span className="font-mono text-[10px] text-muted-foreground opacity-70">
+                                                <span className="font-mono text-[10px] text-muted-foreground opacity-70 flex items-center gap-2">
                                                     {enrollment.profiles?.email}
+                                                    {isActiveHere ? (
+                                                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-semibold not-italic">Aktyvi klasė</span>
+                                                    ) : activeInfo ? (
+                                                        <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold not-italic">Aktyvi: {activeInfo.name}</span>
+                                                    ) : (
+                                                        <span className="text-[9px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-semibold not-italic">Nėra aktyvios</span>
+                                                    )}
                                                 </span>
                                             </div>
                                         </div>
@@ -348,6 +377,23 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                                             </span>
                                         </div>
                                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                            {!isActiveHere && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                                    disabled={settingActiveId === enrollment.student_id}
+                                                    onClick={() => handleSetActive(enrollment.student_id)}
+                                                    title="Set this as active classroom"
+                                                >
+                                                    {settingActiveId === enrollment.student_id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                        <Star className="h-4 w-4" />
+                                                    )}
+                                                    <span className="sr-only">Set as active classroom</span>
+                                                </Button>
+                                            )}
                                             {blockedIds.has(enrollment.student_id) && (
                                                 <Button
                                                     variant="outline"

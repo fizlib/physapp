@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,7 @@ interface StudentPointsSummary {
 interface ClassroomEnrollment {
     id: string
     student_id: string
+    is_active_classroom: boolean
     profiles: {
         first_name: string | null
         last_name: string | null
@@ -59,7 +61,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
             .single(),
         supabase
             .from('enrollments')
-            .select('*, bonus_points, is_cheater, profiles:student_id(id, role, first_name, last_name, email, created_at)')
+            .select('*, bonus_points, is_cheater, is_active_classroom, profiles:student_id(id, role, first_name, last_name, email, created_at)')
             .eq('classroom_id', id)
             .order('created_at', { ascending: false }),
         supabase
@@ -135,6 +137,28 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
     const cheaterStudentIds = enrollmentsList
         .filter((e: any) => !!e.is_cheater)
         .map((e: any) => e.student_id)
+
+    // Fetch active classroom info for all enrolled students
+    // Guard: only do this if current user owns the classroom (verified above)
+    let activeClassroomByStudent: Record<string, { id: string, name: string }> = {}
+    if (currentView === 'students' && enrolledStudentIds.length > 0 && user && classroom.teacher_id === user.id) {
+        const supabaseAdmin = createAdminClient()
+        const { data: activeEnrollments } = await supabaseAdmin
+            .from('enrollments')
+            .select('student_id, classroom_id, classrooms:classroom_id(name)')
+            .in('student_id', enrolledStudentIds)
+            .eq('is_active_classroom', true)
+
+        if (activeEnrollments) {
+            for (const ae of activeEnrollments) {
+                const classroomName = (ae as any).classrooms?.name || 'Unknown'
+                activeClassroomByStudent[ae.student_id as string] = {
+                    id: ae.classroom_id as string,
+                    name: classroomName
+                }
+            }
+        }
+    }
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -260,6 +284,7 @@ export default async function ClassroomPage({ params, searchParams }: { params: 
                             studentPointsById={studentPointsById}
                             blockedStudentIds={blockedStudentIds}
                             cheaterStudentIds={cheaterStudentIds}
+                            activeClassroomByStudent={activeClassroomByStudent}
                         />
                     )}
 

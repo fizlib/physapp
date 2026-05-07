@@ -13,9 +13,10 @@ interface CollectionBreakdown {
 interface PointsBreakdownProps {
     bonusPoints: number
     collections: CollectionBreakdown[]
+    classroomName?: string
 }
 
-export function PointsBreakdown({ bonusPoints, collections }: PointsBreakdownProps) {
+export function PointsBreakdown({ bonusPoints, collections, classroomName }: PointsBreakdownProps) {
     const [expanded, setExpanded] = useState(false)
 
     const hasCollections = collections.length > 0
@@ -42,6 +43,11 @@ export function PointsBreakdown({ bonusPoints, collections }: PointsBreakdownPro
             >
                 <div className="overflow-hidden">
                     <div className="space-y-1 pt-2 border-t border-border/30">
+                        {classroomName && (
+                            <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                                {classroomName}
+                            </div>
+                        )}
                         {collections.map((col) => (
                             <div
                                 key={col.id}

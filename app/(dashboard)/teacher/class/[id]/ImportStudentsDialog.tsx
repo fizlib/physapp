@@ -12,7 +12,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Loader2, Download, Users, AlertTriangle } from "lucide-react"
+import { Loader2, Download, Users } from "lucide-react"
 import { getTeacherClassrooms, getClassroomStudents, importStudentsFromClass } from "../../actions"
 import { toast } from "sonner"
 
@@ -36,6 +36,7 @@ export function ImportStudentsDialog({ classroomId }: ImportStudentsDialogProps)
 
     const [classrooms, setClassrooms] = useState<{ id: string, name: string }[]>([])
     const [selectedSourceClassId, setSelectedSourceClassId] = useState<string>("")
+    const [setAsActive, setSetAsActive] = useState(false)
 
     const [students, setStudents] = useState<StudentPreview[]>([])
 
@@ -84,7 +85,7 @@ export function ImportStudentsDialog({ classroomId }: ImportStudentsDialogProps)
 
         setLoading(true)
         try {
-            const result = await importStudentsFromClass(classroomId, selectedSourceClassId)
+            const result = await importStudentsFromClass(classroomId, selectedSourceClassId, setAsActive)
             if (result.success) {
                 toast.success(result.message || "Students imported successfully!")
                 setOpen(false)
@@ -104,6 +105,7 @@ export function ImportStudentsDialog({ classroomId }: ImportStudentsDialogProps)
     const resetForm = () => {
         setSelectedSourceClassId("")
         setStudents([])
+        setSetAsActive(false)
     }
 
     const selectedClassName = classrooms.find(c => c.id === selectedSourceClassId)?.name || ""
@@ -120,7 +122,7 @@ export function ImportStudentsDialog({ classroomId }: ImportStudentsDialogProps)
                 <DialogHeader>
                     <DialogTitle>Import Students from Another Class</DialogTitle>
                     <DialogDescription>
-                        All students from the selected class will be removed from it and added to this class.
+                        Students from the selected class will be copied to this class. They will remain enrolled in the source class as well.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -189,12 +191,25 @@ export function ImportStudentsDialog({ classroomId }: ImportStudentsDialogProps)
                     )}
 
                     {selectedSourceClassId && students.length > 0 && (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 flex gap-2">
-                            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-800">
-                                All {students.length} student(s) will be <strong>removed</strong> from &ldquo;{selectedClassName}&rdquo; and <strong>added</strong> to this class. Students already in this class will be skipped.
-                            </p>
-                        </div>
+                        <>
+                            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 flex gap-2">
+                                <p className="text-xs text-blue-800">
+                                    {students.length} student(s) will be <strong>copied</strong> to this class. They will stay enrolled in &ldquo;{selectedClassName}&rdquo; as well.
+                                </p>
+                            </div>
+
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={setAsActive}
+                                    onChange={(e) => setSetAsActive(e.target.checked)}
+                                    className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                                />
+                                <span className="text-sm text-foreground">
+                                    Set this as the active classroom for imported students
+                                </span>
+                            </label>
+                        </>
                     )}
 
                     <div className="flex justify-end pt-2">

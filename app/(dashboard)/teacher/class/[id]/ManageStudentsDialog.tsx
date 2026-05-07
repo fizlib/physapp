@@ -11,7 +11,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { Users, Loader2, UserPlus } from "lucide-react"
-import { getUnassignedStudents, enrollStudent } from "../../actions"
+import { getStudentsNotInClassroom, enrollStudent } from "../../actions"
 
 interface Student {
     id: string
@@ -36,7 +36,7 @@ export function ManageStudentsDialog({ classroomId }: { classroomId: string }) {
     const fetchStudents = async () => {
         setLoading(true)
         try {
-            const data = await getUnassignedStudents()
+            const data = await getStudentsNotInClassroom(classroomId)
             setStudents(data || [])
         } catch (err) {
             console.error("Failed to fetch students", err)
@@ -73,7 +73,7 @@ export function ManageStudentsDialog({ classroomId }: { classroomId: string }) {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Unassigned Students</DialogTitle>
+                    <DialogTitle>Available Students</DialogTitle>
                     <DialogDescription>
                         Select students to add to this classroom.
                     </DialogDescription>
@@ -85,7 +85,7 @@ export function ManageStudentsDialog({ classroomId }: { classroomId: string }) {
                         </div>
                     ) : students.length === 0 ? (
                         <p className="text-center text-sm text-muted-foreground py-4">
-                            No unassigned students found.
+                            No students available to add.
                         </p>
                     ) : (
                         students.map((student) => (

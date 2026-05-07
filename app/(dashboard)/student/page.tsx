@@ -20,12 +20,26 @@ export default async function StudentDashboard() {
         </div>
     )
 
-    // RLS policy "Students can view enrolled classrooms" ensures this returns
-    // only classrooms the student is enrolled in.
-    const { data: classrooms } = await supabase
-        .from('classrooms')
-        .select('*')
+    // Fetch enrollments with is_active_classroom flag
+    const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('classroom_id, is_active_classroom, classrooms:classroom_id(*)')
+        .eq('student_id', user.id)
         .order('created_at', { ascending: false })
+
+    // Build classrooms list from enrollments, sorted with active first
+    const classroomsWithActive = (enrollments || [])
+        .filter((e: any) => e.classrooms)
+        .map((e: any) => ({
+            ...e.classrooms,
+            is_active_classroom: e.is_active_classroom
+        }))
+        .sort((a: any, b: any) => {
+            // Active classroom always first
+            if (a.is_active_classroom && !b.is_active_classroom) return -1
+            if (!a.is_active_classroom && b.is_active_classroom) return 1
+            return 0
+        })
 
     const [{ stats }, { breakdown }, messagesResult] = await Promise.all([
         getStudentDashboardStats(),
@@ -76,9 +90,10 @@ export default async function StudentDashboard() {
 
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 
-                    {classrooms?.map((classroom) => (
+                    {classroomsWithActive?.map((classroom: any) => (
                         <div key={classroom.id} className="flex flex-col gap-4">
-                            {classroom.type === 'school_class' && stats && stats[classroom.id] && stats[classroom.id].totalPoints > 0 && (
+                            {/* Only show grade/points for the active classroom */}
+                            {classroom.is_active_classroom && classroom.type === 'school_class' && stats && stats[classroom.id] && stats[classroom.id].totalPoints > 0 && (
                                 <div className="animate-fade-in">
                                     <CircularGradeDisplay
                                         earnedPoints={stats[classroom.id].earnedPoints}
@@ -89,6 +104,7 @@ export default async function StudentDashboard() {
                                             <PointsBreakdown
                                                 bonusPoints={breakdown[classroom.id].bonusPoints}
                                                 collections={breakdown[classroom.id].collections}
+                                                classroomName={classroom.name}
                                             />
                                         )}
                                     </CircularGradeDisplay>
@@ -120,7 +136,7 @@ export default async function StudentDashboard() {
                     ))}
 
 
-                    {classrooms?.length === 0 && (
+                    {classroomsWithActive?.length === 0 && (
                         <div className="col-span-full flex min-h-[300px] flex-col items-center justify-center space-y-4 rounded-xl border border-dashed border-border/60 bg-muted/5 p-8 text-center text-muted-foreground">
                             <div className="rounded-full bg-muted/30 p-4">
                                 <BookOpen className="h-8 w-8 opacity-40" />

@@ -918,7 +918,7 @@ export async function getStudentDashboardStats(): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // 1. Get enrolled classrooms (including cheater flag)
+    // 1. Get active enrolled classrooms only (including cheater flag)
     const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`
@@ -931,6 +931,7 @@ export async function getStudentDashboardStats(): Promise<{
             )
         `)
         .eq('student_id', user.id)
+        .eq('is_active_classroom', true)
 
     if (!enrollments) return { success: false, error: "No enrollments found" }
 
@@ -1020,7 +1021,7 @@ export async function getStudentPointsBreakdown(): Promise<{
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { success: false, error: "Unauthorized" }
 
-    // 1. Get enrolled classrooms (including cheater flag)
+    // 1. Get active enrolled classrooms only (including cheater flag)
     const { data: enrollments } = await supabase
         .from('enrollments')
         .select(`
@@ -1033,6 +1034,7 @@ export async function getStudentPointsBreakdown(): Promise<{
             )
         `)
         .eq('student_id', user.id)
+        .eq('is_active_classroom', true)
 
     if (!enrollments) return { success: false, error: "No enrollments found" }
 
