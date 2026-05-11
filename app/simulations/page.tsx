@@ -5,18 +5,17 @@ import Link from 'next/link';
 import {
     ArrowRight,
     Target,
-    Zap,
     Waves,
-    Wind,
     Atom,
     CircleDot,
-    Lightbulb
+    Zap
 } from 'lucide-react';
 import { SIMULATIONS as SIMULATION_DATA } from '@/lib/simulations';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
     'center-of-mass': <Target className="w-8 h-8 text-blue-500" />,
     'communicating-vessels': <Waves className="w-8 h-8 text-cyan-500" />,
+    'riedlenciu-parkas': <Zap className="w-8 h-8 text-amber-500" />,
 };
 
 const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
@@ -27,6 +26,10 @@ const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
     'communicating-vessels': {
         gradient: 'from-cyan-500/20 to-blue-500/20',
         borderColor: 'group-hover:border-cyan-500/50',
+    },
+    'riedlenciu-parkas': {
+        gradient: 'from-amber-500/20 to-emerald-500/20',
+        borderColor: 'group-hover:border-amber-500/50',
     },
 };
 
@@ -101,7 +104,7 @@ export default function SimulationsPage() {
 
                     {/* Additional "More Coming" Card */}
                     <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-border/50 rounded-2xl bg-secondary/10 animate-fade-in-up"
-                        style={{ animationDelay: '400ms' }}>
+                        style={{ animationDelay: `${SIMULATIONS.length * 100}ms` }}>
                         <div className="p-4 rounded-full bg-secondary/50 mb-4 text-muted-foreground">
                             <CircleDot className="w-8 h-8" />
                         </div>

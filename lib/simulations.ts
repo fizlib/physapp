@@ -21,5 +21,12 @@ export const SIMULATIONS: SimulationInfo[] = [
         description: 'Tyrinėkite skysčių pusiausvyrą susisiekiančiuose induose, stebėkite paviršiaus horizontalumą ir skirtingų tankių skysčių balansą.',
         href: '/simulations/communicating-vessels',
         available: true
+    },
+    {
+        id: 'riedlenciu-parkas',
+        title: 'Riedlenčių parkas',
+        description: 'Tyrinėkite energijos virsmus, trintį ir judėjimą riedlentininkui leidžiantis bei kylant trasa.',
+        href: '/simulations/riedlenciu-parkas',
+        available: true
     }
 ]

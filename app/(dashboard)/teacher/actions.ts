@@ -292,7 +292,7 @@ export async function createClassroom(formData: FormData) {
         type: validated.data.type,
         lesson_schedule: validated.data.lessonSchedule || null,
         allowed_ip: ip,
-        ip_check_enabled: true
+        ip_check_enabled: false
     })
 
     if (error) {
