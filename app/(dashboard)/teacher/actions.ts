@@ -44,6 +44,13 @@ const SubmitTeacherManualPointsAnswerSchema = z.object({
     isCorrect: z.boolean(),
 })
 
+const SetTeacherExercisePointsDisabledSchema = z.object({
+    classroomId: z.string().uuid(),
+    studentId: z.string().uuid(),
+    assignmentId: z.string().uuid(),
+    disabled: z.boolean(),
+})
+
 const AddBonusPointsSchema = z.object({
     classroomId: z.string().uuid(),
     amount: z.number().int().min(1),
@@ -72,6 +79,11 @@ type ProgressSubmissionRow = {
     student_id: string
     submitted_answers: unknown
     earned_points_per_part: unknown
+}
+
+type PointsDisabledProgressRow = {
+    earned_points?: number | string | null
+    points_disabled_by_teacher?: boolean | null
 }
 
 function sortQuestionsByCreatedAt<T extends { created_at?: string | null }>(questions: T[]): T[] {
@@ -148,6 +160,13 @@ function isSubmittedAnswerCorrect(question: PointQuestion, submittedAnswer: stri
 
 function sumEarnedPoints(earnedPointsPerPart: Record<string, number>): number {
     return Object.values(earnedPointsPerPart).reduce((sum, points) => sum + points, 0)
+}
+
+function getEffectiveEarnedPoints(progress: PointsDisabledProgressRow | null | undefined): number {
+    if (!progress || progress.points_disabled_by_teacher) return 0
+
+    const earnedPoints = Number(progress.earned_points)
+    return Number.isFinite(earnedPoints) ? earnedPoints : 0
 }
 
 function isPointProgressCompleted(
@@ -1869,12 +1888,13 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
 
     const completedAssignmentIds = new Set<string>()
     const earnedPointsMap = new Map<string, number>()
+    const pointsDisabledMap = new Map<string, boolean>()
     const submittedAnswersMap = new Map<string, any>()
 
     if (allAssignmentIds.length > 0) {
         const { data: progressData } = await supabaseAdmin
             .from('assignment_progress')
-            .select('assignment_id, is_completed, earned_points, submitted_answers, completed_question_indices')
+            .select('assignment_id, is_completed, earned_points, points_disabled_by_teacher, submitted_answers, completed_question_indices')
             .in('assignment_id', allAssignmentIds)
             .eq('student_id', studentId)
 
@@ -1899,7 +1919,10 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
                 )
 
                 if (p.is_completed || inferredCompletion) completedAssignmentIds.add(p.assignment_id)
-                if (p.earned_points != null) earnedPointsMap.set(p.assignment_id, p.earned_points)
+                if (p.earned_points != null || p.points_disabled_by_teacher) {
+                    earnedPointsMap.set(p.assignment_id, getEffectiveEarnedPoints(p))
+                }
+                if (p.points_disabled_by_teacher) pointsDisabledMap.set(p.assignment_id, true)
                 if (p.submitted_answers) submittedAnswersMap.set(p.assignment_id, p.submitted_answers)
             })
         }
@@ -1921,8 +1944,9 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
                 const earned = earnedPointsMap.get(a.id)
                 const submitted = submittedAnswersMap.get(a.id)
                 const totalPts = calculateAssignmentMaxPoints(a)
+                const pointsDisabledByTeacher = pointsDisabledMap.get(a.id) || false
 
-                let status: 'correct' | 'incorrect' | 'unsubmitted' = 'unsubmitted'
+                let status: 'correct' | 'incorrect' | 'unsubmitted' | 'not_counted' = 'unsubmitted'
 
                 const isCompleted = completedAssignmentIds.has(a.id)
                 const hasSubmission = submitted && Object.keys(submitted).length > 0
@@ -1932,7 +1956,9 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
                 // For non-point exercises, completion itself means done/correct for teacher progress display.
                 if (isPointExercise) {
                     if (isCompleted || hasSubmission) {
-                        if (earned != null && earned >= totalPts && totalPts > 0) {
+                        if (pointsDisabledByTeacher) {
+                            status = 'not_counted'
+                        } else if (earned != null && earned >= totalPts && totalPts > 0) {
                             status = 'correct'
                         } else {
                             status = 'incorrect'
@@ -1950,6 +1976,7 @@ export async function getStudentClassroomProgress(classroomId: string, studentId
                     points: totalPts,
                     earned: earned || 0,
                     pointsEnabled: !!a.points_enabled,
+                    pointsDisabledByTeacher,
                 }
             })
 
@@ -2069,7 +2096,7 @@ export async function getBulkStudentPoints(
 
             const { data: progressData } = await supabaseAdmin
                 .from('assignment_progress')
-                .select('assignment_id, earned_points')
+                .select('assignment_id, earned_points, points_disabled_by_teacher')
                 .in('assignment_id', allAssignmentIds)
                 .eq('student_id', studentId)
 
@@ -2077,7 +2104,9 @@ export async function getBulkStudentPoints(
             const earnedPointsMap = new Map<string, number>()
             if (progressData) {
                 progressData.forEach((p: any) => {
-                    if (p.earned_points != null) earnedPointsMap.set(p.assignment_id, p.earned_points)
+                    if (p.earned_points != null || p.points_disabled_by_teacher) {
+                        earnedPointsMap.set(p.assignment_id, getEffectiveEarnedPoints(p))
+                    }
                 })
             }
 
@@ -2375,7 +2404,7 @@ export async function getStudentAssignmentSubmissionForTeacher(
     const supabaseAdmin = createAdminClient()
     const { data: progress } = await supabaseAdmin
         .from('assignment_progress')
-        .select('submitted_answers, earned_points, earned_points_per_part, is_completed')
+        .select('submitted_answers, earned_points, earned_points_per_part, points_disabled_by_teacher, is_completed')
         .eq('student_id', studentId)
         .eq('assignment_id', assignmentId)
         .maybeSingle()
@@ -2399,10 +2428,109 @@ export async function getStudentAssignmentSubmissionForTeacher(
         submittedAnswers: normalizedProgress.submittedAnswers,
         earnedPointsPerPart: normalizedProgress.earnedPointsPerPart,
         earnedPoints: sumEarnedPoints(normalizedProgress.earnedPointsPerPart),
+        pointsDisabledByTeacher: !!progress?.points_disabled_by_teacher,
         isCompleted: assignment.points_enabled
             ? isPointProgressCompleted(normalizedProgress.submittedAnswers, orderedQuestions as PointQuestion[], assignment.required_variations_count)
             : !!progress?.is_completed
     }
+}
+
+export async function setTeacherExercisePointsDisabled(
+    classroomId: string,
+    studentId: string,
+    assignmentId: string,
+    disabled: boolean
+): Promise<ActionState & {
+    review?: Awaited<ReturnType<typeof getStudentAssignmentSubmissionForTeacher>>
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const validated = SetTeacherExercisePointsDisabledSchema.safeParse({
+        classroomId,
+        studentId,
+        assignmentId,
+        disabled
+    })
+
+    if (!validated.success) {
+        return { success: false, error: "Invalid request" }
+    }
+
+    const payload = validated.data
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id')
+        .eq('id', payload.classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const { data: enrollment } = await supabase
+        .from('enrollments')
+        .select('id')
+        .eq('classroom_id', payload.classroomId)
+        .eq('student_id', payload.studentId)
+        .maybeSingle()
+
+    if (!enrollment) {
+        return { success: false, error: "Student is not enrolled in this classroom" }
+    }
+
+    const { data: assignment } = await supabase
+        .from('assignments')
+        .select('id, points_enabled, collection_id')
+        .eq('id', payload.assignmentId)
+        .eq('classroom_id', payload.classroomId)
+        .single()
+
+    if (!assignment) {
+        return { success: false, error: "Exercise not found" }
+    }
+
+    if (!assignment.points_enabled) {
+        return { success: false, error: "Only pointed exercises can be changed" }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const { data: updatedProgress, error: updateError } = await supabaseAdmin
+        .from('assignment_progress')
+        .update({
+            points_disabled_by_teacher: payload.disabled,
+            updated_at: new Date().toISOString()
+        })
+        .eq('student_id', payload.studentId)
+        .eq('assignment_id', payload.assignmentId)
+        .select('id')
+        .maybeSingle()
+
+    if (updateError) {
+        console.error("Teacher points disable update error", updateError)
+        return { success: false, error: "Failed to update exercise points" }
+    }
+
+    if (!updatedProgress) {
+        return { success: false, error: "No student progress found for this exercise" }
+    }
+
+    revalidatePath(`/teacher/class/${payload.classroomId}`)
+    revalidatePath(`/student/class/${payload.classroomId}`)
+    if (assignment.collection_id) {
+        revalidatePath(`/student/class/${payload.classroomId}/collection/${assignment.collection_id}`)
+    }
+
+    const review = await getStudentAssignmentSubmissionForTeacher(
+        payload.classroomId,
+        payload.studentId,
+        payload.assignmentId
+    )
+
+    return { success: true, review }
 }
 
 export async function submitTeacherManualPointsAnswer(
@@ -2416,6 +2544,7 @@ export async function submitTeacherManualPointsAnswer(
     submittedAnswers?: Record<string, string>
     earnedPointsPerPart?: Record<string, number>
     earnedPoints?: number
+    pointsDisabledByTeacher?: boolean
     isCompleted?: boolean
 }> {
     const supabase = await createClient()
@@ -2486,7 +2615,7 @@ export async function submitTeacherManualPointsAnswer(
     const supabaseAdmin = createAdminClient()
     const { data: existingProgress } = await supabaseAdmin
         .from('assignment_progress')
-        .select('submitted_answers, earned_points_per_part, completed_question_indices')
+        .select('submitted_answers, earned_points_per_part, points_disabled_by_teacher, completed_question_indices')
         .eq('student_id', payload.studentId)
         .eq('assignment_id', payload.assignmentId)
         .maybeSingle()
@@ -2520,6 +2649,7 @@ export async function submitTeacherManualPointsAnswer(
             submitted_answers: submittedAnswers,
             earned_points_per_part: earnedPointsPerPart,
             earned_points: totalEarnedPoints,
+            points_disabled_by_teacher: !!existingProgress?.points_disabled_by_teacher,
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'
@@ -2537,6 +2667,7 @@ export async function submitTeacherManualPointsAnswer(
         submittedAnswers,
         earnedPointsPerPart,
         earnedPoints: totalEarnedPoints,
+        pointsDisabledByTeacher: !!existingProgress?.points_disabled_by_teacher,
         isCompleted: isFullyCompleted
     }
 }
@@ -2550,6 +2681,7 @@ export async function overrideAnswerCorrectness(
     submittedAnswers?: Record<string, string>
     earnedPointsPerPart?: Record<string, number>
     earnedPoints?: number
+    pointsDisabledByTeacher?: boolean
     isCompleted?: boolean
 }> {
     const supabase = await createClient()
@@ -2601,7 +2733,7 @@ export async function overrideAnswerCorrectness(
     const supabaseAdmin = createAdminClient()
     const { data: existingProgress } = await supabaseAdmin
         .from('assignment_progress')
-        .select('submitted_answers, earned_points_per_part, completed_question_indices')
+        .select('submitted_answers, earned_points_per_part, points_disabled_by_teacher, completed_question_indices')
         .eq('student_id', studentId)
         .eq('assignment_id', assignmentId)
         .maybeSingle()
@@ -2641,6 +2773,7 @@ export async function overrideAnswerCorrectness(
             submitted_answers: submittedAnswers,
             earned_points_per_part: earnedPointsPerPart,
             earned_points: totalEarnedPoints,
+            points_disabled_by_teacher: !!existingProgress?.points_disabled_by_teacher,
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'
@@ -2658,6 +2791,7 @@ export async function overrideAnswerCorrectness(
         submittedAnswers,
         earnedPointsPerPart,
         earnedPoints: totalEarnedPoints,
+        pointsDisabledByTeacher: !!existingProgress?.points_disabled_by_teacher,
         isCompleted: isFullyCompleted
     }
 }
@@ -3449,7 +3583,7 @@ export async function autoSubmitForAllTestParticipants(
     // Fetch existing progress for ALL participants on these assignments
     const { data: allProgress } = await supabaseAdmin
         .from('assignment_progress')
-        .select('student_id, assignment_id, submitted_answers, earned_points_per_part')
+        .select('student_id, assignment_id, submitted_answers, earned_points_per_part, points_disabled_by_teacher')
         .in('assignment_id', assignmentIds)
         .in('student_id', studentIds)
 
@@ -3498,6 +3632,7 @@ export async function autoSubmitForAllTestParticipants(
                         submitted_answers: submittedAnswers,
                         earned_points_per_part: earnedPointsPerPart,
                         earned_points: totalEarnedPoints,
+                        points_disabled_by_teacher: !!progress?.points_disabled_by_teacher,
                         is_completed: true,
                         updated_at: new Date().toISOString()
                     }, {
@@ -3588,7 +3723,7 @@ export async function getStudentsForTestDialog(
         const supabaseAdmin = createAdminClient()
         const { data: progressData } = await supabaseAdmin
             .from('assignment_progress')
-            .select('student_id, assignment_id, earned_points, is_completed')
+            .select('student_id, assignment_id, earned_points, points_disabled_by_teacher, is_completed')
             .in('assignment_id', pointedIds)
             .in('student_id', studentIds)
 
@@ -3598,7 +3733,7 @@ export async function getStudentsForTestDialog(
                 if (!progressByStudent[sid]) {
                     progressByStudent[sid] = { earned: 0, completed: true }
                 }
-                progressByStudent[sid].earned += Number(p.earned_points) || 0
+                progressByStudent[sid].earned += getEffectiveEarnedPoints(p)
                 if (!p.is_completed) {
                     progressByStudent[sid].completed = false
                 }

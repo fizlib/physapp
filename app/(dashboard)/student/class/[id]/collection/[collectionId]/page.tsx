@@ -303,7 +303,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
     const progressPromise = assignmentIds.length > 0
         ? supabase
             .from('assignment_progress')
-            .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part')
+            .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part, points_disabled_by_teacher')
             .eq('student_id', user.id)
             .in('assignment_id', assignmentIds)
         : Promise.resolve({
@@ -315,6 +315,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                 active_question_index: number | null
                 submitted_answers: Record<string, string> | null
                 earned_points_per_part: Record<string, number> | null
+                points_disabled_by_teacher: boolean | null
             }[] | null
         })
 

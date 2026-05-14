@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle2, Pencil, ShieldCheck } from "lucide-react"
+import { Loader2, CheckCircle2, Pencil, ShieldCheck, Ban, RotateCcw } from "lucide-react"
 import {
     getStudentClassroomProgress,
     getStudentAssignmentSubmissionForTeacher,
     submitTeacherManualPointsAnswer,
-    overrideAnswerCorrectness
+    overrideAnswerCorrectness,
+    setTeacherExercisePointsDisabled
 } from "../../actions"
 import { CircularGradeDisplay } from "@/components/student/CircularGradeDisplay"
 import MathDisplay from "@/components/MathDisplay"
@@ -20,7 +21,7 @@ interface StudentProgressPanelProps {
     student: { id: string, name: string }
 }
 
-type ExerciseStatus = 'correct' | 'incorrect' | 'unsubmitted'
+type ExerciseStatus = 'correct' | 'incorrect' | 'unsubmitted' | 'not_counted'
 
 interface ExerciseSelection {
     collectionId: string
@@ -35,12 +36,14 @@ interface ExerciseReviewData {
         id: string
         title: string
         points_enabled: boolean
+        points: number | null
         required_variations_count: number | null
         questions: ExerciseQuestion[]
     }
     submittedAnswers: Record<string, string>
     earnedPointsPerPart: Record<string, number>
     earnedPoints: number
+    pointsDisabledByTeacher: boolean
     isCompleted: boolean
 }
 
@@ -62,6 +65,7 @@ interface ManualSubmissionUpdate {
     submittedAnswers: Record<string, string>
     earnedPointsPerPart?: Record<string, number>
     earnedPoints: number
+    pointsDisabledByTeacher?: boolean
     isCompleted: boolean
 }
 
@@ -71,6 +75,7 @@ interface AssignmentStatus {
     points: number
     earned: number
     pointsEnabled: boolean
+    pointsDisabledByTeacher?: boolean
 }
 
 interface ProgressCollection {
@@ -87,6 +92,26 @@ interface StudentProgressResponse {
     collections: ProgressCollection[]
     totalPoints: number
     earnedPoints: number
+}
+
+function getReviewMaxPoints(data: ExerciseReviewData): number {
+    const requiredVariationsCount = Number(data.assignment.required_variations_count) || 0
+    if (requiredVariationsCount > 0 && data.assignment.questions[0]) {
+        return (Number(data.assignment.questions[0].points) || 1) * requiredVariationsCount
+    }
+
+    const assignmentPoints = Number(data.assignment.points)
+    if (Number.isFinite(assignmentPoints) && assignmentPoints > 0) return assignmentPoints
+
+    return data.assignment.questions.reduce((sum, question) => sum + (Number(question.points) || 1), 0)
+}
+
+function getReviewStatus(data: ExerciseReviewData): ExerciseStatus {
+    if (data.pointsDisabledByTeacher) return 'not_counted'
+    if (!data.assignment.points_enabled) return data.isCompleted ? 'correct' : 'incorrect'
+
+    const maxPoints = getReviewMaxPoints(data)
+    return data.earnedPoints >= maxPoints && maxPoints > 0 ? 'correct' : 'incorrect'
 }
 
 export function StudentProgressPanel({ classroomId, student }: StudentProgressPanelProps) {
@@ -174,9 +199,16 @@ export function StudentProgressPanel({ classroomId, student }: StudentProgressPa
                 submittedAnswers: update.submittedAnswers,
                 earnedPointsPerPart: update.earnedPointsPerPart ?? prev.earnedPointsPerPart,
                 earnedPoints: update.earnedPoints,
+                pointsDisabledByTeacher: update.pointsDisabledByTeacher ?? prev.pointsDisabledByTeacher,
                 isCompleted: update.isCompleted
             }
         })
+        void fetchProgress()
+    }, [fetchProgress])
+
+    const handleExerciseReviewApplied = useCallback((reviewData: ExerciseReviewData) => {
+        setSelectedExerciseData(reviewData)
+        setSelectedExercise((prev) => prev ? { ...prev, status: getReviewStatus(reviewData) } : prev)
         void fetchProgress()
     }, [fetchProgress])
 
@@ -222,6 +254,7 @@ export function StudentProgressPanel({ classroomId, student }: StudentProgressPa
                                         selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
                                         onSelectExercise={handleExerciseSelect}
                                         onManualSubmissionApplied={handleManualSubmissionApplied}
+                                        onExerciseReviewApplied={handleExerciseReviewApplied}
                                         onCloseReview={() => {
                                             exerciseRequestIdRef.current += 1
                                             setSelectedExercise(null)
@@ -255,6 +288,7 @@ export function StudentProgressPanel({ classroomId, student }: StudentProgressPa
                                         selectedExerciseError={selectedExercise?.collectionId === collection.id ? selectedExerciseError : null}
                                         onSelectExercise={handleExerciseSelect}
                                         onManualSubmissionApplied={handleManualSubmissionApplied}
+                                        onExerciseReviewApplied={handleExerciseReviewApplied}
                                         onCloseReview={() => {
                                             exerciseRequestIdRef.current += 1
                                             setSelectedExercise(null)
@@ -290,6 +324,7 @@ function CollectionProgressRow({
     selectedExerciseError,
     onSelectExercise,
     onManualSubmissionApplied,
+    onExerciseReviewApplied,
     onCloseReview
 }: {
     classroomId: string
@@ -302,6 +337,7 @@ function CollectionProgressRow({
     selectedExerciseError: string | null
     onSelectExercise: (selection: ExerciseSelection) => void
     onManualSubmissionApplied: (update: ManualSubmissionUpdate) => void
+    onExerciseReviewApplied: (reviewData: ExerciseReviewData) => void
     onCloseReview: () => void
 }) {
     const isComplete = collection.progress === 100
@@ -334,6 +370,13 @@ function CollectionProgressRow({
                         bgColor = 'bg-green-500 shadow-sm shadow-green-500/20'
                         borderColor = as.pointsEnabled ? 'border-amber-400' : 'border-green-600'
                         textColor = 'text-white'
+                    } else if (as.status === 'not_counted') {
+                        bgColor = 'bg-zinc-500 shadow-sm shadow-zinc-500/20'
+                        borderColor = 'border-zinc-600'
+                        textColor = 'text-white'
+                        style = {
+                            background: 'repeating-linear-gradient(45deg, #71717a 0 6px, #52525b 6px 12px)'
+                        }
                     } else if (as.status === 'incorrect') {
                         if (as.earned > 0 && as.points > 0) {
                             const percent = (as.earned / as.points) * 100
@@ -351,11 +394,12 @@ function CollectionProgressRow({
                         }
                     }
 
-                    const isClickable = as.status === 'correct' || as.status === 'incorrect'
+                    const isClickable = as.status === 'correct' || as.status === 'incorrect' || as.status === 'not_counted'
                     const isSelected = selectedAssignmentId === as.id
                     const baseClasses = `flex h-8 w-8 items-center justify-center rounded-md border text-xs font-bold transition-all ${bgColor} ${borderColor} ${frameColor} ${textColor}`
                     const selectedClasses = isSelected ? 'outline outline-2 outline-primary/80 outline-offset-1' : ''
-                    const title = `${as.earned} / ${as.points} tasku${isClickable ? ' - Click to review answer' : ''}`
+                    const disabledLabel = as.pointsDisabledByTeacher ? ' - Not counted by teacher' : ''
+                    const title = `${as.earned} / ${as.points} tasku${disabledLabel}${isClickable ? ' - Click to review answer' : ''}`
 
                     if (isClickable) {
                         return (
@@ -400,6 +444,7 @@ function CollectionProgressRow({
                     loading={selectedExerciseLoading}
                     error={selectedExerciseError}
                     onManualSubmissionApplied={onManualSubmissionApplied}
+                    onExerciseReviewApplied={onExerciseReviewApplied}
                     onClose={onCloseReview}
                 />
             )}
@@ -415,6 +460,7 @@ function ExerciseReviewPanel({
     loading,
     error,
     onManualSubmissionApplied,
+    onExerciseReviewApplied,
     onClose
 }: {
     classroomId: string
@@ -424,16 +470,21 @@ function ExerciseReviewPanel({
     loading: boolean
     error: string | null
     onManualSubmissionApplied: (update: ManualSubmissionUpdate) => void
+    onExerciseReviewApplied: (reviewData: ExerciseReviewData) => void
     onClose: () => void
 }) {
     const [selectedManualQuestionId, setSelectedManualQuestionId] = useState<string | null>(null)
     const [isSubmittingManualAnswer, setIsSubmittingManualAnswer] = useState(false)
     const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
     const [isOverriding, setIsOverriding] = useState<string | null>(null)
+    const [isTogglingPointsDisabled, setIsTogglingPointsDisabled] = useState(false)
 
-    const statusPill = selection.status === 'correct'
+    const displayStatus = data ? getReviewStatus(data) : selection.status
+    const statusPill = displayStatus === 'correct'
         ? { label: 'Correct', className: 'bg-green-100 text-green-700' }
-        : { label: 'Incorrect', className: 'bg-rose-100 text-rose-700' }
+        : displayStatus === 'not_counted'
+            ? { label: 'Not counted', className: 'bg-zinc-100 text-zinc-700' }
+            : { label: 'Incorrect', className: 'bg-rose-100 text-rose-700' }
 
     const isVariationExercise = !!data && (data.assignment.required_variations_count || 0) > 0
     const variationWithAnswer = isVariationExercise && data
@@ -529,6 +580,7 @@ function ExerciseReviewPanel({
                 submittedAnswers: result.submittedAnswers,
                 earnedPointsPerPart: result.earnedPointsPerPart,
                 earnedPoints: result.earnedPoints,
+                pointsDisabledByTeacher: result.pointsDisabledByTeacher,
                 isCompleted: result.isCompleted
             })
 
@@ -539,6 +591,40 @@ function ExerciseReviewPanel({
             toast.error("Failed to submit manual answer")
         } finally {
             setIsSubmittingManualAnswer(false)
+        }
+    }
+
+    const handleTogglePointsDisabled = async () => {
+        if (!data?.assignment.points_enabled) return
+
+        const nextDisabledValue = !data.pointsDisabledByTeacher
+        setIsTogglingPointsDisabled(true)
+
+        try {
+            const result = await setTeacherExercisePointsDisabled(
+                classroomId,
+                studentId,
+                selection.assignmentId,
+                nextDisabledValue
+            )
+
+            if (!result.success) {
+                toast.error(result.error || "Failed to update exercise points")
+                return
+            }
+
+            if (!result.review) {
+                toast.error("Points were updated, but review data was incomplete")
+                return
+            }
+
+            onExerciseReviewApplied(result.review as ExerciseReviewData)
+            toast.success(nextDisabledValue ? "Exercise points disabled" : "Exercise points restored")
+        } catch (toggleError) {
+            console.error(toggleError)
+            toast.error("Failed to update exercise points")
+        } finally {
+            setIsTogglingPointsDisabled(false)
         }
     }
 
@@ -561,9 +647,32 @@ function ExerciseReviewPanel({
                         )}
                     </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={onClose}>
-                    Close review
-                </Button>
+                <div className="flex items-center gap-2">
+                    {data?.assignment.points_enabled && (
+                        <Button
+                            variant={data.pointsDisabledByTeacher ? "outline" : "ghost"}
+                            size="sm"
+                            className={data.pointsDisabledByTeacher
+                                ? "gap-1.5 text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                                : "gap-1.5 text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100"
+                            }
+                            disabled={isTogglingPointsDisabled}
+                            onClick={handleTogglePointsDisabled}
+                        >
+                            {isTogglingPointsDisabled ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : data.pointsDisabledByTeacher ? (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                            ) : (
+                                <Ban className="h-3.5 w-3.5" />
+                            )}
+                            {data.pointsDisabledByTeacher ? "Restore Points" : "Disable Points"}
+                        </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={onClose}>
+                        Close review
+                    </Button>
+                </div>
             </div>
 
             {loading ? (
@@ -577,6 +686,12 @@ function ExerciseReviewPanel({
                 <p className="text-sm text-muted-foreground">No exercise details found.</p>
             ) : (
                 <div className="space-y-4">
+                    {data.pointsDisabledByTeacher && (
+                        <div className="rounded-md border border-zinc-300 bg-zinc-50 p-3 text-sm text-zinc-700">
+                            This exercise is not counted for this student. Raw score is preserved at {data.earnedPoints} points and can be restored.
+                        </div>
+                    )}
+
                     {showNoVariationSubmission && (
                         <p className="text-sm text-muted-foreground">
                             No answer was submitted to this exercise.
@@ -679,6 +794,7 @@ function ExerciseReviewPanel({
                                         submittedAnswers: result.submittedAnswers,
                                         earnedPointsPerPart: result.earnedPointsPerPart,
                                         earnedPoints: result.earnedPoints,
+                                        pointsDisabledByTeacher: result.pointsDisabledByTeacher,
                                         isCompleted: result.isCompleted
                                     })
                                 }

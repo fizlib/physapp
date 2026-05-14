@@ -38,6 +38,18 @@ export type ActionState = {
     error?: string
 }
 
+type PointsDisabledProgressRow = {
+    earned_points?: number | string | null
+    points_disabled_by_teacher?: boolean | null
+}
+
+function getEffectiveEarnedPoints(progress: PointsDisabledProgressRow | null | undefined): number {
+    if (!progress || progress.points_disabled_by_teacher) return 0
+
+    const earnedPoints = Number(progress.earned_points)
+    return Number.isFinite(earnedPoints) ? earnedPoints : 0
+}
+
 export async function logSolutionRevealClick(
     assignmentId: string,
     questionId: string,
@@ -544,7 +556,7 @@ export async function getCollectionProgress(collectionId: string): Promise<{
     // Fetch progress for these assignments
     const { data: progress, error } = await supabase
         .from('assignment_progress')
-        .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part')
+        .select('assignment_id, completed_question_indices, revealed_question_indices, is_completed, active_question_index, submitted_answers, earned_points_per_part, points_disabled_by_teacher')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 
@@ -604,7 +616,7 @@ export async function submitPointsAnswer(
     // Fetch existing progress
     const { data: existing } = await supabase
         .from('assignment_progress')
-        .select('submitted_answers, earned_points_per_part, completed_question_indices')
+        .select('submitted_answers, earned_points_per_part, points_disabled_by_teacher, completed_question_indices')
         .eq('student_id', user.id)
         .eq('assignment_id', assignmentId)
         .single()
@@ -695,6 +707,7 @@ export async function submitPointsAnswer(
             submitted_answers: submittedAnswers,
             earned_points_per_part: earnedPointsPerPart,
             earned_points: totalEarnedPoints,
+            points_disabled_by_teacher: !!existing?.points_disabled_by_teacher,
             updated_at: new Date().toISOString()
         }, {
             onConflict: 'student_id, assignment_id'
@@ -751,7 +764,7 @@ export async function autoSubmitCollectionPointsAnswers(collectionId: string): P
     const assignmentIds = assignments.map(a => a.id)
     const { data: progressData } = await supabase
         .from('assignment_progress')
-        .select('assignment_id, submitted_answers, earned_points_per_part')
+        .select('assignment_id, submitted_answers, earned_points_per_part, points_disabled_by_teacher')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 
@@ -790,6 +803,7 @@ export async function autoSubmitCollectionPointsAnswers(collectionId: string): P
                     submitted_answers: submittedAnswers,
                     earned_points_per_part: earnedPointsPerPart,
                     earned_points: totalEarnedPoints,
+                    points_disabled_by_teacher: !!progress?.points_disabled_by_teacher,
                     is_completed: true,
                     updated_at: new Date().toISOString()
                 }, {
@@ -817,6 +831,7 @@ export async function getCollectionResults(collectionId: string): Promise<{
             pointsEnabled: boolean
             points: number
             earnedPoints: number | null
+            pointsDisabledByTeacher: boolean
             submittedAnswer: string | null
             isCorrect: boolean | null
         }>
@@ -866,7 +881,7 @@ export async function getCollectionResults(collectionId: string): Promise<{
     const assignmentIds = assignments.map(a => a.id)
     const { data: progressData } = await supabase
         .from('assignment_progress')
-        .select('assignment_id, earned_points, submitted_answer, is_completed')
+        .select('assignment_id, earned_points, points_disabled_by_teacher, submitted_answer, is_completed')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 
@@ -879,11 +894,12 @@ export async function getCollectionResults(collectionId: string): Promise<{
         const progress = progressMap.get(a.id)
         const isPointsExercise = a.points_enabled
         const exercisePoints = isPointsExercise ? calculateAssignmentMaxPoints(a) : 0
+        const effectiveEarnedPoints = getEffectiveEarnedPoints(progress)
 
         if (isPointsExercise) {
             totalPoints += exercisePoints
-            if (progress?.earned_points != null && !isCheater) {
-                earnedPoints += progress.earned_points
+            if ((progress?.earned_points != null || progress?.points_disabled_by_teacher) && !isCheater) {
+                earnedPoints += effectiveEarnedPoints
             }
         }
 
@@ -892,9 +908,10 @@ export async function getCollectionResults(collectionId: string): Promise<{
             title: a.title,
             pointsEnabled: isPointsExercise,
             points: exercisePoints,
-            earnedPoints: isCheater ? 0 : (progress?.earned_points ?? null),
+            earnedPoints: isCheater ? 0 : (progress ? effectiveEarnedPoints : null),
+            pointsDisabledByTeacher: !!progress?.points_disabled_by_teacher,
             submittedAnswer: progress?.submitted_answer ?? null,
-            isCorrect: isCheater ? false : (progress?.earned_points != null ? progress.earned_points > 0 : null)
+            isCorrect: isCheater ? false : (progress ? effectiveEarnedPoints > 0 : null)
         }
     })
 
@@ -963,11 +980,11 @@ export async function getStudentDashboardStats(): Promise<{
     const assignmentIds = assignments.map(a => a.id)
     const { data: progress } = await supabase
         .from('assignment_progress')
-        .select('assignment_id, earned_points')
+        .select('assignment_id, earned_points, points_disabled_by_teacher')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 
-    const progressMap = new Map(progress?.map(p => [p.assignment_id, p.earned_points || 0]) || [])
+    const progressMap = new Map(progress?.map(p => [p.assignment_id, getEffectiveEarnedPoints(p)]) || [])
 
     const stats: Record<string, { totalPoints: number, earnedPoints: number }> = {}
 
@@ -1066,11 +1083,11 @@ export async function getStudentPointsBreakdown(): Promise<{
     const assignmentIds = assignments.map(a => a.id)
     const { data: progress } = await supabase
         .from('assignment_progress')
-        .select('assignment_id, earned_points')
+        .select('assignment_id, earned_points, points_disabled_by_teacher')
         .eq('student_id', user.id)
         .in('assignment_id', assignmentIds)
 
-    const progressMap = new Map(progress?.map(p => [p.assignment_id, p.earned_points || 0]) || [])
+    const progressMap = new Map(progress?.map(p => [p.assignment_id, getEffectiveEarnedPoints(p)]) || [])
 
     // 4. Aggregate per-collection per-classroom
     // Map: classroomId -> collectionId -> { title, createdAt, totalPoints, earnedPoints }

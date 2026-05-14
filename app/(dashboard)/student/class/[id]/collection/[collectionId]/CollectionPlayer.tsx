@@ -26,7 +26,7 @@ import {
     reportTabViolation,
     checkTabBlockStatus
 } from "../../../../actions"
-import { ShieldAlert, CheckCircle2, XCircle, FileText } from "lucide-react"
+import { ShieldAlert, CheckCircle2, XCircle, FileText, Ban } from "lucide-react"
 
 interface AssignmentMeta {
     id: string
@@ -287,6 +287,7 @@ export function CollectionPlayer({
             pointsEnabled: boolean
             points: number
             earnedPoints: number | null
+            pointsDisabledByTeacher?: boolean
             isCorrect: boolean | null
         }>
     } | null>(null)
@@ -799,13 +800,13 @@ export function CollectionPlayer({
 
                                 <div className="space-y-2 text-left">
                                     {pointsResults.exercises.filter(e => e.pointsEnabled).map((ex, idx) => (
-                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.pointsDisabledByTeacher ? 'bg-zinc-50 text-zinc-700' : ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                                             <span className="flex items-center gap-2">
-                                                {ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                {ex.pointsDisabledByTeacher ? <Ban className="h-4 w-4" /> : ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                                                 Užduotis {idx + 1}
                                             </span>
                                             <span className="font-medium">
-                                                {ex.earnedPoints ?? 0} / {ex.points} taškai
+                                                {ex.pointsDisabledByTeacher ? `0 / ${ex.points} taškai` : `${ex.earnedPoints ?? 0} / ${ex.points} taškai`}
                                             </span>
                                         </div>
                                     ))}
@@ -854,13 +855,13 @@ export function CollectionPlayer({
 
                                 <div className="space-y-2 text-left">
                                     {pointsResults.exercises.filter(e => e.pointsEnabled).map((ex, idx) => (
-                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                        <div key={ex.id} className={`flex items-center justify-between p-2 rounded-md text-sm ${ex.pointsDisabledByTeacher ? 'bg-zinc-50 text-zinc-700' : ex.isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                                             <span className="flex items-center gap-2">
-                                                {ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                                                {ex.pointsDisabledByTeacher ? <Ban className="h-4 w-4" /> : ex.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                                                 Užduotis {idx + 1}
                                             </span>
                                             <span className="font-medium">
-                                                {ex.earnedPoints ?? 0} / {ex.points} taškai
+                                                {ex.pointsDisabledByTeacher ? `0 / ${ex.points} taškai` : `${ex.earnedPoints ?? 0} / ${ex.points} taškai`}
                                             </span>
                                         </div>
                                     ))}
@@ -1051,9 +1052,11 @@ export function CollectionPlayer({
                                 const exerciseResult = pointsResults.exercises.find(e => e.id === currentAssignment.id)
                                 if (exerciseResult) {
                                     return (
-                                        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${exerciseResult.isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                            {exerciseResult.isCorrect ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
-                                            <span className="font-medium">{exerciseResult.earnedPoints ?? 0} / {exerciseResult.points} taškai</span>
+                                        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${exerciseResult.pointsDisabledByTeacher ? 'bg-zinc-100 text-zinc-700' : exerciseResult.isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {exerciseResult.pointsDisabledByTeacher ? <Ban className="h-5 w-5" /> : exerciseResult.isCorrect ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                                            <span className="font-medium">
+                                                {exerciseResult.pointsDisabledByTeacher ? `0 / ${exerciseResult.points} taškai` : `${exerciseResult.earnedPoints ?? 0} / ${exerciseResult.points} taškai`}
+                                            </span>
                                         </div>
                                     )
                                 }
