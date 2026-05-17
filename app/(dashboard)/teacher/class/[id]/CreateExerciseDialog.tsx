@@ -6,6 +6,7 @@ import {
     Dialog,
     DialogContent,
     DialogHeader,
+    DialogDescription,
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
@@ -298,7 +299,7 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
         }
     }
 
-    const updateQuestion = (index: number, field: keyof QuestionData, value: any) => {
+    const updateQuestion = (index: number, field: keyof QuestionData, value: QuestionData[keyof QuestionData]) => {
         setData(prev => {
             const newQuestions = [...prev.questions]
             newQuestions[index] = { ...newQuestions[index], [field]: value }
@@ -552,6 +553,9 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Create New Exercise</DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Create an exercise manually, from an uploaded image, or from a simulation.
+                    </DialogDescription>
                 </DialogHeader>
 
                 {/* Exercise Mode Selector */}

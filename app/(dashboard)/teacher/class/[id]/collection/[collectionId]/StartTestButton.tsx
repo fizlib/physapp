@@ -55,52 +55,8 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
     const [isEnding, setIsEnding] = useState(false)
     const isEndingRef = useRef(false)
 
-    if (!hasPointedExercises) {
-        return null
-    }
-
-    // Check for active test on mount
-    useEffect(() => {
-        let cancelled = false
-        const checkActiveTest = async () => {
-            const result = await getCollectionTestEndTime(collectionId, classroomId)
-            if (cancelled) return
-            if (result.success && result.testModeEndsAt) {
-                const endTime = new Date(result.testModeEndsAt)
-                if (endTime > new Date()) {
-                    setTestEndTime(endTime)
-                }
-            }
-        }
-        checkActiveTest()
-        return () => { cancelled = true }
-    }, [collectionId, classroomId])
-
-    // Countdown ticker
-    useEffect(() => {
-        if (!testEndTime) {
-            setRemainingSeconds(null)
-            return
-        }
-
-        const tick = () => {
-            const now = Date.now()
-            const remaining = Math.max(0, Math.floor((testEndTime.getTime() - now) / 1000))
-            setRemainingSeconds(remaining)
-
-            if (remaining <= 0 && !isEndingRef.current) {
-                // Timer expired — trigger server-side auto-submit
-                handleTimerExpired()
-            }
-        }
-
-        tick()
-        const interval = setInterval(tick, 1000)
-        return () => clearInterval(interval)
-    }, [testEndTime])
-
     const handleTimerExpired = useCallback(async () => {
-        if (isEndingRef.current) return
+        if (!hasPointedExercises || isEndingRef.current) return
         isEndingRef.current = true
         setIsEnding(true)
 
@@ -121,7 +77,53 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
             setIsEnding(false)
             isEndingRef.current = false
         }
-    }, [collectionId, classroomId, router])
+    }, [collectionId, classroomId, hasPointedExercises, router])
+
+    // Check for active test on mount
+    useEffect(() => {
+        if (!hasPointedExercises) {
+            setTestEndTime(null)
+            setRemainingSeconds(null)
+            return
+        }
+
+        let cancelled = false
+        const checkActiveTest = async () => {
+            const result = await getCollectionTestEndTime(collectionId, classroomId)
+            if (cancelled) return
+            if (result.success && result.testModeEndsAt) {
+                const endTime = new Date(result.testModeEndsAt)
+                if (endTime > new Date()) {
+                    setTestEndTime(endTime)
+                }
+            }
+        }
+        checkActiveTest()
+        return () => { cancelled = true }
+    }, [collectionId, classroomId, hasPointedExercises])
+
+    // Countdown ticker
+    useEffect(() => {
+        if (!hasPointedExercises || !testEndTime) {
+            setRemainingSeconds(null)
+            return
+        }
+
+        const tick = () => {
+            const now = Date.now()
+            const remaining = Math.max(0, Math.floor((testEndTime.getTime() - now) / 1000))
+            setRemainingSeconds(remaining)
+
+            if (remaining <= 0 && !isEndingRef.current) {
+                // Timer expired — trigger server-side auto-submit
+                handleTimerExpired()
+            }
+        }
+
+        tick()
+        const interval = setInterval(tick, 1000)
+        return () => clearInterval(interval)
+    }, [hasPointedExercises, testEndTime, handleTimerExpired])
 
     const handleEndTestEarly = async () => {
         if (isEndingRef.current) return
@@ -224,6 +226,10 @@ export function StartTestButton({ collectionId, classroomId, hasPointedExercises
     }
 
     const selectedWithPriorResults = students.filter(s => selectedIds.has(s.id) && s.hasCompleted)
+
+    if (!hasPointedExercises) {
+        return null
+    }
 
     // If a test is active, show the countdown timer + end button
     if (testEndTime && remainingSeconds !== null) {

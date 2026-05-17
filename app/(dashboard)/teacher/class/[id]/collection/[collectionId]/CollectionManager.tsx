@@ -6,6 +6,7 @@ import {
     Dialog,
     DialogContent,
     DialogHeader,
+    DialogDescription,
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
@@ -251,6 +252,9 @@ export function CollectionManager({
                             {step === 2 && "Select Collection"}
                             {step === 3 && "Select Exercises"}
                         </DialogTitle>
+                        <DialogDescription className="sr-only">
+                            Import exercises from another collection into this collection.
+                        </DialogDescription>
                     </div>
                 </DialogHeader>
 
