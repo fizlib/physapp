@@ -57,6 +57,13 @@ const AddBonusPointsSchema = z.object({
     studentIds: z.array(z.string().uuid()).min(1),
 })
 
+const AssignRandomGroupsSchema = z.object({
+    classroomId: z.string().uuid(),
+    groupSize: z.number().int().min(2),
+    leftoverStrategy: z.enum(['smaller_group', 'distribute']),
+    studentIds: z.array(z.string().uuid()).min(1),
+})
+
 import { getClientIp } from '@/lib/ip'
 
 type PointQuestion = {
@@ -79,6 +86,17 @@ type ProgressSubmissionRow = {
     student_id: string
     submitted_answers: unknown
     earned_points_per_part: unknown
+}
+
+type ClassroomStudentProfileRow = {
+    first_name: string | null
+    last_name: string | null
+    email: string | null
+}
+
+type EnrollmentWithStudentProfileRow = {
+    student_id: string
+    profiles: ClassroomStudentProfileRow | ClassroomStudentProfileRow[] | null
 }
 
 type PointsDisabledProgressRow = {
@@ -558,6 +576,27 @@ export type ActionState = {
     success: boolean
     message?: string
     error?: string
+}
+
+type RandomGroupLeftoverStrategy = 'smaller_group' | 'distribute'
+
+export type RandomGroupAssignmentMember = {
+    id: string
+    firstName: string | null
+    lastName: string | null
+    email: string | null
+    name: string
+}
+
+export type RandomGroupAssignmentGroup = {
+    groupNumber: number
+    members: RandomGroupAssignmentMember[]
+}
+
+export type AssignRandomGroupsState = ActionState & {
+    batchId?: string
+    createdAt?: string
+    groups?: RandomGroupAssignmentGroup[]
 }
 
 export async function addStudent(prevState: any, formData: FormData): Promise<ActionState> {
@@ -4203,6 +4242,211 @@ export async function addBonusPointsToAll(
     return addBonusPointsToStudents(classroomId, amount, students.map((student) => student.id))
 }
 
+function formatRandomGroupStudentName(student: {
+    first_name?: string | null
+    last_name?: string | null
+    email?: string | null
+}): string {
+    return [student.first_name, student.last_name].filter(Boolean).join(' ') || student.email || 'Unnamed student'
+}
+
+function getEnrollmentStudentProfile(enrollment: EnrollmentWithStudentProfileRow): ClassroomStudentProfileRow | null {
+    return Array.isArray(enrollment.profiles) ? enrollment.profiles[0] || null : enrollment.profiles
+}
+
+function shuffleRandomGroupStudents<T>(items: T[]): T[] {
+    const shuffled = [...items]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const current = shuffled[i]
+        shuffled[i] = shuffled[j]
+        shuffled[j] = current
+    }
+    return shuffled
+}
+
+function buildRandomGroupIdLists(
+    shuffledStudentIds: string[],
+    groupSize: number,
+    leftoverStrategy: RandomGroupLeftoverStrategy
+): string[][] {
+    const remainder = shuffledStudentIds.length % groupSize
+
+    if (remainder === 0 || leftoverStrategy === 'smaller_group') {
+        const groups: string[][] = []
+        for (let i = 0; i < shuffledStudentIds.length; i += groupSize) {
+            groups.push(shuffledStudentIds.slice(i, i + groupSize))
+        }
+        return groups
+    }
+
+    const fullGroupCount = Math.floor(shuffledStudentIds.length / groupSize)
+    const groups = Array.from({ length: fullGroupCount }, (_, index) => {
+        const start = index * groupSize
+        return shuffledStudentIds.slice(start, start + groupSize)
+    })
+
+    let cursor = fullGroupCount * groupSize
+    for (let i = 0; i < remainder; i++) {
+        groups[i % groups.length].push(shuffledStudentIds[cursor])
+        cursor += 1
+    }
+
+    return groups
+}
+
+export async function assignRandomGroupsToStudents(
+    classroomId: string,
+    groupSize: number,
+    leftoverStrategy: RandomGroupLeftoverStrategy,
+    studentIds: string[]
+): Promise<AssignRandomGroupsState> {
+    const validated = AssignRandomGroupsSchema.safeParse({ classroomId, groupSize, leftoverStrategy, studentIds })
+    if (!validated.success) {
+        return { success: false, error: "Invalid random groups request" }
+    }
+
+    const selectedStudentIds = [...new Set(validated.data.studentIds)]
+    if (selectedStudentIds.length < validated.data.groupSize) {
+        return { success: false, error: `Select at least ${validated.data.groupSize} students` }
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id, name')
+        .eq('id', validated.data.classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const { data: enrollments, error: enrollmentsError } = await supabaseAdmin
+        .from('enrollments')
+        .select('student_id, profiles:student_id(first_name, last_name, email)')
+        .eq('classroom_id', validated.data.classroomId)
+        .in('student_id', selectedStudentIds)
+
+    if (enrollmentsError) {
+        console.error(enrollmentsError)
+        return { success: false, error: "Failed to fetch selected students" }
+    }
+
+    if (!enrollments || enrollments.length !== selectedStudentIds.length) {
+        return { success: false, error: "One or more selected students are not enrolled in this classroom" }
+    }
+
+    const studentById = new Map<string, RandomGroupAssignmentMember>()
+    for (const enrollment of enrollments as EnrollmentWithStudentProfileRow[]) {
+        const profile = getEnrollmentStudentProfile(enrollment)
+        studentById.set(enrollment.student_id, {
+            id: enrollment.student_id,
+            firstName: profile?.first_name || null,
+            lastName: profile?.last_name || null,
+            email: profile?.email || null,
+            name: formatRandomGroupStudentName(profile || {}),
+        })
+    }
+
+    const shuffledStudentIds = shuffleRandomGroupStudents(selectedStudentIds)
+    const groupIdLists = buildRandomGroupIdLists(shuffledStudentIds, validated.data.groupSize, validated.data.leftoverStrategy)
+    const groups: RandomGroupAssignmentGroup[] = groupIdLists.map((groupIds, index) => ({
+        groupNumber: index + 1,
+        members: groupIds
+            .map((studentId) => studentById.get(studentId))
+            .filter((student): student is RandomGroupAssignmentMember => !!student),
+    }))
+
+    const { data: batch, error: batchError } = await supabaseAdmin
+        .from('random_group_batches')
+        .insert({
+            classroom_id: validated.data.classroomId,
+            teacher_id: user.id,
+            group_size: validated.data.groupSize,
+            leftover_strategy: validated.data.leftoverStrategy,
+            selected_count: selectedStudentIds.length,
+        })
+        .select('id, created_at')
+        .single()
+
+    if (batchError || !batch) {
+        console.error(batchError)
+        return { success: false, error: "Failed to save random groups" }
+    }
+
+    const cleanupBatch = async () => {
+        const { error } = await supabaseAdmin
+            .from('random_group_batches')
+            .delete()
+            .eq('id', batch.id)
+        if (error) console.error("Failed to clean up random group batch:", error)
+    }
+
+    const memberRows = groups.flatMap((group) =>
+        group.members.map((member) => ({
+            batch_id: batch.id,
+            student_id: member.id,
+            group_number: group.groupNumber,
+        }))
+    )
+
+    const { error: membersError } = await supabaseAdmin
+        .from('random_group_members')
+        .insert(memberRows)
+
+    if (membersError) {
+        console.error(membersError)
+        await cleanupBatch()
+        return { success: false, error: "Failed to save group members" }
+    }
+
+    const classroomName = classroom.name || 'classroom'
+    const notificationRows = groups.flatMap((group) => {
+        return group.members.map((member) => ({
+            student_id: member.id,
+            classroom_id: validated.data.classroomId,
+            batch_id: batch.id,
+            title: "Nauja grupės užduotis",
+            body: "",
+            metadata: {
+                batchId: batch.id,
+                classroomId: validated.data.classroomId,
+                classroomName,
+                groupNumber: group.groupNumber,
+                members: group.members.map((groupMember) => ({
+                    id: groupMember.id,
+                    name: groupMember.name,
+                })),
+            },
+        }))
+    })
+
+    const { error: notificationsError } = await supabaseAdmin
+        .from('student_popup_notifications')
+        .insert(notificationRows)
+
+    if (notificationsError) {
+        console.error(notificationsError)
+        await cleanupBatch()
+        return { success: false, error: "Failed to notify students" }
+    }
+
+    revalidatePath(`/teacher/class/${validated.data.classroomId}`)
+    revalidatePath('/student')
+
+    return {
+        success: true,
+        batchId: batch.id,
+        createdAt: batch.created_at,
+        groups,
+    }
+}
+
 export async function getClassroomStudents(classroomId: string) {
     const supabase = await createClient()
 
@@ -4228,12 +4472,15 @@ export async function getClassroomStudents(classroomId: string) {
         return []
     }
 
-    return (data || []).map((e: any) => ({
-        id: e.student_id,
-        first_name: e.profiles?.first_name || null,
-        last_name: e.profiles?.last_name || null,
-        email: e.profiles?.email || null,
-    }))
+    return ((data || []) as EnrollmentWithStudentProfileRow[]).map((enrollment) => {
+        const profile = getEnrollmentStudentProfile(enrollment)
+        return {
+            id: enrollment.student_id,
+            first_name: profile?.first_name || null,
+            last_name: profile?.last_name || null,
+            email: profile?.email || null,
+        }
+    })
 }
 
 export async function importStudentsFromClass(targetClassroomId: string, sourceClassroomId: string, setAsActive: boolean = false): Promise<ActionState> {

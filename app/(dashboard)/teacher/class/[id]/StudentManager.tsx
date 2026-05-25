@@ -11,6 +11,7 @@ import { RemoveStudentButton } from "./RemoveStudentButton"
 import { StudentEventLogsDialog } from "./StudentEventLogsDialog"
 import { StudentProgressPanel } from "./StudentProgressPanel"
 import { AddBonusPointsDialog } from "./AddBonusPointsDialog"
+import { RandomGroupsDialog } from "./RandomGroupsDialog"
 import { ImportStudentsDialog } from "./ImportStudentsDialog"
 
 interface Student {
@@ -296,6 +297,7 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
                     )}
                     <ImportStudentsDialog classroomId={classroomId} />
                     <AddBonusPointsDialog classroomId={classroomId} />
+                    <RandomGroupsDialog classroomId={classroomId} />
                     <Button size="sm" onClick={handleSwitchToAdd}>
                         <UserPlus className="mr-2 h-4 w-4" />
                         Add Student
@@ -502,4 +504,3 @@ export function StudentManager({ classroomId, initialEnrollments, isTeacherAdmin
         </div>
     )
 }
-

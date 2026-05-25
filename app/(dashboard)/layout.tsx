@@ -3,6 +3,7 @@ import { BookOpen, Home, Shield, User, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ReactNode } from "react";
 import { Logo } from "@/components/logo";
+import { StudentPopupNotifications } from "@/components/student/StudentPopupNotifications";
 import { getCachedUser, getCachedProfile, getCachedStudentClassroom } from "@/lib/data-service";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -44,6 +45,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+                {profile?.role === 'student' && <StudentPopupNotifications />}
                 {children}
             </main>
 
