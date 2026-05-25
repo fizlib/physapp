@@ -44,3 +44,5 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+supabase/send_slegis_grade_messages_2026_05_05.sql
