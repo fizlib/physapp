@@ -14,9 +14,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, Shuffle, Users } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { Loader2, Plus, Shuffle, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
-import { assignRandomGroupsToStudents, getClassroomStudents } from "../../actions"
+import { assignRandomGroupsToStudents, getClassroomStudents, getRandomGroupQuestionSets } from "../../actions"
 
 type LeftoverStrategy = "smaller_group" | "distribute"
 
@@ -31,15 +33,28 @@ interface RandomGroupStudent {
     email: string | null
 }
 
+interface AssignedQuestion {
+    number: number
+    text: string
+}
+
 interface RandomGroupResultMember {
     id: string
     name: string
     email: string | null
+    assignedQuestions: AssignedQuestion[]
 }
 
 interface RandomGroupResultGroup {
     groupNumber: number
     members: RandomGroupResultMember[]
+}
+
+interface RandomGroupQuestionSet {
+    id: string
+    questions: string[]
+    questionCount: number
+    lastUsedAt: string
 }
 
 function getStudentName(student: RandomGroupStudent): string {
@@ -75,13 +90,22 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
     const [students, setStudents] = useState<RandomGroupStudent[]>([])
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [resultGroups, setResultGroups] = useState<RandomGroupResultGroup[] | null>(null)
+    const [questionsEnabled, setQuestionsEnabled] = useState(false)
+    const [questions, setQuestions] = useState<string[]>([""])
+    const [questionSets, setQuestionSets] = useState<RandomGroupQuestionSet[]>([])
+    const [loadingQuestionSets, setLoadingQuestionSets] = useState(false)
 
     const parsedGroupSize = Number(groupSize.trim())
     const isValidGroupSize = Number.isInteger(parsedGroupSize) && parsedGroupSize >= 2
     const selectedCount = selectedIds.size
     const remainder = isValidGroupSize && selectedCount >= parsedGroupSize ? selectedCount % parsedGroupSize : 0
     const needsLeftoverChoice = remainder > 0
-    const canSubmit = isValidGroupSize && selectedCount >= parsedGroupSize && !isPending && !loadingStudents
+    const normalizedQuestions = questions.map((question) => question.trim()).filter(Boolean)
+    const canSubmit = isValidGroupSize
+        && selectedCount >= parsedGroupSize
+        && (!questionsEnabled || normalizedQuestions.length > 0)
+        && !isPending
+        && !loadingStudents
 
     const groupSizePreview = useMemo(
         () => buildGroupSizePreview(selectedCount, parsedGroupSize, leftoverStrategy),
@@ -109,13 +133,34 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
         }
     }
 
+    const loadQuestionSets = async () => {
+        setLoadingQuestionSets(true)
+        try {
+            const result = await getRandomGroupQuestionSets()
+            if (result.success && result.questionSets) {
+                setQuestionSets(result.questionSets)
+            } else if (result.error) {
+                toast.error(result.error)
+            }
+        } catch (error) {
+            console.error("Failed to load random group question sets:", error)
+            toast.error("Failed to load question sets")
+        } finally {
+            setLoadingQuestionSets(false)
+        }
+    }
+
     const handleOpenChange = (isOpen: boolean) => {
         setOpen(isOpen)
         if (isOpen) {
             setGroupSize("2")
             setLeftoverStrategy("smaller_group")
             setResultGroups(null)
+            setQuestionsEnabled(false)
+            setQuestions([""])
+            setQuestionSets([])
             loadStudents()
+            loadQuestionSets()
         }
     }
 
@@ -139,6 +184,26 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
         }
     }
 
+    const updateQuestion = (index: number, value: string) => {
+        setQuestions((prev) => prev.map((question, questionIndex) => questionIndex === index ? value : question))
+    }
+
+    const addQuestion = () => {
+        setQuestions((prev) => [...prev, ""])
+    }
+
+    const removeQuestion = (index: number) => {
+        setQuestions((prev) => {
+            if (prev.length === 1) return [""]
+            return prev.filter((_, questionIndex) => questionIndex !== index)
+        })
+    }
+
+    const applyQuestionSet = (questionSet: RandomGroupQuestionSet) => {
+        setQuestionsEnabled(true)
+        setQuestions(questionSet.questions.length > 0 ? questionSet.questions : [""])
+    }
+
     const handleSubmit = async () => {
         if (!isValidGroupSize) {
             toast.error("Group size must be a whole number of at least 2")
@@ -150,13 +215,20 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
             return
         }
 
+        if (questionsEnabled && normalizedQuestions.length === 0) {
+            toast.error("Add at least one question or disable questions")
+            return
+        }
+
         setIsPending(true)
         try {
             const result = await assignRandomGroupsToStudents(
                 classroomId,
                 parsedGroupSize,
                 needsLeftoverChoice ? leftoverStrategy : "smaller_group",
-                Array.from(selectedIds)
+                Array.from(selectedIds),
+                questionsEnabled,
+                questions
             )
 
             if (result.success && result.groups) {
@@ -177,7 +249,10 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
         setResultGroups(null)
         setGroupSize("2")
         setLeftoverStrategy("smaller_group")
+        setQuestionsEnabled(false)
+        setQuestions([""])
         loadStudents()
+        loadQuestionSets()
     }
 
     return (
@@ -217,6 +292,15 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
                                                 <span className="truncate text-sm font-medium">{member.name}</span>
                                                 {member.email && (
                                                     <span className="truncate font-mono text-[10px] text-muted-foreground">{member.email}</span>
+                                                )}
+                                                {member.assignedQuestions.length > 0 && (
+                                                    <div className="mt-2 space-y-1">
+                                                        {member.assignedQuestions.map((question) => (
+                                                            <div key={question.number} className="rounded-sm border bg-background px-2 py-1 text-xs">
+                                                                <span className="font-semibold">{question.number}.</span> {question.text}
+                                                            </div>
+                                                        ))}
+                                                    </div>
                                                 )}
                                             </div>
                                         ))}
@@ -326,6 +410,91 @@ export function RandomGroupsDialog({ classroomId }: RandomGroupsDialogProps) {
                                 </div>
                             </div>
                         )}
+
+                        <div className="space-y-3 rounded-md border p-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <Label htmlFor="random-group-questions-enabled" className="flex flex-col gap-1">
+                                    <span>Enable questions</span>
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                        Assign ordered questions to selected students.
+                                    </span>
+                                </Label>
+                                <Switch
+                                    id="random-group-questions-enabled"
+                                    checked={questionsEnabled}
+                                    onCheckedChange={setQuestionsEnabled}
+                                    disabled={isPending}
+                                />
+                            </div>
+
+                            {questionsEnabled && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Label>Questions ({normalizedQuestions.length})</Label>
+                                        <Button type="button" variant="outline" size="sm" onClick={addQuestion} disabled={isPending}>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add
+                                        </Button>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        {questions.map((question, index) => (
+                                            <div key={index} className="flex gap-2">
+                                                <div className="flex h-9 w-8 shrink-0 items-center justify-center rounded-md border bg-muted/20 text-sm font-semibold">
+                                                    {index + 1}.
+                                                </div>
+                                                <Textarea
+                                                    value={question}
+                                                    onChange={(event) => updateQuestion(index, event.target.value)}
+                                                    placeholder="Question..."
+                                                    className="min-h-16"
+                                                    disabled={isPending}
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => removeQuestion(index)}
+                                                    disabled={isPending}
+                                                    className="h-9 shrink-0 text-muted-foreground hover:text-destructive"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Remove question</span>
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {loadingQuestionSets ? (
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            Loading saved question sets...
+                                        </div>
+                                    ) : questionSets.length > 0 ? (
+                                        <div className="space-y-2">
+                                            <Label>Reuse saved questions</Label>
+                                            <div className="space-y-2">
+                                                {questionSets.map((questionSet) => (
+                                                    <div key={questionSet.id} className="flex items-start justify-between gap-3 rounded-md border bg-muted/10 p-2">
+                                                        <div className="min-w-0 space-y-1">
+                                                            <div className="text-xs font-medium text-muted-foreground">
+                                                                {questionSet.questionCount} questions
+                                                            </div>
+                                                            <div className="line-clamp-2 text-xs">
+                                                                {questionSet.questions.map((savedQuestion, index) => `${index + 1}. ${savedQuestion}`).join(' ')}
+                                                            </div>
+                                                        </div>
+                                                        <Button type="button" size="sm" variant="secondary" onClick={() => applyQuestionSet(questionSet)} disabled={isPending}>
+                                                            Use
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
+                        </div>
 
                         {groupSizePreview.length > 0 && (
                             <div className="rounded-md border bg-muted/20 p-2.5 text-xs text-muted-foreground">

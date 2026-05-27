@@ -101,6 +101,23 @@ export function StudentPopupNotifications() {
                                 </div>
                             </div>
                         )}
+
+                        {currentNotification.assignedQuestions.length > 0 && (
+                            <div className="space-y-3 rounded-md border bg-primary/5 p-3">
+                                {currentNotification.questionInstruction && (
+                                    <p className="text-sm leading-relaxed text-foreground">
+                                        {currentNotification.questionInstruction}
+                                    </p>
+                                )}
+                                <div className="space-y-2">
+                                    {currentNotification.assignedQuestions.map((question) => (
+                                        <div key={question.number} className="rounded-md bg-background px-3 py-2 text-sm">
+                                            <span className="font-semibold">{question.number}.</span> {question.text}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -112,7 +129,7 @@ export function StudentPopupNotifications() {
                                 Pažymima...
                             </>
                         ) : (
-                            "Supratau"
+                            "Uždaryti"
                         )}
                     </Button>
                 </DialogFooter>

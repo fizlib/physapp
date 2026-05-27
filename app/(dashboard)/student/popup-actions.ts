@@ -18,6 +18,11 @@ export type StudentPopupNotification = {
         id: string | null
         name: string
     }>
+    assignedQuestions: Array<{
+        number: number
+        text: string
+    }>
+    questionInstruction: string | null
 }
 
 type StudentPopupNotificationRow = {
@@ -39,6 +44,8 @@ function readPopupNotificationMetadata(metadata: unknown): Omit<StudentPopupNoti
             classroomName: null,
             groupNumber: null,
             members: [],
+            assignedQuestions: [],
+            questionInstruction: null,
         }
     }
 
@@ -51,11 +58,22 @@ function readPopupNotificationMetadata(metadata: unknown): Omit<StudentPopupNoti
                 name: typeof member.name === 'string' && member.name.trim() ? member.name : 'Mokinys',
             }))
         : []
+    const assignedQuestions = Array.isArray(value.assignedQuestions)
+        ? value.assignedQuestions
+            .filter((question): question is Record<string, unknown> => !!question && typeof question === 'object' && !Array.isArray(question))
+            .map((question) => ({
+                number: typeof question.number === 'number' && Number.isFinite(question.number) ? question.number : 0,
+                text: typeof question.text === 'string' ? question.text : '',
+            }))
+            .filter((question) => question.number > 0 && question.text.trim().length > 0)
+        : []
 
     return {
         classroomName: typeof value.classroomName === 'string' ? value.classroomName : null,
         groupNumber: typeof value.groupNumber === 'number' && Number.isFinite(value.groupNumber) ? value.groupNumber : null,
         members,
+        assignedQuestions,
+        questionInstruction: typeof value.questionInstruction === 'string' ? value.questionInstruction : null,
     }
 }
 

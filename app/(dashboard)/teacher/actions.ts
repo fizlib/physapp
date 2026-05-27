@@ -62,7 +62,11 @@ const AssignRandomGroupsSchema = z.object({
     groupSize: z.number().int().min(2),
     leftoverStrategy: z.enum(['smaller_group', 'distribute']),
     studentIds: z.array(z.string().uuid()).min(1),
+    questionsEnabled: z.boolean().default(false),
+    questions: z.array(z.string()).default([]),
 })
+
+const RANDOM_GROUP_QUESTION_INSTRUCTION = "Kai ateis tavo eilė, perskaityk klausimą kitiems grupės nariams. Išklausyk jų atsakymus. Po to, jei nori, gali pridėti savo mintį."
 
 import { getClientIp } from '@/lib/ip'
 
@@ -580,12 +584,18 @@ export type ActionState = {
 
 type RandomGroupLeftoverStrategy = 'smaller_group' | 'distribute'
 
+export type RandomGroupAssignedQuestion = {
+    number: number
+    text: string
+}
+
 export type RandomGroupAssignmentMember = {
     id: string
     firstName: string | null
     lastName: string | null
     email: string | null
     name: string
+    assignedQuestions: RandomGroupAssignedQuestion[]
 }
 
 export type RandomGroupAssignmentGroup = {
@@ -597,6 +607,13 @@ export type AssignRandomGroupsState = ActionState & {
     batchId?: string
     createdAt?: string
     groups?: RandomGroupAssignmentGroup[]
+}
+
+export type RandomGroupQuestionSet = {
+    id: string
+    questions: string[]
+    questionCount: number
+    lastUsedAt: string
 }
 
 export async function addStudent(prevState: any, formData: FormData): Promise<ActionState> {
@@ -4254,6 +4271,32 @@ function getEnrollmentStudentProfile(enrollment: EnrollmentWithStudentProfileRow
     return Array.isArray(enrollment.profiles) ? enrollment.profiles[0] || null : enrollment.profiles
 }
 
+function normalizeRandomGroupQuestions(questions: string[]): RandomGroupAssignedQuestion[] {
+    return questions
+        .map((question) => question.trim())
+        .filter((question) => question.length > 0)
+        .map((text, index) => ({
+            number: index + 1,
+            text,
+        }))
+}
+
+function assignRandomGroupQuestions(
+    groupStudentIds: string[],
+    questions: RandomGroupAssignedQuestion[]
+): Map<string, RandomGroupAssignedQuestion[]> {
+    const questionsByStudentId = new Map<string, RandomGroupAssignedQuestion[]>(
+        groupStudentIds.map((studentId) => [studentId, []])
+    )
+
+    questions.forEach((question, index) => {
+        const studentId = groupStudentIds[index % groupStudentIds.length]
+        questionsByStudentId.get(studentId)?.push(question)
+    })
+
+    return questionsByStudentId
+}
+
 function shuffleRandomGroupStudents<T>(items: T[]): T[] {
     const shuffled = [...items]
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -4299,9 +4342,11 @@ export async function assignRandomGroupsToStudents(
     classroomId: string,
     groupSize: number,
     leftoverStrategy: RandomGroupLeftoverStrategy,
-    studentIds: string[]
+    studentIds: string[],
+    questionsEnabled: boolean = false,
+    questions: string[] = []
 ): Promise<AssignRandomGroupsState> {
-    const validated = AssignRandomGroupsSchema.safeParse({ classroomId, groupSize, leftoverStrategy, studentIds })
+    const validated = AssignRandomGroupsSchema.safeParse({ classroomId, groupSize, leftoverStrategy, studentIds, questionsEnabled, questions })
     if (!validated.success) {
         return { success: false, error: "Invalid random groups request" }
     }
@@ -4309,6 +4354,14 @@ export async function assignRandomGroupsToStudents(
     const selectedStudentIds = [...new Set(validated.data.studentIds)]
     if (selectedStudentIds.length < validated.data.groupSize) {
         return { success: false, error: `Select at least ${validated.data.groupSize} students` }
+    }
+
+    const normalizedQuestions = validated.data.questionsEnabled
+        ? normalizeRandomGroupQuestions(validated.data.questions)
+        : []
+
+    if (validated.data.questionsEnabled && normalizedQuestions.length === 0) {
+        return { success: false, error: "Add at least one question or disable questions" }
     }
 
     const supabase = await createClient()
@@ -4350,17 +4403,26 @@ export async function assignRandomGroupsToStudents(
             lastName: profile?.last_name || null,
             email: profile?.email || null,
             name: formatRandomGroupStudentName(profile || {}),
+            assignedQuestions: [],
         })
     }
 
     const shuffledStudentIds = shuffleRandomGroupStudents(selectedStudentIds)
     const groupIdLists = buildRandomGroupIdLists(shuffledStudentIds, validated.data.groupSize, validated.data.leftoverStrategy)
-    const groups: RandomGroupAssignmentGroup[] = groupIdLists.map((groupIds, index) => ({
-        groupNumber: index + 1,
-        members: groupIds
-            .map((studentId) => studentById.get(studentId))
-            .filter((student): student is RandomGroupAssignmentMember => !!student),
-    }))
+    const groups: RandomGroupAssignmentGroup[] = groupIdLists.map((groupIds, index) => {
+        const questionsByStudentId = assignRandomGroupQuestions(groupIds, normalizedQuestions)
+
+        return {
+            groupNumber: index + 1,
+            members: groupIds
+                .map((studentId) => studentById.get(studentId))
+                .filter((student): student is RandomGroupAssignmentMember => !!student)
+                .map((student) => ({
+                    ...student,
+                    assignedQuestions: questionsByStudentId.get(student.id) || [],
+                })),
+        }
+    })
 
     const { data: batch, error: batchError } = await supabaseAdmin
         .from('random_group_batches')
@@ -4370,6 +4432,8 @@ export async function assignRandomGroupsToStudents(
             group_size: validated.data.groupSize,
             leftover_strategy: validated.data.leftoverStrategy,
             selected_count: selectedStudentIds.length,
+            questions_enabled: validated.data.questionsEnabled,
+            questions: normalizedQuestions,
         })
         .select('id, created_at')
         .single()
@@ -4392,6 +4456,7 @@ export async function assignRandomGroupsToStudents(
             batch_id: batch.id,
             student_id: member.id,
             group_number: group.groupNumber,
+            assigned_questions: member.assignedQuestions,
         }))
     )
 
@@ -4403,6 +4468,46 @@ export async function assignRandomGroupsToStudents(
         console.error(membersError)
         await cleanupBatch()
         return { success: false, error: "Failed to save group members" }
+    }
+
+    if (validated.data.questionsEnabled) {
+        const questionTexts = normalizedQuestions.map((question) => question.text)
+        const questionsKey = JSON.stringify(questionTexts)
+        const now = new Date().toISOString()
+
+        const { data: existingQuestionSet, error: fetchQuestionSetError } = await supabaseAdmin
+            .from('random_group_question_sets')
+            .select('id')
+            .eq('teacher_id', user.id)
+            .eq('questions_key', questionsKey)
+            .maybeSingle()
+
+        if (fetchQuestionSetError) {
+            console.error(fetchQuestionSetError)
+            await cleanupBatch()
+            return { success: false, error: "Failed to save question set" }
+        }
+
+        const { error: saveQuestionSetError } = existingQuestionSet
+            ? await supabaseAdmin
+                .from('random_group_question_sets')
+                .update({ last_used_at: now })
+                .eq('id', existingQuestionSet.id)
+            : await supabaseAdmin
+                .from('random_group_question_sets')
+                .insert({
+                    teacher_id: user.id,
+                    questions: questionTexts,
+                    questions_key: questionsKey,
+                    question_count: questionTexts.length,
+                    last_used_at: now,
+                })
+
+        if (saveQuestionSetError) {
+            console.error(saveQuestionSetError)
+            await cleanupBatch()
+            return { success: false, error: "Failed to save question set" }
+        }
     }
 
     const classroomName = classroom.name || 'classroom'
@@ -4422,6 +4527,8 @@ export async function assignRandomGroupsToStudents(
                     id: groupMember.id,
                     name: groupMember.name,
                 })),
+                assignedQuestions: member.assignedQuestions,
+                questionInstruction: member.assignedQuestions.length > 0 ? RANDOM_GROUP_QUESTION_INSTRUCTION : undefined,
             },
         }))
     })
@@ -4481,6 +4588,44 @@ export async function getClassroomStudents(classroomId: string) {
             email: profile?.email || null,
         }
     })
+}
+
+export async function getRandomGroupQuestionSets(): Promise<{
+    success: boolean
+    questionSets?: RandomGroupQuestionSet[]
+    error?: string
+}> {
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data, error } = await supabase
+        .from('random_group_question_sets')
+        .select('id, questions, question_count, last_used_at')
+        .eq('teacher_id', user.id)
+        .order('last_used_at', { ascending: false })
+        .limit(10)
+
+    if (error) {
+        console.error('Error fetching random group question sets:', error)
+        return { success: false, error: "Failed to fetch question sets" }
+    }
+
+    const questionSets = (data || []).map((row) => {
+        const questions = Array.isArray(row.questions)
+            ? row.questions.filter((question): question is string => typeof question === 'string')
+            : []
+
+        return {
+            id: row.id,
+            questions,
+            questionCount: row.question_count || questions.length,
+            lastUsedAt: row.last_used_at,
+        }
+    })
+
+    return { success: true, questionSets }
 }
 
 export async function importStudentsFromClass(targetClassroomId: string, sourceClassroomId: string, setAsActive: boolean = false): Promise<ActionState> {
