@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import {
     Dialog,
     DialogContent,
     DialogDescription,
-    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, Users } from "lucide-react"
+import { Users } from "lucide-react"
 import {
     getUnseenPopupNotifications,
     markPopupNotificationSeen,
@@ -121,18 +119,6 @@ export function StudentPopupNotifications() {
                     </div>
                 )}
 
-                <DialogFooter>
-                    <Button onClick={handleAcknowledge} disabled={acknowledging}>
-                        {acknowledging ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Pažymima...
-                            </>
-                        ) : (
-                            "Uždaryti"
-                        )}
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     )
