@@ -28,5 +28,12 @@ export const SIMULATIONS: SimulationInfo[] = [
         description: 'Tyrinėkite energijos virsmus, trintį ir judėjimą riedlentininkui leidžiantis bei kylant trasa.',
         href: '/simulations/riedlenciu-parkas',
         available: true
+    },
+    {
+        id: '9-kl-testai',
+        title: '9 kl. Testai',
+        description: 'Atsakykite į laiko ribojamus klausimus apie fizikinių dydžių apibrėžimus, matavimo vienetus ir formules be klaidų.',
+        href: '/simulations/9-kl-testai',
+        available: true
     }
 ]

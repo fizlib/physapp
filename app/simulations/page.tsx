@@ -8,7 +8,8 @@ import {
     Waves,
     Atom,
     CircleDot,
-    Zap
+    Zap,
+    ListChecks
 } from 'lucide-react';
 import { SIMULATIONS as SIMULATION_DATA } from '@/lib/simulations';
 
@@ -16,6 +17,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
     'center-of-mass': <Target className="w-8 h-8 text-blue-500" />,
     'communicating-vessels': <Waves className="w-8 h-8 text-cyan-500" />,
     'riedlenciu-parkas': <Zap className="w-8 h-8 text-amber-500" />,
+    '9-kl-testai': <ListChecks className="w-8 h-8 text-emerald-500" />,
 };
 
 const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
@@ -30,6 +32,10 @@ const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
     'riedlenciu-parkas': {
         gradient: 'from-amber-500/20 to-emerald-500/20',
         borderColor: 'group-hover:border-amber-500/50',
+    },
+    '9-kl-testai': {
+        gradient: 'from-emerald-500/20 to-sky-500/20',
+        borderColor: 'group-hover:border-emerald-500/50',
     },
 };
 

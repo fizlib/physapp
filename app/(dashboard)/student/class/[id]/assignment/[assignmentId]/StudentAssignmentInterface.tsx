@@ -1,18 +1,54 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import MathDisplay from "@/components/MathDisplay"
 import { DiagramDisplay } from "@/components/DiagramDisplay"
 import { TestInterface } from "../../../../../teacher/class/[id]/assignment/[assignmentId]/TestInterface"
 import { Progress } from "@/components/ui/progress"
-import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, AlertCircle, Loader2, ExternalLink, Monitor, FileText } from "lucide-react"
+import { ArrowLeft, ArrowRight, CheckCircle2, BookOpen, HelpCircle, Loader2, ExternalLink, Monitor, FileText, Lock } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { logSolutionRevealClick, upsertAssignmentProgress, submitPointsAnswer } from "../../../../actions"
 import { toast } from "sonner"
 import { Award } from "lucide-react"
+import {
+    NINTH_GRADE_TESTS_SIMULATION_ID,
+    NINTH_GRADE_TESTS_SIMULATION_PATH,
+    getSimulationCompletionKey,
+} from "@/lib/simulation-completion"
+
+interface AssignmentQuestion {
+    id: string
+    latex_text?: string | null
+    question_type?: string | null
+    correct_value?: number | null
+    tolerance_percent?: number | null
+    options?: string[] | null
+    correct_answer?: string | null
+    points?: number | null
+    solution_text?: string | null
+    diagram_type?: 'graph' | 'scheme' | 'none' | null
+    diagram_latex?: string | null
+    diagram_svg?: string | null
+    diagram_image_url?: string | null
+}
+
+interface StudentAssignment {
+    id: string
+    title?: string | null
+    questions?: AssignmentQuestion[] | null
+    required_variations_count?: number | null
+    show_all_questions?: boolean | null
+    simulation_url?: string | null
+    theory_content?: string | null
+    theory_image_url?: string | null
+}
+
+function normalizeDiagramType(diagramType?: AssignmentQuestion['diagram_type']) {
+    return diagramType === 'graph' || diagramType === 'scheme' ? diagramType : null
+}
 
 export function StudentAssignmentInterface({
     assignment,
@@ -29,7 +65,6 @@ export function StudentAssignmentInterface({
     exerciseNumber,
     // Points mode props
     pointsEnabled = false,
-    exercisePoints = 1,
     initialSubmittedAnswers = {},
     initialEarnedPointsPerPart = {},
     isLastExercise = false,
@@ -37,7 +72,7 @@ export function StudentAssignmentInterface({
     hideCorrectness = false,
     onProgressUpdate
 }: {
-    assignment: any,
+    assignment: StudentAssignment,
     classId: string,
     onFinish?: () => void,
     onPrevious?: () => void,
@@ -59,10 +94,10 @@ export function StudentAssignmentInterface({
     hideCorrectness?: boolean,
     onProgressUpdate?: () => void
 }) {
-    const questions = assignment.questions || []
+    const questions = useMemo(() => assignment.questions || [], [assignment.questions])
     const totalQuestions = questions.length
-    const requiredVariations = assignment.required_variations_count;
-    const isVariationMode = requiredVariations && requiredVariations > 0;
+    const requiredVariations = assignment.required_variations_count ?? 0;
+    const isVariationMode = requiredVariations > 0;
 
     // Initialize currentIndex deterministically to avoid hydration mismatch
     const [currentIndex, setCurrentIndex] = useState(initialActiveQuestionIndex ?? 0)
@@ -114,7 +149,7 @@ export function StudentAssignmentInterface({
                 initialRevealedIndices.includes(currentIndex);
 
             if (initialActiveQuestionIndex === undefined || isDone) {
-                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i) && !initialRevealedIndices.includes(i));
+                const unsolved = questions.map((_, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i) && !initialRevealedIndices.includes(i));
                 if (unsolved.length > 0) {
                     const newIndex = unsolved[Math.floor(Math.random() * unsolved.length)];
                     if (newIndex !== currentIndex) {
@@ -125,7 +160,7 @@ export function StudentAssignmentInterface({
                     // Reset revealed indices to give student a fresh start
                     setRevealedIndices(new Set())
                     // Pick any non-completed variation
-                    const notCompleted = questions.map((_: any, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i));
+                    const notCompleted = questions.map((_, i: number) => i).filter((i: number) => !initialCompletedIndices.includes(i));
                     if (notCompleted.length > 0) {
                         const newIndex = notCompleted[Math.floor(Math.random() * notCompleted.length)];
                         setCurrentIndex(newIndex);
@@ -212,7 +247,7 @@ export function StudentAssignmentInterface({
 
     const handleRevealSolution = async () => {
         // Check if revealing this question means there are no other unsolved questions left
-        const unsolvedOthers = questions.map((_: any, i: number) => i).filter((i: number) =>
+        const unsolvedOthers = questions.map((_, i: number) => i).filter((i: number) =>
             i !== currentIndex && !completedIndices.has(i) && !revealedIndices.has(i)
         )
         const isLastUnsolved = unsolvedOthers.length === 0
@@ -315,7 +350,7 @@ export function StudentAssignmentInterface({
     }
 
     // In points mode, a locked question (submitted answer) counts as "completed" for navigation
-    const isCurrentQuestionLocked = pointsEnabled && questions[currentIndex]?.id && lockedQuestionIds.has(questions[currentIndex].id)
+    const isCurrentQuestionLocked = !!(pointsEnabled && questions[currentIndex]?.id && lockedQuestionIds.has(questions[currentIndex].id))
     const canProceed = canSkip || completedIndices.has(currentIndex) || revealedIndices.has(currentIndex) || isCurrentQuestionLocked
     // For variations, use lockedQuestionIds in points mode, completedIndices otherwise
     const effectiveCompletedCount = pointsEnabled ? lockedQuestionIds.size : completedIndices.size
@@ -343,9 +378,78 @@ export function StudentAssignmentInterface({
         return pointsCorrectnessByQuestionId[questionId] ? 'correct' : 'incorrect'
     }
     const currentPointsStatus = getPointsQuestionStatus(questions[currentIndex]?.id)
+    const simulationUrl = assignment.simulation_url ?? ''
+    const normalizedSimulationUrl = simulationUrl
+        ? simulationUrl.split('?')[0]
+        : ''
+    const simulationRequiresLocalCompletion = normalizedSimulationUrl === NINTH_GRADE_TESTS_SIMULATION_PATH
+    const simulationCompletionKey = simulationRequiresLocalCompletion && assignment.id
+        ? getSimulationCompletionKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignment.id)
+        : null
+    const [localSimulationCompleted, setLocalSimulationCompleted] = useState(initialIsCompleted)
+    const simulationCanFinish = !simulationRequiresLocalCompletion || initialIsCompleted || localSimulationCompleted
+
+    useEffect(() => {
+        if (!simulationRequiresLocalCompletion || !simulationCompletionKey) {
+            setLocalSimulationCompleted(initialIsCompleted)
+            return
+        }
+
+        const readCompletionMarker = () => {
+            try {
+                setLocalSimulationCompleted(initialIsCompleted || window.localStorage.getItem(simulationCompletionKey) === 'completed')
+            } catch {
+                setLocalSimulationCompleted(initialIsCompleted)
+            }
+        }
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === simulationCompletionKey && event.newValue === 'completed') {
+                setLocalSimulationCompleted(true)
+            }
+        }
+
+        const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return
+
+            const data = event.data as {
+                type?: unknown
+                simulationId?: unknown
+                assignmentId?: unknown
+            }
+
+            if (
+                data.type === 'simulation-completed' &&
+                data.simulationId === NINTH_GRADE_TESTS_SIMULATION_ID &&
+                data.assignmentId === assignment.id
+            ) {
+                setLocalSimulationCompleted(true)
+            }
+        }
+
+        readCompletionMarker()
+        window.addEventListener('storage', handleStorage)
+        window.addEventListener('message', handleMessage)
+        window.addEventListener('focus', readCompletionMarker)
+
+        return () => {
+            window.removeEventListener('storage', handleStorage)
+            window.removeEventListener('message', handleMessage)
+            window.removeEventListener('focus', readCompletionMarker)
+        }
+    }, [assignment.id, initialIsCompleted, simulationCompletionKey, simulationRequiresLocalCompletion])
+
+    const getSimulationLaunchUrl = () => {
+        if (!simulationRequiresLocalCompletion || !assignment.id || !simulationUrl) {
+            return simulationUrl
+        }
+
+        const separator = simulationUrl.includes('?') ? '&' : '?'
+        return `${simulationUrl}${separator}assignmentId=${encodeURIComponent(assignment.id)}`
+    }
 
     // Simulation exercise — render a simple card with "Open Simulation" button
-    if (assignment.simulation_url) {
+    if (simulationUrl) {
         return (
             <div className="space-y-8 max-w-3xl mx-auto">
                 {!compact && (
@@ -375,11 +479,22 @@ export function StudentAssignmentInterface({
                         <Button
                             size="lg"
                             className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-lg px-8"
-                            onClick={() => window.open(assignment.simulation_url, '_blank')}
+                            onClick={() => window.open(getSimulationLaunchUrl(), '_blank')}
                         >
                             <ExternalLink className="h-5 w-5" />
                             Atidaryti simuliaciją
                         </Button>
+
+                        {simulationRequiresLocalCompletion && (
+                            <div className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${simulationCanFinish ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'}`}>
+                                {simulationCanFinish ? (
+                                    <CheckCircle2 className="h-4 w-4" />
+                                ) : (
+                                    <Lock className="h-4 w-4" />
+                                )}
+                                {simulationCanFinish ? 'Testas įveiktas' : 'Testas dar nebaigtas'}
+                            </div>
+                        )}
 
                         <div className={`mt-4 flex ${onPrevious ? 'justify-between w-full' : 'justify-center'}`}>
                             {onPrevious && (
@@ -389,11 +504,11 @@ export function StudentAssignmentInterface({
                                 </Button>
                             )}
                             <Button
-                                disabled={isFinishing}
+                                disabled={isFinishing || !simulationCanFinish}
                                 variant="default"
                                 className="bg-green-600 hover:bg-green-700 text-white gap-2"
                                 onClick={async () => {
-                                    if (isFinishing) return
+                                    if (isFinishing || !simulationCanFinish) return
                                     setIsFinishing(true)
                                     try {
                                         await upsertAssignmentProgress(
@@ -559,9 +674,9 @@ export function StudentAssignmentInterface({
             {showPersistentDiagram && (
                 <div className="mb-8">
                     <DiagramDisplay
-                        diagramType={firstQuestion.diagram_type}
+                        diagramType={normalizeDiagramType(firstQuestion?.diagram_type)}
                         diagramLatex={firstQuestion.diagram_latex}
-                        diagramSvg={firstQuestion.diagram_svg}
+                        diagramSvg={firstQuestion.diagram_svg ?? null}
                         diagramImageUrl={firstQuestion.diagram_image_url}
                     />
                 </div>
@@ -570,7 +685,7 @@ export function StudentAssignmentInterface({
             {showAll ? (
                 /* One Page View */
                 <div className="space-y-8">
-                    {questions.map((q: any, index: number) => {
+                    {questions.map((q, index: number) => {
                         const isCorrect = completedIndices.has(index)
                         const pointsStatus = getPointsQuestionStatus(q.id)
                         const cardStateClasses = pointsEnabled
@@ -593,9 +708,9 @@ export function StudentAssignmentInterface({
                                             <MathDisplay content={q.latex_text || "No question text"} />
                                         </div>
                                         <DiagramDisplay
-                                            diagramType={q.diagram_type}
+                                            diagramType={normalizeDiagramType(q.diagram_type)}
                                             diagramLatex={q.diagram_latex}
-                                            diagramSvg={q.diagram_svg}
+                                            diagramSvg={q.diagram_svg ?? null}
                                             diagramImageUrl={q.diagram_image_url}
                                         />
 
@@ -622,7 +737,7 @@ export function StudentAssignmentInterface({
                                                         const newRevealed = new Set(revealedIndices).add(index)
                                                         setRevealedIndices(newRevealed)
                                                         // Check if this is the last unsolved question
-                                                        const unsolvedOthers = questions.filter((_: any, i: number) =>
+                                                        const unsolvedOthers = questions.filter((_, i: number) =>
                                                             i !== index && !completedIndices.has(i) && !revealedIndices.has(i)
                                                         )
                                                         if (unsolvedOthers.length === 0) {
@@ -782,9 +897,9 @@ export function StudentAssignmentInterface({
                         </div>
                         {!showPersistentDiagram && (
                             <DiagramDisplay
-                                diagramType={questions[currentIndex].diagram_type || (!isVariationMode ? firstQuestion?.diagram_type : undefined)}
+                                diagramType={normalizeDiagramType(questions[currentIndex].diagram_type ?? (!isVariationMode ? firstQuestion?.diagram_type : null))}
                                 diagramLatex={questions[currentIndex].diagram_latex || (!isVariationMode ? firstQuestion?.diagram_latex : undefined)}
-                                diagramSvg={questions[currentIndex].diagram_svg || (!isVariationMode ? firstQuestion?.diagram_svg : undefined)}
+                                diagramSvg={questions[currentIndex].diagram_svg ?? (!isVariationMode ? firstQuestion?.diagram_svg ?? null : null)}
                                 diagramImageUrl={questions[currentIndex].diagram_image_url || (!isVariationMode ? firstQuestion?.diagram_image_url : undefined)}
                             />
                         )}
@@ -864,7 +979,7 @@ export function StudentAssignmentInterface({
                                         onClick={() => {
                                             if (isVariationMode) {
                                                 // Pick next random unsolved (not solved/locked and not revealed)
-                                                const unsolved = questions.map((_: any, i: number) => i).filter((i: number) => {
+                                                const unsolved = questions.map((_, i: number) => i).filter((i: number) => {
                                                     const qId = questions[i]?.id
                                                     const isCompleted = completedIndices.has(i)
                                                     const isLocked = pointsEnabled && qId && lockedQuestionIds.has(qId)
