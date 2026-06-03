@@ -27,6 +27,7 @@ import {
     checkTabBlockStatus
 } from "../../../../actions"
 import { ShieldAlert, CheckCircle2, XCircle, FileText, Ban } from "lucide-react"
+import { NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH } from "@/lib/simulation-completion"
 
 interface AssignmentMeta {
     id: string
@@ -34,6 +35,7 @@ interface AssignmentMeta {
     order_index?: number | null
     published?: boolean
     points_enabled?: boolean
+    simulation_url?: string | null
 }
 
 interface CollectionPlayerProps {
@@ -75,6 +77,9 @@ export function CollectionPlayer({
         () => [...allAssignmentsMetaState].sort((a: AssignmentMeta, b: AssignmentMeta) => (a.order_index || 0) - (b.order_index || 0)),
         [allAssignmentsMetaState]
     )
+    const isScoredSimulationAssignment = (assignment?: { simulation_url?: string | null }) => {
+        return assignment?.simulation_url?.split('?')[0] === NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH
+    }
 
     // Determine initial state based on progress
     // Create a map for easy lookup - use useMemo to recalculate when progressDataState changes
@@ -945,7 +950,7 @@ export function CollectionPlayer({
                                         // Check if student has submitted answers for this exercise
                                         const assignmentProgress = progressMap.get(assignment.id)
                                         const hasSubmissions = assignmentProgress?.submitted_answers && Object.keys(assignmentProgress.submitted_answers).length > 0
-                                        const isPointedAndLocked = assignment.points_enabled && !isTestModeActive && !hasSubmissions
+                                        const isPointedAndLocked = assignment.points_enabled && !isScoredSimulationAssignment(assignment) && !isTestModeActive && !hasSubmissions
                                         const isLocked = isClasswork
                                             ? (!isPublished || isPointedAndLocked)
                                             : (!isPublished || publishedIndex > maxReachedIndex)
@@ -1033,7 +1038,7 @@ export function CollectionPlayer({
                 {/* Pointed exercises are locked by default; unlocked only during active test or if student has submissions */}
                 {(() => {
                     const currentHasSubmissions = currentProgress?.submitted_answers && Object.keys(currentProgress.submitted_answers).length > 0
-                    const shouldBlockPointed = currentAssignment.points_enabled && !isTestModeActive && !currentHasSubmissions
+                    const shouldBlockPointed = currentAssignment.points_enabled && !isScoredSimulationAssignment(currentAssignment) && !isTestModeActive && !currentHasSubmissions
                     return shouldBlockPointed
                 })() ? (
                     <Card className="max-w-md mx-auto border-2 border-amber-200 bg-card/50">

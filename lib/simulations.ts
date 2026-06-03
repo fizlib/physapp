@@ -5,6 +5,10 @@ export interface SimulationInfo {
     description: string
     href: string
     available: boolean
+    teacherOnly?: boolean
+    pointsEnabled?: boolean
+    maxPoints?: number
+    classworkOnly?: boolean
 }
 
 export const SIMULATIONS: SimulationInfo[] = [
@@ -35,5 +39,16 @@ export const SIMULATIONS: SimulationInfo[] = [
         description: 'Atsakykite į laiko ribojamus klausimus apie fizikinių dydžių apibrėžimus, matavimo vienetus ir formules be klaidų.',
         href: '/simulations/9-kl-testai',
         available: true
+    },
+    {
+        id: '9-kl-testai-testas',
+        title: '9 kl. Testai (testas)',
+        description: 'Kontrolinis 9 klasės testas su atsitiktine klausimų tvarka, 15 sekundžių kiekvienam klausimui ir 10 taškų vertinimu.',
+        href: '/simulations/9-kl-testai-testas',
+        available: true,
+        teacherOnly: true,
+        pointsEnabled: true,
+        maxPoints: 10,
+        classworkOnly: true
     }
 ]

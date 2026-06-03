@@ -2,16 +2,23 @@ import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, BookOpen, Clock, GripVertical, BarChart2 } from "lucide-react"
+import { ArrowLeft, BarChart2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { CollectionManager, RemoveExerciseButton, TogglePublishButton } from "./CollectionManager"
+import { CollectionManager } from "./CollectionManager"
 import { CreateExerciseDialog } from "../../CreateExerciseDialog"
 import { SortableExerciseList } from "./SortableExerciseList"
 import { CollectionBatchActions } from "./CollectionBatchActions"
 import { CollectionSettingsDialog } from "./CollectionSettingsDialog"
 import { StartTestButton } from "./StartTestButton"
 import { MarkdownContent } from "@/components/ui/markdown-editor"
+import { NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH } from "@/lib/simulation-completion"
 
+interface CollectionAssignmentRow {
+    id: string
+    order_index?: number | null
+    points_enabled?: boolean | null
+    simulation_url?: string | null
+}
 
 export default async function CollectionPage({ params }: { params: Promise<{ id: string, collectionId: string }> }) {
     const supabase = await createClient()
@@ -38,10 +45,12 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
     const isInformationPage = collection.category === 'information'
 
     // Sort assignments by order_index (or created_at if index helps)
-    const assignments = collection.assignments?.sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)) || []
+    const assignments = ([...(collection.assignments || [])] as CollectionAssignmentRow[])
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
 
-    // Check if any assignment has points enabled
-    const hasPointedExercises = assignments.some((a: any) => a.points_enabled)
+    const hasTimedPointExercises = assignments.some((a) =>
+        a.points_enabled && a.simulation_url?.split('?')[0] !== NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH
+    )
 
     return (
         <div className="min-h-screen bg-background p-8 font-sans text-foreground">
@@ -115,7 +124,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ id:
                             <StartTestButton
                                 collectionId={collectionId}
                                 classroomId={id}
-                                hasPointedExercises={hasPointedExercises}
+                                hasPointedExercises={hasTimedPointExercises}
                             />
                         </div>
                     )}

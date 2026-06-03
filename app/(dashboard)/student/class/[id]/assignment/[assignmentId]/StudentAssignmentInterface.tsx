@@ -16,6 +16,8 @@ import { Award } from "lucide-react"
 import {
     NINTH_GRADE_TESTS_SIMULATION_ID,
     NINTH_GRADE_TESTS_SIMULATION_PATH,
+    NINTH_GRADE_TESTS_SCORED_SIMULATION_ID,
+    NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH,
     getSimulationCompletionKey,
 } from "@/lib/simulation-completion"
 
@@ -382,9 +384,29 @@ export function StudentAssignmentInterface({
     const normalizedSimulationUrl = simulationUrl
         ? simulationUrl.split('?')[0]
         : ''
-    const simulationRequiresLocalCompletion = normalizedSimulationUrl === NINTH_GRADE_TESTS_SIMULATION_PATH
-    const simulationCompletionKey = simulationRequiresLocalCompletion && assignment.id
-        ? getSimulationCompletionKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignment.id)
+    const simulationCompletionConfig = useMemo(() => {
+        if (normalizedSimulationUrl === NINTH_GRADE_TESTS_SIMULATION_PATH) {
+            return {
+                simulationId: NINTH_GRADE_TESTS_SIMULATION_ID,
+                completedLabel: 'Testas įveiktas',
+                incompleteLabel: 'Testas dar nebaigtas',
+            }
+        }
+
+        if (normalizedSimulationUrl === NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH) {
+            return {
+                simulationId: NINTH_GRADE_TESTS_SCORED_SIMULATION_ID,
+                completedLabel: 'Testas baigtas',
+                incompleteLabel: 'Testas dar nebaigtas',
+            }
+        }
+
+        return null
+    }, [normalizedSimulationUrl])
+    const simulationRequiresLocalCompletion = !!simulationCompletionConfig
+    const simulationIsScoredTest = normalizedSimulationUrl === NINTH_GRADE_TESTS_SCORED_SIMULATION_PATH
+    const simulationCompletionKey = simulationRequiresLocalCompletion && assignment.id && simulationCompletionConfig
+        ? getSimulationCompletionKey(simulationCompletionConfig.simulationId, assignment.id)
         : null
     const [localSimulationCompleted, setLocalSimulationCompleted] = useState(initialIsCompleted)
     const simulationCanFinish = !simulationRequiresLocalCompletion || initialIsCompleted || localSimulationCompleted
@@ -420,7 +442,7 @@ export function StudentAssignmentInterface({
 
             if (
                 data.type === 'simulation-completed' &&
-                data.simulationId === NINTH_GRADE_TESTS_SIMULATION_ID &&
+                data.simulationId === simulationCompletionConfig.simulationId &&
                 data.assignmentId === assignment.id
             ) {
                 setLocalSimulationCompleted(true)
@@ -437,7 +459,7 @@ export function StudentAssignmentInterface({
             window.removeEventListener('message', handleMessage)
             window.removeEventListener('focus', readCompletionMarker)
         }
-    }, [assignment.id, initialIsCompleted, simulationCompletionKey, simulationRequiresLocalCompletion])
+    }, [assignment.id, initialIsCompleted, simulationCompletionConfig, simulationCompletionKey, simulationRequiresLocalCompletion])
 
     const getSimulationLaunchUrl = () => {
         if (!simulationRequiresLocalCompletion || !assignment.id || !simulationUrl) {
@@ -492,7 +514,9 @@ export function StudentAssignmentInterface({
                                 ) : (
                                     <Lock className="h-4 w-4" />
                                 )}
-                                {simulationCanFinish ? 'Testas įveiktas' : 'Testas dar nebaigtas'}
+                                {simulationCanFinish
+                                    ? simulationCompletionConfig?.completedLabel
+                                    : simulationCompletionConfig?.incompleteLabel}
                             </div>
                         )}
 
@@ -511,14 +535,18 @@ export function StudentAssignmentInterface({
                                     if (isFinishing || !simulationCanFinish) return
                                     setIsFinishing(true)
                                     try {
-                                        await upsertAssignmentProgress(
-                                            assignment.id,
-                                            [],
-                                            true,
-                                            0,
-                                            [],
-                                            {}
-                                        )
+                                        if (simulationIsScoredTest) {
+                                            if (onProgressUpdate) await onProgressUpdate()
+                                        } else {
+                                            await upsertAssignmentProgress(
+                                                assignment.id,
+                                                [],
+                                                true,
+                                                0,
+                                                [],
+                                                {}
+                                            )
+                                        }
                                         if (onFinish) {
                                             onFinish()
                                         } else {

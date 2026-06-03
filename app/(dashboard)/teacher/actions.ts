@@ -9,6 +9,19 @@ import { headers } from 'next/headers'
 import { GoogleGenerativeAI, Part } from '@google/generative-ai'
 import { generateContentWithFallback } from '@/lib/gemini'
 import { calculateAssignmentMaxPoints } from '@/lib/points'
+import {
+    buildProgressEarnedParts,
+    buildProgressSubmittedAnswers,
+    buildScoredQuestionOrder,
+    calculateScaledScore,
+    fillTimedOutAnswers,
+    isScoredSimulationUrl,
+    SCORED_TEST_SIMULATION_ID,
+    toScoredAnswerMap,
+    toScoredQuestionOrder,
+    type ScoredAnswerMap,
+    type ScoredQuestionOrderItem,
+} from '@/lib/ninth-grade-scored-test'
 
 // ... (keep existing code) ...
 
@@ -108,6 +121,22 @@ type PointsDisabledProgressRow = {
     points_disabled_by_teacher?: boolean | null
 }
 
+type ScoredSimulationAssignmentRow = {
+    id: string
+    classroom_id?: string | null
+    collection_id?: string | null
+    simulation_url?: string | null
+    questions?: Array<{ id: string; points?: number | null }> | null
+}
+
+type AutoSubmitProgressRow = {
+    student_id: string
+    assignment_id: string
+    submitted_answers: unknown
+    earned_points_per_part: unknown
+    points_disabled_by_teacher?: boolean | null
+}
+
 function sortQuestionsByCreatedAt<T extends { created_at?: string | null }>(questions: T[]): T[] {
     return [...questions].sort((a, b) => {
         const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
@@ -189,6 +218,110 @@ function getEffectiveEarnedPoints(progress: PointsDisabledProgressRow | null | u
 
     const earnedPoints = Number(progress.earned_points)
     return Number.isFinite(earnedPoints) ? earnedPoints : 0
+}
+
+async function mirrorScoredSimulationProgressForTeacher(
+    supabaseAdmin: ReturnType<typeof createAdminClient>,
+    assignment: { id: string; classroom_id?: string | null; collection_id?: string | null },
+    studentId: string,
+    order: ScoredQuestionOrderItem[],
+    answers: ScoredAnswerMap,
+    isCompleted: boolean
+) {
+    const { data: existingProgress } = await supabaseAdmin
+        .from('assignment_progress')
+        .select('points_disabled_by_teacher')
+        .eq('assignment_id', assignment.id)
+        .eq('student_id', studentId)
+        .maybeSingle()
+
+    const completedIndices = order
+        .map((item, index) => answers[item.key] ? index : null)
+        .filter((index): index is number => index !== null)
+
+    const earnedPoints = calculateScaledScore(answers, order.length)
+
+    const { error } = await supabaseAdmin
+        .from('assignment_progress')
+        .upsert({
+            student_id: studentId,
+            assignment_id: assignment.id,
+            completed_question_indices: completedIndices,
+            is_completed: isCompleted,
+            active_question_index: Math.min(completedIndices.length, Math.max(order.length - 1, 0)),
+            revealed_question_indices: [],
+            submitted_answers: buildProgressSubmittedAnswers(answers),
+            earned_points_per_part: buildProgressEarnedParts(answers),
+            earned_points: earnedPoints,
+            points_disabled_by_teacher: !!existingProgress?.points_disabled_by_teacher,
+            updated_at: new Date().toISOString(),
+        }, {
+            onConflict: 'student_id, assignment_id',
+        })
+
+    if (error) {
+        console.error("Scored simulation progress mirror error", {
+            assignmentId: assignment.id,
+            studentId,
+            error,
+        })
+    }
+}
+
+async function finalizeScoredSimulationAttemptForTeacher(
+    supabaseAdmin: ReturnType<typeof createAdminClient>,
+    assignment: { id: string; classroom_id?: string | null; collection_id?: string | null },
+    studentId: string,
+    completedAtIso = new Date().toISOString()
+) {
+    const { data: attempt } = await supabaseAdmin
+        .from('simulation_test_attempts')
+        .select('*')
+        .eq('assignment_id', assignment.id)
+        .eq('student_id', studentId)
+        .maybeSingle()
+
+    const order = toScoredQuestionOrder(attempt?.question_order).length > 0
+        ? toScoredQuestionOrder(attempt?.question_order)
+        : buildScoredQuestionOrder()
+    const answers = fillTimedOutAnswers(order, toScoredAnswerMap(attempt?.answers), completedAtIso)
+    const earnedPoints = calculateScaledScore(answers, order.length)
+
+    const { error: attemptError } = await supabaseAdmin
+        .from('simulation_test_attempts')
+        .upsert({
+            assignment_id: assignment.id,
+            student_id: studentId,
+            simulation_id: SCORED_TEST_SIMULATION_ID,
+            question_order: order,
+            answers,
+            current_index: order.length,
+            current_question_started_at: null,
+            current_question_deadline_at: null,
+            completed_at: completedAtIso,
+            earned_points: earnedPoints,
+            updated_at: new Date().toISOString(),
+        }, {
+            onConflict: 'assignment_id, student_id',
+        })
+
+    if (attemptError) {
+        console.error("Scored simulation finalize attempt error", {
+            assignmentId: assignment.id,
+            studentId,
+            error: attemptError,
+        })
+        return
+    }
+
+    await mirrorScoredSimulationProgressForTeacher(
+        supabaseAdmin,
+        assignment,
+        studentId,
+        order,
+        answers,
+        true
+    )
 }
 
 function isPointProgressCompleted(
@@ -1270,7 +1403,7 @@ export async function generateExerciseFromImage(formData: FormData) {
     }
 }
 
-export async function createAssignmentWithQuestion(classroomId: string, exerciseData: any, collectionId?: string) {
+export async function createAssignmentWithQuestion(classroomId: string, exerciseData: unknown, collectionId?: string) {
     const supabase = await createClient()
 
     // 1. Verify Auth
@@ -3484,7 +3617,7 @@ export async function startTestCollection(
         // Reset assignment_progress for selected students on pointed exercises in this collection
         const { data: pointedAssignments } = await supabase
             .from('assignments')
-            .select('id')
+            .select('id, simulation_url')
             .eq('collection_id', collectionId)
             .eq('points_enabled', true)
 
@@ -3499,6 +3632,22 @@ export async function startTestCollection(
             if (resetError) {
                 console.error("Progress reset error:", resetError)
                 // Non-fatal
+            }
+
+            const scoredSimulationIds = (pointedAssignments as ScoredSimulationAssignmentRow[])
+                .filter((assignment) => isScoredSimulationUrl(assignment.simulation_url))
+                .map((assignment) => assignment.id)
+
+            if (scoredSimulationIds.length > 0) {
+                const { error: attemptResetError } = await supabaseAdmin
+                    .from('simulation_test_attempts')
+                    .delete()
+                    .in('assignment_id', scoredSimulationIds)
+                    .in('student_id', selectedStudentIds)
+
+                if (attemptResetError) {
+                    console.error("Scored simulation attempt reset error:", attemptResetError)
+                }
             }
         }
     }
@@ -3625,7 +3774,7 @@ export async function autoSubmitForAllTestParticipants(
     // Fetch all PUBLISHED assignments in collection with points enabled
     const { data: assignments } = await supabaseAdmin
         .from('assignments')
-        .select('id, points_enabled, questions(id, points)')
+        .select('id, classroom_id, collection_id, points_enabled, simulation_url, questions(id, points)')
         .eq('collection_id', collectionId)
         .eq('points_enabled', true)
         .eq('published', true)
@@ -3634,7 +3783,8 @@ export async function autoSubmitForAllTestParticipants(
         return { success: true } // No points-enabled exercises
     }
 
-    const assignmentIds = assignments.map(a => a.id)
+    const assignmentRows = assignments as ScoredSimulationAssignmentRow[]
+    const assignmentIds = assignmentRows.map(a => a.id)
 
     // Fetch existing progress for ALL participants on these assignments
     const { data: allProgress } = await supabaseAdmin
@@ -3644,8 +3794,9 @@ export async function autoSubmitForAllTestParticipants(
         .in('student_id', studentIds)
 
     // Build a lookup: studentId -> assignmentId -> progress
-    const progressLookup = new Map<string, Map<string, any>>()
-    allProgress?.forEach(p => {
+    const progressLookup = new Map<string, Map<string, AutoSubmitProgressRow>>()
+    const progressRows = (allProgress || []) as AutoSubmitProgressRow[]
+    progressRows.forEach(p => {
         if (!progressLookup.has(p.student_id)) {
             progressLookup.set(p.student_id, new Map())
         }
@@ -3656,13 +3807,22 @@ export async function autoSubmitForAllTestParticipants(
     for (const studentId of studentIds) {
         const studentProgress = progressLookup.get(studentId) || new Map()
 
-        for (const assignment of assignments) {
-            const questions = (assignment as any).questions || []
+        for (const assignment of assignmentRows) {
+            if (isScoredSimulationUrl(assignment.simulation_url)) {
+                await finalizeScoredSimulationAttemptForTeacher(
+                    supabaseAdmin,
+                    assignment,
+                    studentId
+                )
+                continue
+            }
+
+            const questions = assignment.questions || []
             if (questions.length === 0) continue
 
             const progress = studentProgress.get(assignment.id)
-            const submittedAnswers: Record<string, string> = progress?.submitted_answers || {}
-            const earnedPointsPerPart: Record<string, number> = progress?.earned_points_per_part || {}
+            const submittedAnswers = toSubmittedAnswerMap(progress?.submitted_answers)
+            const earnedPointsPerPart = toEarnedPointsMap(progress?.earned_points_per_part)
 
             let hasNewSubmissions = false
 

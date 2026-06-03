@@ -39,7 +39,7 @@ const STYLE_MAP: Record<string, { gradient: string; borderColor: string }> = {
     },
 };
 
-const SIMULATIONS = SIMULATION_DATA.map(sim => ({
+const SIMULATIONS = SIMULATION_DATA.filter(sim => !sim.teacherOnly).map(sim => ({
     ...sim,
     icon: ICON_MAP[sim.id] || <Atom className="w-8 h-8 text-blue-500" />,
     gradient: STYLE_MAP[sim.id]?.gradient || 'from-blue-500/20 to-indigo-500/20',

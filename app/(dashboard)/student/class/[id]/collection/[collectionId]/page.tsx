@@ -5,7 +5,7 @@ import { Suspense } from "react"
 import { CollectionPlayer } from "./CollectionPlayer"
 import { getClientIp } from "@/lib/ip"
 import { getSiteSettings } from "@/app/(dashboard)/admin/settings/actions"
-import { ShieldAlert, ArrowLeft, Loader2, Lock, FileText } from "lucide-react"
+import { ShieldAlert, ArrowLeft, Loader2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { MarkdownContent } from "@/components/ui/markdown-editor"
@@ -30,6 +30,7 @@ interface AssignmentMetaRow {
     published: boolean
     order_index: number | null
     points_enabled: boolean | null
+    simulation_url: string | null
 }
 
 interface AssignmentQuestionRow {
@@ -91,7 +92,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             .single(),
         supabase
             .from('assignments')
-            .select('id, title, published, order_index, points_enabled')
+            .select('id, title, published, order_index, points_enabled, simulation_url')
             .eq('collection_id', collectionId)
             .order('order_index', { ascending: true }),
         supabase
@@ -245,6 +246,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
                     published: !!assignment.published,
                     order_index: assignment.order_index,
                     points_enabled: assignment.points_enabled,
+                    simulation_url: assignment.simulation_url,
                 }))
             }
 
@@ -278,6 +280,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             published: !!assignment.published,
             order_index: assignment.order_index,
             points_enabled: assignment.points_enabled,
+            simulation_url: assignment.simulation_url,
         }))
     }
 
@@ -288,6 +291,7 @@ export default async function StudentCollectionPage({ params }: { params: Promis
             order_index: assignment.order_index,
             published: !!assignment.published,
             points_enabled: !!assignment.points_enabled,
+            simulation_url: assignment.simulation_url,
         }))
         .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
 

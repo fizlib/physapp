@@ -159,6 +159,12 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
     const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const illustrationInputRef = useRef<HTMLInputElement>(null)
+    const availableSimulations = SIMULATIONS.filter(s => s.available)
+    const isSimulationAllowedInContext = (simulationId: string) => {
+        const simulation = SIMULATIONS.find(s => s.id === simulationId)
+        if (!simulation) return false
+        return !simulation.classworkOnly || (!!collectionId && collectionCategory === 'classwork')
+    }
 
     // Load saved model from localStorage on mount
     useEffect(() => {
@@ -361,20 +367,27 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
             return
         }
 
+        if (!isSimulationAllowedInContext(sim.id)) {
+            toast.error("This scored simulation can only be added to a classwork collection")
+            return
+        }
+
         setLoading(true)
         try {
             const exerciseData = {
                 title: sim.title,
                 questions: [],
                 show_all_questions: true,
-                simulation_url: sim.href
+                simulation_url: sim.href,
+                points_enabled: !!sim.pointsEnabled,
+                points: sim.pointsEnabled ? (sim.maxPoints || 1) : undefined,
             }
             const result = await createAssignmentWithQuestion(classroomId, exerciseData, collectionId)
             if (result.success) {
                 toast.success("Simulation exercise created!")
                 setOpen(false)
                 setExerciseMode('ai')
-                setSelectedSimulation(SIMULATIONS.filter(s => s.available)[0]?.id || '')
+                setSelectedSimulation(availableSimulations[0]?.id || '')
             } else {
                 toast.error(result.error || "Failed to create simulation exercise")
             }
@@ -619,8 +632,14 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                     value={selectedSimulation}
                                     onChange={(e) => setSelectedSimulation(e.target.value)}
                                 >
-                                    {SIMULATIONS.filter(s => s.available).map(sim => (
-                                        <option key={sim.id} value={sim.id}>{sim.title}</option>
+                                    {availableSimulations.map(sim => (
+                                        <option
+                                            key={sim.id}
+                                            value={sim.id}
+                                            disabled={!isSimulationAllowedInContext(sim.id)}
+                                        >
+                                            {sim.title}{sim.classworkOnly && collectionCategory !== 'classwork' ? ' (classwork only)' : ''}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -633,13 +652,18 @@ export function CreateExerciseDialog({ classroomId, classroomType, collectionId,
                                     <p className="text-xs text-muted-foreground">
                                         {SIMULATIONS.find(s => s.id === selectedSimulation)?.description}
                                     </p>
+                                    {SIMULATIONS.find(s => s.id === selectedSimulation)?.pointsEnabled && (
+                                        <p className="text-xs font-semibold text-amber-700">
+                                            Vertinama: {SIMULATIONS.find(s => s.id === selectedSimulation)?.maxPoints || 0} taškų
+                                        </p>
+                                    )}
                                 </div>
                             )}
 
                             <Button
                                 type="button"
                                 className="w-full"
-                                disabled={!selectedSimulation || loading}
+                                disabled={!selectedSimulation || loading || !isSimulationAllowedInContext(selectedSimulation)}
                                 onClick={handleCreateSimulation}
                             >
                                 {loading ? (
