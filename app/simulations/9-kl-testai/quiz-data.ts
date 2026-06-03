@@ -97,7 +97,7 @@ export const QUIZ_TOPICS: QuizTopicSet[] = [
             {
                 id: 'atramos-reakcijos-jega',
                 answer: 'Atramos reakcijos jėga (N⃗)',
-                definition: 'Kūną veikianti atramos arba pakabos tamprumo jėga.',
+                definition: 'Tamprumo jėga, kuria atrama veikia ant jos esantį kūną',
             },
             {
                 id: 'sunkis',

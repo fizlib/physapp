@@ -12,7 +12,7 @@ import {
 } from "@/lib/simulation-completion"
 import { QUIZ_TOPICS, type QuizQuestion, type QuizTopicSet } from "./quiz-data"
 
-const ANSWER_SECONDS = 10
+const ANSWER_SECONDS = 15
 const OPTION_LABELS = ['A', 'B', 'C', 'D'] as const
 
 type QuizScreen = 'intro' | 'playing' | 'lost' | 'completed'
@@ -110,6 +110,18 @@ function getAnswerPool(topic: QuizTopicSet) {
 
 function getCurrentAssignmentId() {
     return new URLSearchParams(window.location.search).get('assignmentId')
+}
+
+function clampTopicIndex(topicIndex: number) {
+    if (!Number.isFinite(topicIndex)) return 0
+
+    return Math.min(Math.max(0, Math.floor(topicIndex)), QUIZ_TOPICS.length - 1)
+}
+
+function clampTopicProgress(topicIndex: number) {
+    if (!Number.isFinite(topicIndex)) return 0
+
+    return Math.min(Math.max(0, Math.floor(topicIndex)), QUIZ_TOPICS.length)
 }
 
 function SymbolBase({ symbol, showVector = true }: { symbol: string, showVector?: boolean }) {
@@ -419,55 +431,67 @@ function OptionText({ question, answer }: { question: QuizQuestion, answer: stri
 
 function TopicProgressTrack({
     progressPercent,
-    activeTopicIndex,
+    unlockedTopicIndex,
+    onSelectTopic,
 }: {
     progressPercent: number
-    activeTopicIndex: number
+    unlockedTopicIndex: number
+    onSelectTopic: (topicIndex: number) => void
 }) {
     return (
-        <div className="relative pb-6 pt-3">
-            <div className="relative h-2.5 rounded-full bg-[#dfe7ff]/90 shadow-[inset_0_1px_3px_rgba(61,87,154,0.16)] sm:h-3">
-                <div
-                    className="relative h-full rounded-full bg-[linear-gradient(90deg,#005dff_0%,#1168ff_54%,#704dff_82%,#ffe274_100%)] shadow-[0_0_16px_rgba(12,90,245,0.35)] transition-all duration-300"
-                    style={{ width: `${progressPercent}%` }}
-                >
-                    {progressPercent > 0 && (
-                        <span className="absolute right-0 top-1/2 h-5 w-5 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#ffe78a] shadow-[0_0_18px_rgba(255,203,87,0.9),0_0_34px_rgba(255,133,0,0.32)]" />
-                    )}
-                </div>
-            </div>
-            {QUIZ_TOPICS.map((topic, index) => {
-                const checkpointPercent = ((index + 1) / QUIZ_TOPICS.length) * 100
-                const isCheckpointComplete = progressPercent >= checkpointPercent - 0.1
-                const isReached = isCheckpointComplete || activeTopicIndex > index
-
-                return (
-                    <span
-                        key={topic.id}
-                        className={`absolute top-3 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ${isReached
-                            ? 'h-12 w-12 bg-[#1267ff]/12'
-                            : 'h-8 w-8'
-                            }`}
-                        style={{ left: `${checkpointPercent}%` }}
-                        title={topic.title}
+        <div className="relative px-5 py-3 sm:px-6">
+            <div className="relative">
+                <div className="relative h-2.5 rounded-full bg-[#dfe7ff]/90 shadow-[inset_0_1px_3px_rgba(61,87,154,0.16)] sm:h-3">
+                    <div
+                        className="relative h-full rounded-full bg-[linear-gradient(90deg,#005dff_0%,#1168ff_54%,#704dff_82%,#ffe274_100%)] shadow-[0_0_16px_rgba(12,90,245,0.35)] transition-all duration-300"
+                        style={{ width: `${progressPercent}%` }}
                     >
-                        <span
-                            className={`flex items-center justify-center rounded-full text-sm font-black transition-all ${isReached
-                                ? 'h-8 w-8 bg-[#1267ff] text-white shadow-[0_8px_18px_rgba(18,103,255,0.34)]'
-                                : 'h-8 w-8 border-2 border-[#1267ff] bg-white text-[#1267ff] shadow-[0_5px_12px_rgba(18,103,255,0.16)]'
+                        {progressPercent > 0 && (
+                            <span className="absolute right-0 top-1/2 h-5 w-5 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#ffe78a] shadow-[0_0_18px_rgba(255,203,87,0.9),0_0_34px_rgba(255,133,0,0.32)]" />
+                        )}
+                    </div>
+                </div>
+                {QUIZ_TOPICS.map((topic, index) => {
+                    const checkpointPercent = (index / QUIZ_TOPICS.length) * 100
+                    const isUnlocked = index <= unlockedTopicIndex
+                    const isReached = isUnlocked || progressPercent >= checkpointPercent - 0.1
+
+                    return (
+                        <button
+                            key={topic.id}
+                            type="button"
+                            disabled={!isUnlocked}
+                            onClick={() => onSelectTopic(index)}
+                            aria-label={`Pradėti ${index + 1} rinkinį: ${topic.title}`}
+                            className={`absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 appearance-none items-center justify-center rounded-full p-0 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0b5cff] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:opacity-100 ${isReached
+                                ? 'h-12 w-12 bg-[#1267ff]/12'
+                                : 'h-8 w-8'
+                                } ${isUnlocked
+                                    ? 'cursor-pointer hover:scale-105'
+                                    : 'cursor-not-allowed'
                                 }`}
+                            style={{ left: `${checkpointPercent}%` }}
+                            title={isUnlocked ? topic.title : `${topic.title} (užrakinta)`}
                         >
-                            {index + 1}
-                        </span>
-                    </span>
-                )
-            })}
+                            <span
+                                className={`flex items-center justify-center rounded-full text-sm font-black transition-all ${isReached
+                                    ? 'h-8 w-8 bg-[#1267ff] text-white shadow-[0_8px_18px_rgba(18,103,255,0.34)]'
+                                    : 'h-8 w-8 border-2 border-[#1267ff] bg-white text-[#1267ff] shadow-[0_5px_12px_rgba(18,103,255,0.16)]'
+                                    }`}
+                            >
+                                {index + 1}
+                            </span>
+                        </button>
+                    )
+                })}
+            </div>
         </div>
     )
 }
 
 export default function NinthGradeTestsSimulationPage() {
     const [activeTopicIndex, setActiveTopicIndex] = useState(0)
+    const [unlockedTopicIndex, setUnlockedTopicIndex] = useState(0)
     const activeTopic = QUIZ_TOPICS[activeTopicIndex] ?? QUIZ_TOPICS[0]
     const allAnswers = useMemo(
         () => getAnswerPool(activeTopic),
@@ -481,6 +505,8 @@ export default function NinthGradeTestsSimulationPage() {
     const [correctFeedback, setCorrectFeedback] = useState<CorrectFeedback | null>(null)
     const nextQuestionTimeoutRef = useRef<number | null>(null)
     const correctBurstIdRef = useRef(0)
+    const unlockedTopicIndexRef = useRef(0)
+    const restoreProgressTimeoutRef = useRef<number | null>(null)
 
     const currentQuestion = attemptQuestions[currentIndex]
     const isFrozenQuestionReview = screen === 'lost' && !!currentQuestion
@@ -496,21 +522,30 @@ export default function NinthGradeTestsSimulationPage() {
         }
     }, [])
 
-    const persistTopicProgress = useCallback((topicIndex: number) => {
+    const persistTopicProgress = useCallback((topicIndex: number, options?: { allowDecrease?: boolean }) => {
+        const clampedTopicIndex = clampTopicProgress(topicIndex)
+        const nextUnlockedTopicIndex = options?.allowDecrease
+            ? clampedTopicIndex
+            : Math.max(unlockedTopicIndexRef.current, clampedTopicIndex)
+
+        unlockedTopicIndexRef.current = nextUnlockedTopicIndex
+        setUnlockedTopicIndex(nextUnlockedTopicIndex)
+
         try {
             const assignmentId = getCurrentAssignmentId()
             const progressKey = getSimulationTopicProgressKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignmentId)
-            window.localStorage.setItem(progressKey, topicIndex.toString())
+            window.localStorage.setItem(progressKey, nextUnlockedTopicIndex.toString())
         } catch (error) {
             console.error('Failed to record simulation topic progress:', error)
         }
     }, [])
 
     const beginTopic = useCallback((topicIndex: number) => {
-        const nextTopic = QUIZ_TOPICS[topicIndex] ?? QUIZ_TOPICS[0]
+        const nextTopicIndex = clampTopicIndex(topicIndex)
+        const nextTopic = QUIZ_TOPICS[nextTopicIndex] ?? QUIZ_TOPICS[0]
 
         clearPendingAdvance()
-        setActiveTopicIndex(topicIndex)
+        setActiveTopicIndex(nextTopicIndex)
         setAttemptQuestions(buildAttemptQuestions(nextTopic))
         setCurrentIndex(0)
         setTimeLeft(ANSWER_SECONDS)
@@ -553,34 +588,16 @@ export default function NinthGradeTestsSimulationPage() {
     }, [activeTopicIndex, beginTopic, completeQuiz, persistTopicProgress])
 
     const restartQuiz = useCallback(() => {
-        persistTopicProgress(0)
         beginTopic(0)
-    }, [beginTopic, persistTopicProgress])
+    }, [beginTopic])
 
-    const resetQuizProgress = useCallback(() => {
-        clearPendingAdvance()
+    const selectUnlockedTopic = useCallback((topicIndex: number) => {
+        const nextTopicIndex = clampTopicIndex(topicIndex)
 
-        try {
-            const assignmentId = getCurrentAssignmentId()
-            const progressKey = getSimulationTopicProgressKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignmentId)
-            window.localStorage.removeItem(progressKey)
+        if (nextTopicIndex > unlockedTopicIndexRef.current) return
 
-            if (assignmentId) {
-                const completionKey = getSimulationCompletionKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignmentId)
-                window.localStorage.removeItem(completionKey)
-            }
-        } catch (error) {
-            console.error('Failed to reset simulation progress:', error)
-        }
-
-        setActiveTopicIndex(0)
-        setAttemptQuestions([])
-        setCurrentIndex(0)
-        setTimeLeft(ANSWER_SECONDS)
-        setLossInfo(null)
-        setCorrectFeedback(null)
-        setScreen('intro')
-    }, [clearPendingAdvance])
+        beginTopic(nextTopicIndex)
+    }, [beginTopic])
 
     useEffect(() => {
         if (screen !== 'playing' || correctFeedback) return
@@ -602,28 +619,29 @@ export default function NinthGradeTestsSimulationPage() {
             if (nextQuestionTimeoutRef.current !== null) {
                 window.clearTimeout(nextQuestionTimeoutRef.current)
             }
+
+            if (restoreProgressTimeoutRef.current !== null) {
+                window.clearTimeout(restoreProgressTimeoutRef.current)
+            }
         }
     }, [])
 
     useEffect(() => {
-        let restoreTimeout: number | null = null
-
         try {
             const assignmentId = getCurrentAssignmentId()
             const progressKey = getSimulationTopicProgressKey(NINTH_GRADE_TESTS_SIMULATION_ID, assignmentId)
             const storedProgress = Number(window.localStorage.getItem(progressKey))
+            const restoredProgress = clampTopicProgress(storedProgress)
+            const restoredTopicIndex = clampTopicIndex(restoredProgress)
 
-            if (Number.isInteger(storedProgress) && storedProgress >= 0 && storedProgress < QUIZ_TOPICS.length) {
-                restoreTimeout = window.setTimeout(() => setActiveTopicIndex(storedProgress), 0)
-            }
+            unlockedTopicIndexRef.current = restoredProgress
+            restoreProgressTimeoutRef.current = window.setTimeout(() => {
+                setUnlockedTopicIndex(restoredProgress)
+                setActiveTopicIndex(restoredTopicIndex)
+                restoreProgressTimeoutRef.current = null
+            }, 0)
         } catch (error) {
             console.error('Failed to restore simulation topic progress:', error)
-        }
-
-        return () => {
-            if (restoreTimeout !== null) {
-                window.clearTimeout(restoreTimeout)
-            }
         }
     }, [])
 
@@ -684,9 +702,11 @@ export default function NinthGradeTestsSimulationPage() {
     const currentTopicProgress = attemptQuestions.length > 0
         ? Math.min(currentIndex + (correctFeedback ? 1 : 0), attemptQuestions.length) / attemptQuestions.length
         : 0
-    const progressPercent = screen === 'completed'
+    const currentAttemptProgressPercent = screen === 'completed'
         ? 100
         : Math.min(100, ((activeTopicIndex + currentTopicProgress) / QUIZ_TOPICS.length) * 100)
+    const unlockedProgressPercent = Math.min(100, (unlockedTopicIndex / QUIZ_TOPICS.length) * 100)
+    const progressPercent = Math.max(currentAttemptProgressPercent, unlockedProgressPercent)
 
     return (
         <main className="relative min-h-[100dvh] overflow-hidden bg-[#eef4ff] text-[#07122d]">
@@ -770,21 +790,12 @@ export default function NinthGradeTestsSimulationPage() {
             <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[1540px] flex-col px-4 py-3 sm:px-8 lg:px-10">
                 <header className="flex items-center justify-between pb-2">
                     <Button variant="ghost" size="sm" asChild className="-ml-3 h-9 rounded-full px-3 text-sm font-bold text-[#07122d] hover:bg-white/55 sm:text-base">
-                        <Link href="/simulations">
+                        <Link href="/">
                             <ArrowLeft className="mr-2 h-5 w-5" />
-                            Simuliacijos
+                            Pagrindinis
                         </Link>
                     </Button>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={resetQuizProgress}
-                            className="h-8 rounded-full border-red-200 bg-white/70 px-3 text-xs font-bold text-red-600 shadow-sm hover:bg-white"
-                        >
-                            Reset progress
-                        </Button>
                         <div className="text-sm font-bold text-[#102451] sm:text-base">
                             9 kl. Testai
                         </div>
@@ -794,17 +805,15 @@ export default function NinthGradeTestsSimulationPage() {
                 <section className="flex min-h-0 flex-1 items-start justify-center pb-3 pt-2 sm:pt-3">
                     {screen === 'intro' && (
                         <div className="w-full max-w-2xl rounded-[1.6rem] border border-white/80 bg-white/80 p-6 text-center shadow-[0_28px_80px_rgba(56,101,190,0.24)] backdrop-blur-xl sm:p-8">
-                            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#eaf1ff] text-[#0959f5] shadow-inner">
-                                <Clock className="h-7 w-7" />
-                            </div>
-                            <p className="mb-2 text-sm font-semibold text-[#26467e] sm:text-base">
-                                {activeTopic.title}
-                            </p>
                             <h1 className="mb-6 text-3xl font-black tracking-tight text-[#050814] sm:text-4xl">
                                 9 kl. Testai
                             </h1>
                             <div className="mb-6">
-                                <TopicProgressTrack progressPercent={progressPercent} activeTopicIndex={activeTopicIndex} />
+                                <TopicProgressTrack
+                                    progressPercent={progressPercent}
+                                    unlockedTopicIndex={unlockedTopicIndex}
+                                    onSelectTopic={selectUnlockedTopic}
+                                />
                             </div>
                             <Button size="lg" onClick={startAttempt} className="min-w-44 rounded-xl bg-[#0959f5] px-8 text-base font-bold shadow-[0_10px_25px_rgba(9,89,245,0.28)] hover:bg-[#074ddd]">
                                 Pradėti
@@ -821,7 +830,7 @@ export default function NinthGradeTestsSimulationPage() {
                                             {activeTopic.title}
                                         </p>
                                         <h1 className="mt-0.5 text-2xl font-black tracking-tight text-[#050814] sm:text-3xl">
-                                            {isFrozenQuestionReview ? 'Bandymas nepavyko' : `Lygis ${currentIndex + 1} iš ${attemptQuestions.length}`}
+                                            {isFrozenQuestionReview ? 'Bandymas nepavyko' : `Klausimas ${currentIndex + 1} iš ${attemptQuestions.length}`}
                                         </h1>
                                     </div>
                                     {isFrozenQuestionReview ? (
@@ -836,7 +845,11 @@ export default function NinthGradeTestsSimulationPage() {
                                         </div>
                                     )}
                                 </div>
-                                <TopicProgressTrack progressPercent={progressPercent} activeTopicIndex={activeTopicIndex} />
+                                <TopicProgressTrack
+                                    progressPercent={progressPercent}
+                                    unlockedTopicIndex={unlockedTopicIndex}
+                                    onSelectTopic={selectUnlockedTopic}
+                                />
                             </div>
 
                             <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
@@ -927,7 +940,11 @@ export default function NinthGradeTestsSimulationPage() {
                                 {activeTopic.title}
                             </p>
                             <div className="mb-6">
-                                <TopicProgressTrack progressPercent={progressPercent} activeTopicIndex={QUIZ_TOPICS.length} />
+                                <TopicProgressTrack
+                                    progressPercent={progressPercent}
+                                    unlockedTopicIndex={unlockedTopicIndex}
+                                    onSelectTopic={selectUnlockedTopic}
+                                />
                             </div>
                             <Button size="lg" variant="outline" onClick={restartQuiz} className="min-w-40 rounded-xl border-[#cbd6fb] bg-white/75 px-8 text-base font-bold text-[#102451] shadow-[0_10px_25px_rgba(87,112,170,0.16)] hover:bg-white">
                                 Kartoti
