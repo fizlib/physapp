@@ -89,6 +89,8 @@ interface RoleConfig {
 const GAME_SERVER_URL = process.env.NEXT_PUBLIC_VAMPIRES_SERVER_URL
     || "https://http--vampires-classroom-backend--k46wscvdzqkf.code.run"
 
+console.log("[Vampires] GAME_SERVER_URL =", GAME_SERVER_URL)
+
 const DEFAULT_SETTINGS: GameSettings = {
     discussionTime: 120,
     nightTime: 60,
@@ -163,13 +165,16 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
         let cancelled = false
 
         const connect = async () => {
+            console.log(`[Vampires] Connecting as ${role}, userId=${userId}`)
             const { data: { session: authSession } } = await supabase.auth.getSession()
             if (cancelled) return
 
             if (!authSession?.access_token) {
+                console.error("[Vampires] No access token available")
                 setError("Authentication session is unavailable. Please sign in again.")
                 return
             }
+            console.log("[Vampires] Got access token, connecting to", GAME_SERVER_URL)
 
             activeSocket = io(GAME_SERVER_URL, {
                 transports: ["websocket", "polling"],
@@ -180,16 +185,25 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             })
 
             activeSocket.on("connect", () => {
+                console.log("[Vampires] Socket connected, id =", activeSocket?.id)
                 setConnected(true)
                 setError(null)
             })
-            activeSocket.on("disconnect", () => setConnected(false))
+            activeSocket.on("disconnect", (reason) => {
+                console.log("[Vampires] Socket disconnected, reason =", reason)
+                setConnected(false)
+            })
             activeSocket.on("connect_error", (socketError) => {
+                console.error("[Vampires] connect_error:", socketError.message)
                 setConnected(false)
                 setError(socketError.message || "Could not connect to the game server.")
             })
-            activeSocket.on("classroom_error", (message: string) => setError(message))
+            activeSocket.on("classroom_error", (message: string) => {
+                console.error("[Vampires] classroom_error:", message)
+                setError(message)
+            })
             activeSocket.on("classroom_session_state", (state: ClassroomSessionState) => {
+                console.log("[Vampires] classroom_session_state:", JSON.stringify(state))
                 setSession(state)
                 setTargetSize(state.targetSize || 10)
                 if (role === "student" && state.status !== "running") {
@@ -197,13 +211,18 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                 }
             })
             activeSocket.on("game_assigned", (nextAssignment: GameAssignment) => {
+                console.log("[Vampires] game_assigned:", nextAssignment)
                 setAssignment(nextAssignment)
                 setError(null)
             })
             activeSocket.on("classroom_session_reset", () => {
+                console.log("[Vampires] classroom_session_reset")
                 setAssignment(null)
             })
-            activeSocket.on("session_replaced", (message: string) => setError(message))
+            activeSocket.on("session_replaced", (message: string) => {
+                console.error("[Vampires] session_replaced:", message)
+                setError(message)
+            })
             activeSocket.on("elevenlabs_options", (data: { models?: Array<{ id: string; name: string }> }) => {
                 setElevenlabsModels(data.models || [])
             })
@@ -220,7 +239,11 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
     }, [role])
 
     useEffect(() => {
-        if (!socket || !connected || role !== "teacher" || !selectedClassroomId) return
+        if (!socket || !connected || role !== "teacher" || !selectedClassroomId) {
+            console.log(`[Vampires] teacher_watch skipped: socket=${!!socket}, connected=${connected}, role=${role}, classroomId=${selectedClassroomId}`)
+            return
+        }
+        console.log(`[Vampires] Emitting teacher_watch_classroom for classroomId=${selectedClassroomId}`)
         socket.emit("teacher_watch_classroom", { classroomId: selectedClassroomId })
     }, [connected, role, selectedClassroomId, socket])
 

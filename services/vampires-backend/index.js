@@ -1637,11 +1637,13 @@ io.use(async (socket, next) => {
   try {
     const accessToken = socket.handshake.auth?.accessToken;
     if (!accessToken) {
+      console.log('[Auth] No access token provided');
       return next(new Error('Authentication required.'));
     }
 
     const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
     if (authError || !authData.user) {
+      console.log('[Auth] Invalid token:', authError?.message);
       return next(new Error('Invalid or expired session.'));
     }
 
@@ -1652,13 +1654,16 @@ io.use(async (socket, next) => {
       .maybeSingle();
 
     if (profileError || !profile || !profile.approved) {
+      console.log('[Auth] Profile issue:', { profileError, hasProfile: !!profile, approved: profile?.approved });
       return next(new Error('Approved profile required.'));
     }
 
     if (profile.role !== 'teacher' && profile.role !== 'student') {
+      console.log('[Auth] Unsupported role:', profile.role);
       return next(new Error('Unsupported profile role.'));
     }
 
+    console.log(`[Auth] Authenticated: ${profile.role} ${getProfileName(profile, authData.user)} (${authData.user.id})`);
     socket.data.user = authData.user;
     socket.data.profile = profile;
     socket.data.displayName = getProfileName(profile, authData.user);
@@ -1671,9 +1676,11 @@ io.use(async (socket, next) => {
 
 io.on('connection', async (socket) => {
   const identity = socket.data;
+  console.log(`[Connection] New connection: ${identity.profile.role} ${identity.displayName} (socket=${socket.id})`);
 
   if (identity.profile.role === 'student') {
     const classroomId = await getActiveStudentClassroom(identity.user.id);
+    console.log(`[Connection] Student ${identity.displayName} active classroom: ${classroomId || 'NONE'}`);
     if (!classroomId) {
       socket.emit('classroom_error', 'No active classroom is assigned to this student.');
       return;
@@ -1703,6 +1710,8 @@ io.on('connection', async (socket) => {
       joinedAt: previous?.joinedAt || Date.now(),
     });
 
+    console.log(`[Connection] Student ${identity.displayName} added to presence for classroom ${classroomId}. Total presence: ${presence.size}`);
+
     const session = classroomSessions.get(classroomId);
     if (!session || session.status !== 'running' || !attachStudentToAssignedGame(socket, session)) {
       socket.emit('classroom_session_state', {
@@ -1718,8 +1727,10 @@ io.on('connection', async (socket) => {
   }
 
   socket.on('teacher_watch_classroom', async ({ classroomId } = {}) => {
+    console.log(`[Connection] teacher_watch_classroom: teacher=${identity.displayName}, classroomId=${classroomId}`);
     const classroom = await verifyTeacherClassroom(socket, classroomId);
     if (!classroom) {
+      console.log(`[Connection] Teacher ${identity.displayName} does NOT own classroom ${classroomId}`);
       socket.emit('classroom_error', 'You do not own this classroom.');
       return;
     }
@@ -1733,7 +1744,9 @@ io.on('connection', async (socket) => {
     socket.join(classroomRoom(classroomId));
     socket.join(classroomTeacherRoom(classroomId));
     getClassroomSession(classroomId, socket.data.user.id);
-    socket.emit('classroom_session_state', serializeClassroomSession(classroomId));
+    const state = serializeClassroomSession(classroomId);
+    console.log(`[Connection] Sending teacher state: ${state.connectedStudents.length} students, status=${state.status}`);
+    socket.emit('classroom_session_state', state);
   });
 
   socket.on('prepare_classroom_games', async ({
