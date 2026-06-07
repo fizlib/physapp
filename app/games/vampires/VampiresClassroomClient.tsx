@@ -145,6 +145,36 @@ const ROLE_NAMES = [
     "Jester",
 ] as const
 
+const ROLE_LABELS: Record<string, string> = {
+    Investigator: "Tyrėjas",
+    Lookout: "Stebėtojas",
+    Doctor: "Gydytojas",
+    Jailor: "Kalėjimo prižiūrėtojas",
+    Citizen: "Miestietis",
+    Vampire: "Vampyras",
+    "Vampire Framer": "Vampyras šmeižikas",
+    Jester: "Juokdarys",
+}
+
+const ALIGNMENT_LABELS: Record<string, string> = {
+    good: "gerieji",
+    evil: "blogieji",
+    neutral: "neutralūs",
+}
+
+const GAME_STATE_LABELS: Record<string, string> = {
+    LOBBY: "Laukimo kambarys",
+    NIGHT: "Naktis",
+    DAY_DISCUSS: "Dienos diskusija",
+    DAY_VOTE: "Dienos balsavimas",
+    GAME_OVER: "Žaidimas baigtas",
+}
+
+const roleLabel = (roleName: string | null | undefined) => roleName ? ROLE_LABELS[roleName] || roleName : "Vaidmuo nepriskirtas"
+const alignmentLabel = (alignment: string | null | undefined) => alignment ? ALIGNMENT_LABELS[alignment.toLowerCase()] || alignment : "nežinoma"
+const gameStateLabel = (state: string) => GAME_STATE_LABELS[state] || state.replaceAll("_", " ").toLocaleLowerCase("lt-LT")
+const gameCountLabel = (count: number) => count === 1 ? "žaidimą" : count % 10 >= 2 && count % 10 <= 9 && (count % 100 < 10 || count % 100 >= 20) ? "žaidimus" : "žaidimų"
+
 interface Props {
     userId: string
     role: UserRole
@@ -176,7 +206,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             if (cancelled) return
 
             if (!authSession?.access_token) {
-                setError("Authentication session is unavailable. Please sign in again.")
+                setError("Autentifikavimo sesija nepasiekiama. Prisijunkite dar kartą.")
                 return
             }
 
@@ -195,7 +225,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             activeSocket.on("disconnect", () => setConnected(false))
             activeSocket.on("connect_error", (socketError) => {
                 setConnected(false)
-                setError(socketError.message || "Could not connect to the game server.")
+                setError(socketError.message || "Nepavyko prisijungti prie žaidimo serverio.")
             })
             activeSocket.on("classroom_error", (message: string) => setError(message))
             activeSocket.on("classroom_session_state", (state: ClassroomSessionState) => {
@@ -286,7 +316,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             <main className="vampires-stage vampires-waiting">
                 <div className="vampires-waiting-card">
                     <div className="vampires-spinner" aria-hidden="true" />
-                    <h1>Vampires</h1>
+                    <h1>Vampyrai</h1>
                     <p>Laukiama, kol mokytojas pradės žaidimą...</p>
                     <span>{connected ? "Prisijungta prie klasės laukiamojo" : "Jungiamasi prie žaidimo serverio"}</span>
                     {preparedGroup && (
@@ -306,23 +336,23 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             <div className="vampires-teacher-shell">
                 <header className="vampires-teacher-header">
                     <div>
-                        <span className="vampires-kicker">Protus classroom game</span>
-                        <h1>Vampires</h1>
-                        <p>Prepare connected students, split them into games, and control the round.</p>
+                        <span className="vampires-kicker">„Protus“ klasės žaidimas</span>
+                        <h1>Vampyrai</h1>
+                        <p>Paruoškite prisijungusius mokinius, suskirstykite juos į žaidimus ir valdykite raundą.</p>
                     </div>
                     <div className={`vampires-connection ${connected ? "online" : ""}`}>
                         <span />
-                        {connected ? "Server connected" : "Connecting"}
+                        {connected ? "Prisijungta prie serverio" : "Jungiamasi"}
                     </div>
                 </header>
 
                 {classrooms.length === 0 ? (
-                    <div className="vampires-empty">Create a classroom before starting a game.</div>
+                    <div className="vampires-empty">Prieš pradėdami žaidimą sukurkite klasę.</div>
                 ) : (
                     <>
                         <section className="vampires-panel vampires-classroom-bar">
                             <label>
-                                Classroom
+                                Klasė
                                 <select
                                     value={selectedClassroomId}
                                     onChange={(event) => {
@@ -340,14 +370,14 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                             </label>
                             <div className="vampires-count">
                                 <strong>{connectedStudents.length}</strong>
-                                <span>connected students</span>
+                                <span>prisijungusių mokinių</span>
                             </div>
                             {session?.status === "running" && (
                                 <button
                                     className="vampires-button danger"
                                     onClick={() => socket?.emit("teacher_end_all_games", { classroomId: selectedClassroomId })}
                                 >
-                                    End all and return to lobby
+                                    Baigti visus žaidimus ir grįžti į laukimo kambarį
                                 </button>
                             )}
                         </section>
@@ -360,10 +390,10 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                     <article className="vampires-panel vampires-game-control" key={game.code}>
                                         <div className="vampires-game-control-head">
                                             <div>
-                                                <span>Group {game.groupNumber}</span>
-                                                <h2>{game.state.replaceAll("_", " ")}</h2>
+                                                <span>Grupė {game.groupNumber}</span>
+                                                <h2>{gameStateLabel(game.state)}</h2>
                                             </div>
-                                            <strong>{game.timer}s</strong>
+                                            <strong>{game.timer} sek.</strong>
                                         </div>
                                         <div className="vampires-roster">
                                             {game.players.map(player => (
@@ -377,7 +407,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     })}
                                                 >
                                                     <span>{player.isNPC ? "NPC" : player.name}</span>
-                                                    <small>{player.alive ? "alive" : "out"}{!player.connected ? " · disconnected" : ""}</small>
+                                                    <small>{player.alive ? "gyvas" : "iškritęs"}{!player.connected ? " · atsijungęs" : ""}</small>
                                                 </button>
                                             ))}
                                         </div>
@@ -390,7 +420,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     code: game.code,
                                                 })}
                                             >
-                                                Skip timer
+                                                Praleisti laikmatį
                                             </button>
                                             <button
                                                 className="vampires-button danger"
@@ -400,14 +430,14 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     code: game.code,
                                                 })}
                                             >
-                                                End game
+                                                Baigti žaidimą
                                             </button>
                                         </div>
                                     </article>
                                 ))}
                                 {unassignedStudents.length > 0 && (
                                     <article className="vampires-panel vampires-late-students">
-                                        <h2>Waiting for next round</h2>
+                                        <h2>Laukia kito raundo</h2>
                                         {unassignedStudents.map(student => <div key={student.id}>{student.name}</div>)}
                                     </article>
                                 )}
@@ -417,8 +447,8 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                 <section className="vampires-panel">
                                     <div className="vampires-section-title">
                                         <div>
-                                            <span>Step 1</span>
-                                            <h2>Connected students</h2>
+                                            <span>1 žingsnis</span>
+                                            <h2>Prisijungę mokiniai</h2>
                                         </div>
                                         <strong>{connectedStudents.length}</strong>
                                     </div>
@@ -426,10 +456,10 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                         {connectedStudents.length ? connectedStudents.map(student => (
                                             <div key={student.id}>
                                                 <span>{student.name}</span>
-                                                <small>ready</small>
+                                                <small>pasiruošęs</small>
                                             </div>
                                         )) : (
-                                            <p>Students appear here after opening <code>/games/vampires</code>.</p>
+                                            <p>Mokiniai čia pasirodys atidarę <code>/games/vampires</code>.</p>
                                         )}
                                     </div>
                                 </section>
@@ -437,47 +467,47 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                 <section className="vampires-panel vampires-settings">
                                     <div className="vampires-section-title">
                                         <div>
-                                            <span>Step 2</span>
-                                            <h2>Game setup</h2>
+                                            <span>2 žingsnis</span>
+                                            <h2>Žaidimo nustatymai</h2>
                                         </div>
                                     </div>
 
                                     <div className="vampires-form-grid">
-                                        <NumberField label="Students per game" min={2} max={50} value={targetSize} onChange={setTargetSize} />
-                                        <NumberField label="NPCs per game" min={0} max={20} value={npcCount} onChange={setNpcCount} />
-                                        <NumberField label="Discussion time" min={10} max={600} value={settings.discussionTime} onChange={value => setSettings(current => ({ ...current, discussionTime: value }))} />
-                                        <NumberField label="Night time" min={10} max={300} value={settings.nightTime} onChange={value => setSettings(current => ({ ...current, nightTime: value }))} />
-                                        <NumberField label="Voting time" min={5} max={120} value={settings.votingTime} onChange={value => setSettings(current => ({ ...current, votingTime: value }))} />
+                                        <NumberField label="Mokinių viename žaidime" min={2} max={50} value={targetSize} onChange={setTargetSize} />
+                                        <NumberField label="NPC viename žaidime" min={0} max={20} value={npcCount} onChange={setNpcCount} />
+                                        <NumberField label="Diskusijos laikas" min={10} max={600} value={settings.discussionTime} onChange={value => setSettings(current => ({ ...current, discussionTime: value }))} />
+                                        <NumberField label="Nakties laikas" min={10} max={300} value={settings.nightTime} onChange={value => setSettings(current => ({ ...current, nightTime: value }))} />
+                                        <NumberField label="Balsavimo laikas" min={5} max={120} value={settings.votingTime} onChange={value => setSettings(current => ({ ...current, votingTime: value }))} />
                                         <label>
-                                            Theme
+                                            Tema
                                             <select value={settings.theme} onChange={event => setSettings(current => ({ ...current, theme: event.target.value as GameTheme }))}>
-                                                <option value="dark">Dark</option>
-                                                <option value="day">Day</option>
-                                                <option value="christmas">Christmas</option>
+                                                <option value="dark">Tamsi</option>
+                                                <option value="day">Dienos</option>
+                                                <option value="christmas">Kalėdinė</option>
                                             </select>
                                         </label>
                                     </div>
 
                                     <div className="vampires-toggle-grid">
-                                        <Toggle label="Reveal eliminated roles" checked={settings.revealRole} onChange={checked => setSettings(current => ({ ...current, revealRole: checked }))} />
-                                        <Toggle label="Enable chat" checked={settings.chatEnabled} onChange={checked => setSettings(current => ({ ...current, chatEnabled: checked }))} />
+                                        <Toggle label="Atskleisti iškritusių žaidėjų vaidmenis" checked={settings.revealRole} onChange={checked => setSettings(current => ({ ...current, revealRole: checked }))} />
+                                        <Toggle label="Įjungti pokalbį" checked={settings.chatEnabled} onChange={checked => setSettings(current => ({ ...current, chatEnabled: checked }))} />
                                     </div>
 
                                     {npcCount > 0 && (
                                         <div className="vampires-advanced">
                                             <div className="vampires-form-grid">
                                                 <label>
-                                                    NPC language
+                                                    NPC kalba
                                                     <select value={settings.npcNationality} onChange={event => setSettings(current => ({ ...current, npcNationality: event.target.value as GameSettings["npcNationality"] }))}>
-                                                        <option value="english">English</option>
-                                                        <option value="lithuanian">Lithuanian</option>
+                                                        <option value="english">Anglų</option>
+                                                        <option value="lithuanian">Lietuvių</option>
                                                     </select>
                                                 </label>
-                                                <Toggle label="NPC text-to-speech" checked={settings.enableTTS} onChange={checked => setSettings(current => ({ ...current, enableTTS: checked }))} />
-                                                <Toggle label="Voice input" checked={settings.enableSTT} onChange={checked => setSettings(current => ({ ...current, enableSTT: checked }))} />
+                                                <Toggle label="NPC teksto įgarsinimas" checked={settings.enableTTS} onChange={checked => setSettings(current => ({ ...current, enableTTS: checked }))} />
+                                                <Toggle label="Balso įvestis" checked={settings.enableSTT} onChange={checked => setSettings(current => ({ ...current, enableSTT: checked }))} />
                                                 {settings.enableTTS && (
                                                     <label>
-                                                        TTS provider
+                                                        Balso sintezės teikėjas
                                                         <select value={settings.ttsProvider} onChange={event => setSettings(current => ({ ...current, ttsProvider: event.target.value as GameSettings["ttsProvider"] }))}>
                                                             <option value="google">Google</option>
                                                             <option value="elevenlabs">ElevenLabs</option>
@@ -486,7 +516,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                 )}
                                                 {settings.enableTTS && settings.ttsProvider === "elevenlabs" && (
                                                     <label>
-                                                        ElevenLabs model
+                                                        „ElevenLabs“ modelis
                                                         <select value={settings.elevenlabsModel} onChange={event => setSettings(current => ({ ...current, elevenlabsModel: event.target.value }))}>
                                                             <option value="eleven_turbo_v2_5">Turbo v2.5</option>
                                                             {elevenlabsModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
@@ -496,28 +526,28 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                 {settings.enableSTT && (
                                                     <>
                                                         <label>
-                                                            STT provider
+                                                            Kalbos atpažinimo teikėjas
                                                             <select value={settings.sttProvider} onChange={event => setSettings(current => ({ ...current, sttProvider: event.target.value as GameSettings["sttProvider"] }))}>
                                                                 <option value="deepgram">Deepgram NOVA-3</option>
                                                                 <option value="google">Google</option>
                                                             </select>
                                                         </label>
                                                         <label>
-                                                            Voice mode
+                                                            Balso įvesties režimas
                                                             <select value={settings.voiceInputMode} onChange={event => setSettings(current => ({ ...current, voiceInputMode: event.target.value as GameSettings["voiceInputMode"] }))}>
-                                                                <option value="push-to-talk">Push to talk</option>
-                                                                <option value="voice-activity">Voice activity detection</option>
+                                                                <option value="push-to-talk">Laikyti ir kalbėti</option>
+                                                                <option value="voice-activity">Balso aktyvumo aptikimas</option>
                                                             </select>
                                                         </label>
                                                     </>
                                                 )}
                                             </div>
                                             <div className="vampires-role-options">
-                                                <span>Roles allowed for NPCs</span>
+                                                <span>NPC leidžiami vaidmenys</span>
                                                 {Object.keys(settings.npcAllowedRoles).map(roleName => (
                                                     <Toggle
                                                         key={roleName}
-                                                        label={roleName}
+                                                        label={roleLabel(roleName)}
                                                         checked={settings.npcAllowedRoles[roleName] !== false}
                                                         onChange={checked => setSettings(current => ({
                                                             ...current,
@@ -531,10 +561,10 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
 
                                     <div className="vampires-role-config">
                                         <div className="vampires-role-config-head">
-                                            <strong>Role configuration</strong>
+                                            <strong>Vaidmenų konfigūracija</strong>
                                             <div>
-                                                <button className={roleConfig.useDefault ? "active" : ""} onClick={() => setRoleConfig(current => ({ ...current, useDefault: true }))}>Automatic</button>
-                                                <button className={!roleConfig.useDefault ? "active" : ""} onClick={() => setRoleConfig(current => ({ ...current, useDefault: false }))}>Custom</button>
+                                                <button className={roleConfig.useDefault ? "active" : ""} onClick={() => setRoleConfig(current => ({ ...current, useDefault: true }))}>Automatinė</button>
+                                                <button className={!roleConfig.useDefault ? "active" : ""} onClick={() => setRoleConfig(current => ({ ...current, useDefault: false }))}>Pasirinktinė</button>
                                             </div>
                                         </div>
                                         {!roleConfig.useDefault && (
@@ -542,14 +572,14 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                 {ROLE_NAMES.map(roleName => (
                                                     <NumberField
                                                         key={roleName}
-                                                        label={roleName}
+                                                        label={roleLabel(roleName)}
                                                         min={0}
                                                         max={50}
                                                         value={roleConfig[roleName]}
                                                         onChange={value => setRoleConfig(current => ({ ...current, [roleName]: value }))}
                                                     />
                                                 ))}
-                                                <div className="vampires-role-total">Configured special roles: {customRoleTotal}</div>
+                                                <div className="vampires-role-total">Sukonfigūruotų specialių vaidmenų: {customRoleTotal}</div>
                                             </div>
                                         )}
                                     </div>
@@ -558,25 +588,25 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                 <section className="vampires-panel vampires-preview">
                                     <div className="vampires-section-title">
                                         <div>
-                                            <span>Step 3</span>
-                                            <h2>Preview and start</h2>
+                                            <span>3 žingsnis</span>
+                                            <h2>Peržiūra ir paleidimas</h2>
                                         </div>
                                     </div>
                                     <div className="vampires-actions">
                                         <button className="vampires-button" disabled={!canPrepare} onClick={prepareGroups}>
-                                            Prepare random groups
+                                            Paruošti atsitiktines grupes
                                         </button>
                                         <button className="vampires-button primary" disabled={!canStart} onClick={startGames}>
-                                            Start {session?.previewGroups.length || 0} game{session?.previewGroups.length === 1 ? "" : "s"}
+                                            Pradėti {session?.previewGroups.length || 0} {gameCountLabel(session?.previewGroups.length || 0)}
                                         </button>
                                     </div>
                                     {!canPrepare && connectedStudents.length < 2 && (
-                                        <p className="vampires-hint">At least 2 connected students are required.</p>
+                                        <p className="vampires-hint">Reikia bent 2 prisijungusių mokinių.</p>
                                     )}
                                     <div className="vampires-preview-groups">
                                         {session?.previewGroups.map(group => (
                                             <div key={group.groupNumber}>
-                                                <strong>Group {group.groupNumber}</strong>
+                                                <strong>Grupė {group.groupNumber}</strong>
                                                 <span>{group.students.map(student => student.name).join(", ")}</span>
                                             </div>
                                         ))}
@@ -591,19 +621,19 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                     {selectedPlayer.isNPC && <span className="npc-badge">NPC</span>}
                                     <div className="role-info-display">
                                         <div className={`role-value large ${selectedPlayer.alignment || ""}`}>
-                                            {selectedPlayer.role || "No role assigned"}
+                                            {roleLabel(selectedPlayer.role)}
                                         </div>
                                         <p className="alignment-text">
-                                            Alignment: <strong>{selectedPlayer.alignment || "Unknown"}</strong>
+                                            Pusė: <strong>{alignmentLabel(selectedPlayer.alignment)}</strong>
                                         </p>
                                         <p className="status-text">
-                                            Status: <strong className={selectedPlayer.alive ? "status-alive" : "status-dead"}>
-                                                {selectedPlayer.alive ? "Alive" : "Dead"}
+                                            Būsena: <strong className={selectedPlayer.alive ? "status-alive" : "status-dead"}>
+                                                {selectedPlayer.alive ? "Gyvas" : "Miręs"}
                                             </strong>
                                         </p>
                                     </div>
                                     <div className="role-change-section">
-                                        <h4>Change role</h4>
+                                        <h4>Keisti vaidmenį</h4>
                                         <div className="role-change-buttons">
                                             {["Investigator", "Lookout", "Doctor", "Jailor", "Citizen", "Vampire", "Vampire Framer", "Jester"].map(roleName => {
                                                 const alignment = roleName === "Vampire" || roleName === "Vampire Framer"
@@ -622,14 +652,14 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                             newRole: roleName,
                                                         })}
                                                     >
-                                                        {roleName}
+                                                        {roleLabel(roleName)}
                                                     </button>
                                                 )
                                             })}
                                         </div>
                                     </div>
                                     <div className="role-change-section">
-                                        <h4>Lifecycle</h4>
+                                        <h4>Gyvybės būsena</h4>
                                         <div className="role-change-buttons">
                                             <button
                                                 type="button"
@@ -641,7 +671,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     alive: false,
                                                 })}
                                             >
-                                                Kill
+                                                Pašalinti
                                             </button>
                                             <button
                                                 type="button"
@@ -653,11 +683,11 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     alive: true,
                                                 })}
                                             >
-                                                Revive
+                                                Atgaivinti
                                             </button>
                                         </div>
                                     </div>
-                                    <button className="btn-secondary" onClick={() => setSelectedPlayer(null)}>Close</button>
+                                    <button className="btn-secondary" onClick={() => setSelectedPlayer(null)}>Uždaryti</button>
                                 </div>
                             </div>
                         )}

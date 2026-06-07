@@ -3,10 +3,75 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronUp, Crosshair, Eye, UsersRound } from 'lucide-react';
 
+const ROLE_LABELS = {
+  Investigator: 'Tyrėjas',
+  Lookout: 'Stebėtojas',
+  Doctor: 'Gydytojas',
+  Jailor: 'Kalėjimo prižiūrėtojas',
+  Citizen: 'Miestietis',
+  Vampire: 'Vampyras',
+  'Vampire Framer': 'Vampyras šmeižikas',
+  Jester: 'Juokdarys',
+};
+
+const ALIGNMENT_LABELS = {
+  Good: 'Gerieji',
+  Evil: 'Blogieji',
+  Neutral: 'Neutralūs',
+  good: 'gerieji',
+  evil: 'blogieji',
+  neutral: 'neutralūs',
+  GOOD: 'Gerieji',
+  EVIL: 'Blogieji',
+  NEUTRAL: 'Neutralūs',
+};
+
+const PHASE_LABELS = {
+  LOBBY: 'Laukimo kambarys',
+  NIGHT: 'Naktis',
+  DAY_DISCUSS: 'Dienos diskusija',
+  DAY_VOTE: 'Dienos balsavimas',
+  GAME_OVER: 'Žaidimas baigtas',
+};
+
+const getRoleLabel = role => role ? ROLE_LABELS[role] || role : 'Vaidmuo nepriskirtas';
+const getAlignmentLabel = alignment => alignment ? ALIGNMENT_LABELS[alignment] || alignment : 'Nežinoma';
+const getPhaseLabel = phase => phase ? PHASE_LABELS[phase] || phase.replaceAll('_', ' ').toLocaleLowerCase('lt-LT') : '';
+const getGenderLabel = gender => ({ male: 'vyras', female: 'moteris', neutral: 'neutralus' }[gender] || gender);
+const pluralizeLt = (count, one, few, many) => {
+  const lastTwo = Math.abs(count) % 100;
+  const last = Math.abs(count) % 10;
+  if (last === 1 && lastTwo !== 11) return one;
+  if (last >= 2 && last <= 9 && (lastTwo < 10 || lastTwo >= 20)) return few;
+  return many;
+};
+
+const translateServerMessage = message => ({
+  'Game no longer exists.': 'Žaidimo nebėra.',
+  'Game is full.': 'Žaidime nebėra vietų.',
+  'Invalid game code.': 'Neteisingas žaidimo kodas.',
+  'Player not found.': 'Žaidėjas nerastas.',
+  'Only the host can do that.': 'Tai gali atlikti tik vedėjas.',
+  'The game has already started.': 'Žaidimas jau prasidėjo.',
+}[message] || message);
+
+const translateGameLogMessage = message => {
+  if (typeof message !== 'string') return message;
+  const night = message.match(/^Night (\d+) started$/);
+  if (night) return `Prasidėjo ${night[1]} naktis`;
+  const day = message.match(/^Day (\d+) started$/);
+  if (day) return `Prasidėjo ${day[1]} diena`;
+  return ({
+    'Voting started': 'Prasidėjo balsavimas',
+    'Cancelled framing': 'Šmeižimas atšauktas',
+    'Cancelled action': 'Veiksmas atšauktas',
+  }[message] || message);
+};
+
 // Random username generator
 const generateRandomUsername = () => {
-  const adjectives = ['Shadow', 'Dark', 'Blood', 'Night', 'Crimson', 'Silent', 'Mystic', 'Ancient', 'Pale', 'Eternal'];
-  const nouns = ['Hunter', 'Walker', 'Stalker', 'Slayer', 'Seeker', 'Watcher', 'Phantom', 'Specter', 'Raven', 'Wolf'];
+  const adjectives = ['Šešėlinis', 'Tamsusis', 'Kruvinasis', 'Naktinis', 'Raudonasis', 'Tylusis', 'Mistinis', 'Senovinis', 'Blyškusis', 'Amžinasis'];
+  const nouns = ['Medžiotojas', 'Klajūnas', 'Seklys', 'Naikintojas', 'Ieškotojas', 'Stebėtojas', 'Fantomas', 'Šmėkla', 'Varnas', 'Vilkas'];
   const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
   const noun = nouns[Math.floor(Math.random() * nouns.length)];
   const num = Math.floor(Math.random() * 100);
@@ -17,50 +82,50 @@ const ROLE_INFO = {
   Investigator: {
     alignment: 'Good',
     art: 'investigator',
-    ability: 'Each night, investigate one player to learn if they are suspicious.',
-    goal: 'Eliminate all vampires and survive.'
+    ability: 'Kiekvieną naktį ištirkite vieną žaidėją ir sužinokite, ar jis kelia įtarimų.',
+    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
   },
   Lookout: {
     alignment: 'Good',
     art: 'lookout',
-    ability: 'Each night, watch one player to see who visits them.',
-    goal: 'Eliminate all vampires and survive.'
+    ability: 'Kiekvieną naktį stebėkite vieną žaidėją ir sužinokite, kas jį aplanko.',
+    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
   },
   Doctor: {
     alignment: 'Good',
     art: 'doctor',
-    ability: 'Each night, heal one player to save them from vampire attacks. You have 3 heals per game.',
-    goal: 'Eliminate all vampires and survive.'
+    ability: 'Kiekvieną naktį išgydykite vieną žaidėją ir apsaugokite jį nuo vampyrų atakos. Per žaidimą turite 3 gydymus.',
+    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
   },
   Jailor: {
     alignment: 'Good',
     art: 'jailor',
-    ability: 'Each night, jail one player for private interrogation. You can choose to execute the prisoner.',
-    goal: 'Eliminate all vampires and survive. Warning: executing an innocent will cost your life!'
+    ability: 'Kiekvieną naktį įkalinkite vieną žaidėją privačiai apklausai. Galite nuspręsti kalinį nubausti mirtimi.',
+    goal: 'Pašalinkite visus vampyrus ir išgyvenkite. Įspėjimas: nubaudę nekaltąjį, žūsite ir jūs!'
   },
   Citizen: {
     alignment: 'Good',
     art: 'citizen',
-    ability: 'No special ability. Use your vote wisely during the day.',
-    goal: 'Eliminate all vampires and survive.'
+    ability: 'Ypatingų gebėjimų neturite. Dieną balsuokite išmintingai.',
+    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
   },
   Vampire: {
     alignment: 'Evil',
     art: 'vampire',
-    ability: 'Every other night, vote to turn a citizen. The target with the most votes is turned (ties are random)!',
-    goal: 'Turn or eliminate all non-vampires.'
+    ability: 'Kas antrą naktį balsuokite, kurį miestietį paversti vampyru. Daugiausia balsų gavęs taikinys bus paverstas, o lygiųjų atveju taikinys parenkamas atsitiktinai.',
+    goal: 'Paverskite arba pašalinkite visus, kurie nėra vampyrai.'
   },
   'Vampire Framer': {
     alignment: 'Evil',
     art: 'vampire-framer',
-    ability: 'Each night, frame one player to appear as a vampire to investigators. Every other night, also vote to turn someone.',
-    goal: 'Turn or eliminate all non-vampires.'
+    ability: 'Kiekvieną naktį apšmeižkite vieną žaidėją, kad tyrėjams jis atrodytų kaip vampyras. Kas antrą naktį taip pat balsuokite, ką paversti.',
+    goal: 'Paverskite arba pašalinkite visus, kurie nėra vampyrai.'
   },
   Jester: {
     alignment: 'Neutral',
     art: 'jester',
-    ability: 'No special night ability. Try to act suspicious!',
-    goal: 'Get yourself voted out during the day to win.'
+    ability: 'Ypatingo naktinio gebėjimo neturite. Stenkitės elgtis įtartinai!',
+    goal: 'Kad laimėtumėte, dieną turite būti išbalsuotas.'
   }
 };
 
@@ -82,9 +147,9 @@ const createGameLogEntry = (log, fallbackType = 'public') => {
 };
 
 const getPhaseLogEntry = (state, round) => {
-  if (state === 'NIGHT') return { message: `Night ${round} started`, type: 'night' };
-  if (state === 'DAY_DISCUSS') return { message: `Day ${round} started`, type: 'day' };
-  if (state === 'DAY_VOTE') return { message: 'Voting started', type: 'day' };
+  if (state === 'NIGHT') return { message: `Prasidėjo ${round} naktis`, type: 'night' };
+  if (state === 'DAY_DISCUSS') return { message: `Prasidėjo ${round} diena`, type: 'day' };
+  if (state === 'DAY_VOTE') return { message: 'Prasidėjo balsavimas', type: 'day' };
   return null;
 };
 
@@ -345,7 +410,7 @@ export default function VampireGame({
       checkAudioLevel();
     } catch (err) {
       console.error('[Voice VAD] Microphone access denied:', err);
-      alert('Microphone access denied. Please allow microphone permissions in your browser settings.');
+      alert('Prieiga prie mikrofono nesuteikta. Naršyklės nustatymuose leiskite naudoti mikrofoną.');
     }
   }, [code, socket]);
 
@@ -443,7 +508,7 @@ export default function VampireGame({
         })
         .catch(err => {
           console.error('[Voice] Microphone permission denied:', err);
-          alert('Microphone access denied. Voice chat will not work. Please allow microphone permissions in your browser settings.');
+          alert('Prieiga prie mikrofono nesuteikta. Balso pokalbis neveiks. Naršyklės nustatymuose leiskite naudoti mikrofoną.');
         });
     }
   }, [gameState?.state, gameState?.enableSTT, sttAvailable]);
@@ -645,14 +710,14 @@ export default function VampireGame({
 
     const handleKicked = () => {
       clearSession();
-      alert("You have been kicked from the game.");
+      alert("Buvote pašalintas iš žaidimo.");
       window.location.reload();
     };
 
     const handleError = (msg) => {
       // If error related to rejoin, clear storage
       if (msg === 'Game no longer exists.') clearSession();
-      alert(msg);
+      alert(translateServerMessage(msg));
     };
 
     const handlePlayerRoleInfo = (data) => {
@@ -783,7 +848,7 @@ export default function VampireGame({
   };
 
   const initiateJoinGame = () => {
-    if (!code.trim()) return alert("Code required");
+    if (!code.trim()) return alert("Įveskite kodą");
     setPendingCode(code.toUpperCase());
     setIsCreating(false);
     setView('ENTER_USERNAME');
@@ -801,7 +866,7 @@ export default function VampireGame({
   };
 
   const kickPlayer = (targetId) => {
-    if (window.confirm("Kick this player?")) {
+    if (window.confirm("Pašalinti šį žaidėją?")) {
       socket.emit('kick_player', { code, targetId });
     }
   };
@@ -821,13 +886,13 @@ export default function VampireGame({
       if (frameTarget === targetId) {
         socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
         setFrameTarget(null);
-        appendGameLog('Cancelled framing', 'private');
+        appendGameLog('Šmeižimas atšauktas', 'private');
         return;
       }
       socket.emit('night_action', { code, action: { targetId, type } });
       setFrameTarget(targetId);
       const targetPlayer = gameState?.players.find(p => p.id === targetId);
-      appendGameLog(`Framing ${targetPlayer?.name || 'Unknown'}`, 'private');
+      appendGameLog(`Šmeižiamas ${targetPlayer?.name || 'nežinomas žaidėjas'}`, 'private');
       return;
     }
 
@@ -835,14 +900,14 @@ export default function VampireGame({
     if (nightTarget?.targetId === targetId && nightTarget?.type === type) {
       socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
       setNightTarget(null);
-      appendGameLog('Cancelled action', 'private');
+      appendGameLog('Veiksmas atšauktas', 'private');
       return;
     }
     socket.emit('night_action', { code, action: { targetId, type } });
     setNightTarget({ targetId, type });
     const targetPlayer = gameState?.players.find(p => p.id === targetId);
-    const actionNames = { 'INVESTIGATE': 'Investigating', 'LOOKOUT': 'Watching', 'BITE': 'Voting for', 'HEAL': 'Healing', 'JAIL': 'Jailing', 'FRAME': 'Framing' };
-    appendGameLog(`${actionNames[type] || 'Action on'} ${targetPlayer?.name || 'Unknown'}`, 'private');
+    const actionNames = { 'INVESTIGATE': 'Tiriamas', 'LOOKOUT': 'Stebimas', 'BITE': 'Balsuojama už', 'HEAL': 'Gydomas', 'JAIL': 'Kalinamas', 'FRAME': 'Šmeižiamas' };
+    appendGameLog(`${actionNames[type] || 'Veiksmas su'} ${targetPlayer?.name || 'nežinomu žaidėju'}`, 'private');
   };
   const vote = (targetId) => {
     // Toggle behavior: if clicking same target, unvote
@@ -856,7 +921,7 @@ export default function VampireGame({
   };
   const skipTimer = () => socket.emit('skip_timer', { code });
   const endGame = () => {
-    if (window.confirm("Are you sure you want to end the game?")) {
+    if (window.confirm("Ar tikrai norite baigti žaidimą?")) {
       socket.emit('end_game', { code });
     }
   };
@@ -909,7 +974,7 @@ export default function VampireGame({
       setIsRecording(true);
     } catch (err) {
       console.error('[Voice] Microphone access denied:', err);
-      alert('Microphone access denied. Please allow microphone permissions in your browser settings.');
+      alert('Prieiga prie mikrofono nesuteikta. Naršyklės nustatymuose leiskite naudoti mikrofoną.');
     }
   };
 
@@ -929,7 +994,7 @@ export default function VampireGame({
       <div id="vampires-game-root" className="vampires-shell container center-screen">
         {selectedTheme === 'christmas' && <Snowfall />}
         <div className="card menu-card">
-          <h2>Preparing your classroom game...</h2>
+          <h2>Ruošiamas jūsų klasės žaidimas...</h2>
         </div>
       </div>
     );
@@ -939,19 +1004,19 @@ export default function VampireGame({
     return (
       <div id="vampires-game-root" className="vampires-shell container center-screen">
         {selectedTheme === 'christmas' && <Snowfall />}
-        <h1 className="title-blood">VAMPIRES</h1>
+        <h1 className="title-blood">VAMPYRAI</h1>
 
         <div className="row">
           <div className="card menu-card">
-            <h3>Create Room</h3>
-            <p className="hint-text">Configure game settings in the lobby</p>
-            <button className="btn-primary" onClick={initiateCreateGame}>Create Game</button>
+            <h3>Sukurti kambarį</h3>
+            <p className="hint-text">Žaidimo nustatymus galėsite pasirinkti laukimo kambaryje</p>
+            <button className="btn-primary" onClick={initiateCreateGame}>Sukurti žaidimą</button>
           </div>
 
           <div className="card menu-card">
-            <h3>Join Room</h3>
-            <input className="input-modern" placeholder="ROOM CODE" value={code} onChange={e => setCode(e.target.value.toUpperCase())} />
-            <button className="btn-secondary" onClick={initiateJoinGame}>Join Game</button>
+            <h3>Prisijungti prie kambario</h3>
+            <input className="input-modern" placeholder="KAMBARIO KODAS" value={code} onChange={e => setCode(e.target.value.toUpperCase())} />
+            <button className="btn-secondary" onClick={initiateJoinGame}>Prisijungti prie žaidimo</button>
           </div>
         </div>
 
@@ -960,21 +1025,21 @@ export default function VampireGame({
           <button
             className={`theme-btn theme-dark ${selectedTheme === 'dark' ? 'active' : ''}`}
             onClick={() => changeTheme('dark')}
-            title="Dark Theme"
+            title="Tamsi tema"
           >
             🌙
           </button>
           <button
             className={`theme-btn theme-light ${selectedTheme === 'day' ? 'active' : ''}`}
             onClick={() => changeTheme('day')}
-            title="Light Theme"
+            title="Šviesi tema"
           >
             ☀️
           </button>
           <button
             className={`theme-btn theme-christmas ${selectedTheme === 'christmas' ? 'active' : ''}`}
             onClick={() => changeTheme('christmas')}
-            title="Christmas Theme"
+            title="Kalėdinė tema"
           >
             🎄
           </button>
@@ -987,14 +1052,14 @@ export default function VampireGame({
     return (
       <div id="vampires-game-root" className="vampires-shell container center-screen">
         {selectedTheme === 'christmas' && <Snowfall />}
-        <h1 className="title-blood">VAMPIRES</h1>
+        <h1 className="title-blood">VAMPYRAI</h1>
         <div className="card menu-card username-card">
-          <h3>{isCreating ? 'Create Your Identity' : 'Enter Your Identity'}</h3>
-          <p className="hint-text">Leave empty for a random name</p>
+          <h3>{isCreating ? 'Susikurkite tapatybę' : 'Įveskite savo tapatybę'}</h3>
+          <p className="hint-text">Palikite tuščią, kad vardas būtų sugeneruotas atsitiktinai</p>
           <div className="input-group">
             <input
               className="input-modern"
-              placeholder="Enter Username (optional)"
+              placeholder="Įveskite vardą (nebūtina)"
               value={name}
               onChange={e => setName(e.target.value)}
               onKeyPress={e => e.key === 'Enter' && submitUsername()}
@@ -1002,9 +1067,9 @@ export default function VampireGame({
             />
           </div>
           <div className="button-row">
-            <button className="btn-secondary" onClick={() => { setView('MENU'); setName(''); }}>Back</button>
+            <button className="btn-secondary" onClick={() => { setView('MENU'); setName(''); }}>Atgal</button>
             <button className="btn-primary" onClick={submitUsername}>
-              {name.trim() ? 'Continue' : 'Get Random Name'}
+              {name.trim() ? 'Tęsti' : 'Sugeneruoti atsitiktinį vardą'}
             </button>
           </div>
         </div>
@@ -1018,13 +1083,13 @@ export default function VampireGame({
 
     // Role configuration helpers
     const roleData = [
-      { key: 'Investigator', icon: '🔍', alignment: 'good', name: 'Investigator' },
-      { key: 'Lookout', icon: '👁️', alignment: 'good', name: 'Lookout' },
-      { key: 'Doctor', icon: '💉', alignment: 'good', name: 'Doctor' },
-      { key: 'Jailor', icon: '🔒', alignment: 'good', name: 'Jailor' },
-      { key: 'Vampire', icon: '🧛', alignment: 'evil', name: 'Vampire' },
-      { key: 'Vampire Framer', icon: '🎭', alignment: 'evil', name: 'Vampire Framer' },
-      { key: 'Jester', icon: '🃏', alignment: 'neutral', name: 'Jester' }
+      { key: 'Investigator', icon: '🔍', alignment: 'good', name: getRoleLabel('Investigator') },
+      { key: 'Lookout', icon: '👁️', alignment: 'good', name: getRoleLabel('Lookout') },
+      { key: 'Doctor', icon: '💉', alignment: 'good', name: getRoleLabel('Doctor') },
+      { key: 'Jailor', icon: '🔒', alignment: 'good', name: getRoleLabel('Jailor') },
+      { key: 'Vampire', icon: '🧛', alignment: 'evil', name: getRoleLabel('Vampire') },
+      { key: 'Vampire Framer', icon: '🎭', alignment: 'evil', name: getRoleLabel('Vampire Framer') },
+      { key: 'Jester', icon: '🃏', alignment: 'neutral', name: getRoleLabel('Jester') }
     ];
 
     const totalConfiguredRoles = roleConfig.Investigator + roleConfig.Lookout + roleConfig.Doctor + (roleConfig.Jailor || 0) + roleConfig.Vampire + (roleConfig['Vampire Framer'] || 0) + roleConfig.Jester;
@@ -1047,60 +1112,60 @@ export default function VampireGame({
       <div id="vampires-game-root" className="vampires-shell container">
         {selectedTheme === 'christmas' && <Snowfall />}
         <div className="lobby-header">
-          <h1>Preparing classroom game...</h1>
+          <h1>Ruošiamas klasės žaidimas...</h1>
         </div>
 
         {/* NPC Edit Modal */}
         {editingNPC && (
           <div className="modal-overlay" onClick={() => setEditingNPC(null)}>
             <div className="modal-content npc-edit-modal" onClick={e => e.stopPropagation()}>
-              <h2>🤖 Edit NPC</h2>
+              <h2>🤖 Redaguoti NPC</h2>
 
               <div className="npc-edit-form">
                 <div className="form-group">
-                  <label>Name</label>
+                  <label>Vardas</label>
                   <input
                     type="text"
                     className="input-modern"
                     value={editingNPC.name}
                     onChange={e => setEditingNPC({ ...editingNPC, name: e.target.value })}
-                    placeholder="NPC Name"
+                    placeholder="NPC vardas"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label>Personality Description</label>
+                  <label>Asmenybės aprašymas</label>
                   <textarea
                     className="input-modern textarea-modern"
                     value={editingNPC.personality}
                     onChange={e => setEditingNPC({ ...editingNPC, personality: e.target.value })}
-                    placeholder="e.g., paranoid, aggressive, analytical, quiet..."
+                    placeholder="pvz., paranojiškas, agresyvus, analitiškas, tylus..."
                     rows={3}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label>Talking Style</label>
+                  <label>Kalbėjimo stilius</label>
                   <textarea
                     className="input-modern textarea-modern"
                     value={editingNPC.talkingStyle}
                     onChange={e => setEditingNPC({ ...editingNPC, talkingStyle: e.target.value })}
-                    placeholder="e.g., uses slang, formal, stutters, speaks in riddles..."
+                    placeholder="pvz., vartoja žargoną, kalba formaliai, mikčioja, kalba mįslėmis..."
                     rows={3}
                   />
                 </div>
 
                 {settings.ttsProvider === 'elevenlabs' && settings.enableTTS && (
                   <div className="form-group">
-                    <label>🔊 ElevenLabs Voice</label>
+                    <label>🔊 „ElevenLabs“ balsas</label>
                     <select
                       className="input-modern"
                       value={editingNPC.elevenlabsVoiceId || ''}
                       onChange={e => setEditingNPC({ ...editingNPC, elevenlabsVoiceId: e.target.value })}
                     >
-                      <option value="">Random (Auto-assign)</option>
+                      <option value="">Atsitiktinis (parenkamas automatiškai)</option>
                       {elevenlabsOptions.voices.map(voice => (
-                        <option key={voice.id} value={voice.id}>{voice.name} ({voice.gender})</option>
+                        <option key={voice.id} value={voice.id}>{voice.name} ({getGenderLabel(voice.gender)})</option>
                       ))}
                     </select>
                   </div>
@@ -1108,7 +1173,7 @@ export default function VampireGame({
               </div>
 
               <div className="button-row">
-                <button className="btn-secondary" onClick={() => setEditingNPC(null)}>Cancel</button>
+                <button className="btn-secondary" onClick={() => setEditingNPC(null)}>Atšaukti</button>
                 <button
                   className="btn-primary"
                   onClick={() => {
@@ -1123,7 +1188,7 @@ export default function VampireGame({
                     setEditingNPC(null);
                   }}
                 >
-                  Save Changes
+                  Išsaugoti pakeitimus
                 </button>
               </div>
             </div>
@@ -1142,7 +1207,7 @@ export default function VampireGame({
               }}
             >
               <div className="avatar">{p.isNPC ? '🤖' : p.name.charAt(0).toUpperCase()}</div>
-              <span className="player-name">{p.name} {p.id === myId ? '(You)' : ''}</span>
+              <span className="player-name">{p.name} {p.id === myId ? '(jūs)' : ''}</span>
               {isHost && p.isNPC && <span className="npc-edit-icon">✏️</span>}
               {isHost && p.id !== myId && (
                 <button className="btn-kick" onClick={(e) => { e.stopPropagation(); kickPlayer(p.id); }}>×</button>
@@ -1153,7 +1218,7 @@ export default function VampireGame({
 
         {isHost && (
           <button className="btn-secondary btn-add-npc" onClick={addNPC}>
-            + Add NPC Player
+            + Pridėti NPC žaidėją
           </button>
         )}
 
@@ -1161,11 +1226,11 @@ export default function VampireGame({
         {isHost && (
           <div className="game-settings-panel">
             <div className="game-settings-header">
-              <h3>⚙️ Game Settings</h3>
+              <h3>⚙️ Žaidimo nustatymai</h3>
             </div>
             <div className="game-settings-grid">
               <div className="game-setting-item">
-                <label>Discussion Time</label>
+                <label>Diskusijos laikas</label>
                 <div className="game-setting-input-row">
                   <input
                     type="number"
@@ -1179,11 +1244,11 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   />
-                  <span className="setting-unit">sec</span>
+                  <span className="setting-unit">sek.</span>
                 </div>
               </div>
               <div className="game-setting-item">
-                <label>Night Time</label>
+                <label>Nakties laikas</label>
                 <div className="game-setting-input-row">
                   <input
                     type="number"
@@ -1197,11 +1262,11 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   />
-                  <span className="setting-unit">sec</span>
+                  <span className="setting-unit">sek.</span>
                 </div>
               </div>
               <div className="game-setting-item">
-                <label>Voting Time</label>
+                <label>Balsavimo laikas</label>
                 <div className="game-setting-input-row">
                   <input
                     type="number"
@@ -1215,7 +1280,7 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   />
-                  <span className="setting-unit">sec</span>
+                  <span className="setting-unit">sek.</span>
                 </div>
               </div>
               <div className="game-setting-item checkbox-setting">
@@ -1230,12 +1295,12 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   />
-                  Enable Chat
+                  Įjungti pokalbį
                 </label>
               </div>
               {settings.enableAI && (
                 <div className="game-setting-item">
-                  <label>NPCs Nationality</label>
+                  <label>NPC kalba</label>
                   <select
                     className="setting-select"
                     value={settings.npcNationality || 'english'}
@@ -1246,14 +1311,14 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   >
-                    <option value="english">English</option>
-                    <option value="lithuanian">Lithuanian</option>
+                    <option value="english">Anglų</option>
+                    <option value="lithuanian">Lietuvių</option>
                   </select>
                 </div>
               )}
               {settings.enableAI && (
                 <div className="game-setting-item">
-                  <label>NPC Allowed Roles:</label>
+                  <label>NPC leidžiami vaidmenys:</label>
                   <div className="npc-roles-grid">
                     {['Investigator', 'Lookout', 'Doctor', 'Jailor', 'Vampire', 'Vampire Framer', 'Jester', 'Citizen'].map(role => (
                       <label key={role} className="npc-role-checkbox">
@@ -1271,7 +1336,7 @@ export default function VampireGame({
                             socket.emit('update_settings', { code, settings: newSettings });
                           }}
                         />
-                        <span className="role-name">{role}</span>
+                        <span className="role-name">{getRoleLabel(role)}</span>
                       </label>
                     ))}
                   </div>
@@ -1290,13 +1355,13 @@ export default function VampireGame({
                         socket.emit('update_settings', { code, settings: newSettings });
                       }}
                     />
-                    🔊 NPC Text-to-Speech
+                    🔊 NPC teksto įgarsinimas
                   </label>
                 </div>
               )}
               {settings.enableAI && settings.enableTTS && (
                 <div className="game-setting-item">
-                  <label>TTS Provider:</label>
+                  <label>Balso sintezės teikėjas:</label>
                   <select
                     value={settings.ttsProvider || 'google'}
                     onChange={e => {
@@ -1313,7 +1378,7 @@ export default function VampireGame({
               )}
               {settings.enableAI && settings.enableTTS && settings.ttsProvider === 'elevenlabs' && (
                 <div className="game-setting-item">
-                  <label>ElevenLabs Model:</label>
+                  <label>„ElevenLabs“ modelis:</label>
                   <select
                     value={settings.elevenlabsModel || 'eleven_turbo_v2_5'}
                     onChange={e => {
@@ -1343,13 +1408,13 @@ export default function VampireGame({
                         socket.emit('update_settings', { code, settings: newSettings });
                       }}
                     />
-                    🎤 Enable Voice Chat {!sttAvailable && '(Not Available)'}
+                    🎤 Įjungti balso pokalbį {!sttAvailable && '(nepasiekiama)'}
                   </label>
                 </div>
               )}
               {settings.enableAI && settings.enableSTT && sttAvailable && (
                 <div className="game-setting-item">
-                  <label>STT Provider:</label>
+                  <label>Kalbos atpažinimo teikėjas:</label>
                   <select
                     value={settings.sttProvider || 'deepgram'}
                     onChange={e => {
@@ -1366,7 +1431,7 @@ export default function VampireGame({
               )}
               {settings.enableAI && settings.enableSTT && sttAvailable && (
                 <div className="game-setting-item">
-                  <label>Voice Input Mode:</label>
+                  <label>Balso įvesties režimas:</label>
                   <select
                     className="setting-select"
                     value={settings.voiceInputMode || 'push-to-talk'}
@@ -1377,8 +1442,8 @@ export default function VampireGame({
                       socket.emit('update_settings', { code, settings: newSettings });
                     }}
                   >
-                    <option value="push-to-talk">Push to Talk</option>
-                    <option value="voice-activity">Voice Activity Detection</option>
+                    <option value="push-to-talk">Laikyti ir kalbėti</option>
+                    <option value="voice-activity">Balso aktyvumo aptikimas</option>
                   </select>
                 </div>
               )}
@@ -1390,28 +1455,28 @@ export default function VampireGame({
         {isHost && (
           <div className="role-config-panel">
             <div className="role-config-header">
-              <h3>🎭 Role Configuration</h3>
+              <h3>🎭 Vaidmenų konfigūracija</h3>
               <div className="role-config-toggle">
                 <button
                   className={`toggle-btn ${roleConfig.useDefault ? 'active' : ''}`}
                   onClick={() => toggleRoleMode(true)}
                 >
-                  Default
+                  Numatytoji
                 </button>
                 <button
                   className={`toggle-btn ${!roleConfig.useDefault ? 'active' : ''}`}
                   onClick={() => toggleRoleMode(false)}
                 >
-                  Custom
+                  Pasirinktinė
                 </button>
               </div>
             </div>
 
             {roleConfig.useDefault ? (
               <div className="role-config-default-message">
-                Roles will be automatically assigned based on player count.
+                Vaidmenys bus automatiškai paskirti pagal žaidėjų skaičių.
                 <br />
-                <small>(~10% each for Investigators, Lookouts, Vampires, 1 Jester, rest Citizens)</small>
+                <small>(maždaug po 10 % tyrėjų, stebėtojų ir vampyrų, 1 juokdarys, likusieji – miestiečiai)</small>
               </div>
             ) : (
               <>
@@ -1424,7 +1489,7 @@ export default function VampireGame({
                           <span className="role-config-name">{role.name}</span>
                         </div>
                         <span className={`role-config-alignment ${role.alignment}`}>
-                          {role.alignment}
+                          {getAlignmentLabel(role.alignment)}
                         </span>
                       </div>
                       <div className="role-config-counter">
@@ -1451,13 +1516,13 @@ export default function VampireGame({
                     <div className="role-config-card-header">
                       <div className="role-config-card-title">
                         <span className="role-config-icon">👤</span>
-                        <span className="role-config-name">Citizen</span>
+                        <span className="role-config-name">Miestietis</span>
                       </div>
-                      <span className="role-config-alignment good">good</span>
+                      <span className="role-config-alignment good">gerieji</span>
                     </div>
                     <div className="role-config-counter">
                       <span className="counter-value" style={{ minWidth: 'auto', opacity: 0.7 }}>
-                        {citizenCount} (auto)
+                        {citizenCount} (automatiškai)
                       </span>
                     </div>
                   </div>
@@ -1465,14 +1530,14 @@ export default function VampireGame({
 
                 <div className="role-config-summary">
                   <div className="role-summary-item">
-                    Players: <span>{playerCount}</span>
+                    Žaidėjai: <span>{playerCount}</span>
                   </div>
                   <div className="role-summary-item">
-                    Configured: <span>{totalConfiguredRoles}</span> + <span>{citizenCount}</span> Citizens
+                    Sukonfigūruota: <span>{totalConfiguredRoles}</span> + <span>{citizenCount}</span> miestiečių
                   </div>
                   {totalConfiguredRoles > playerCount && (
                     <div className="role-summary-warning">
-                      ⚠️ More roles than players! Some roles will be randomly excluded.
+                      ⚠️ Vaidmenų daugiau nei žaidėjų! Dalis vaidmenų bus atsitiktinai praleista.
                     </div>
                   )}
                 </div>
@@ -1482,9 +1547,9 @@ export default function VampireGame({
         )}
 
         {isHost ? (
-          <button className="btn-primary btn-large" onClick={startGame}>START NIGHT</button>
+          <button className="btn-primary btn-large" onClick={startGame}>PRADĖTI NAKTĮ</button>
         ) : (
-          <div className="waiting-text">Waiting for host to start...</div>
+          <div className="waiting-text">Laukiama, kol vedėjas pradės žaidimą...</div>
         )}
       </div>
     );
@@ -1512,17 +1577,17 @@ export default function VampireGame({
       {selectedTheme === 'christmas' && <Snowfall />}
       <div className="game-header">
         <div className="phase-indicator">
-          <span className="phase-label">{gameState?.state.replace('_', ' ')}</span>
-          <span className="timer-badge">{timer}s</span>
+          <span className="phase-label">{getPhaseLabel(gameState?.state)}</span>
+          <span className="timer-badge">{timer} sek.</span>
         </div>
-        <div className="role-display" onClick={() => setRoleRevealed(true)} title="Click to see your role">
-          <span className="role-label">Role</span>
-          <span className="role-value">Show</span>
+        <div className="role-display" onClick={() => setRoleRevealed(true)} title="Spustelėkite, kad pamatytumėte savo vaidmenį">
+          <span className="role-label">Vaidmuo</span>
+          <span className="role-value">Rodyti</span>
         </div>
         {isHost && isGameActive && (
           <div className="host-controls">
-            <button className="btn-small btn-skip" onClick={skipTimer}>Skip Timer</button>
-            <button className="btn-small btn-end" onClick={endGame}>End Game</button>
+            <button className="btn-small btn-skip" onClick={skipTimer}>Praleisti laikmatį</button>
+            <button className="btn-small btn-end" onClick={endGame}>Baigti žaidimą</button>
           </div>
         )}
       </div>
@@ -1538,7 +1603,7 @@ export default function VampireGame({
             onClick={e => e.stopPropagation()}
           >
             <div className="role-panel-heading">
-              <h2 id="role-panel-title">Your Role</h2>
+              <h2 id="role-panel-title">Jūsų vaidmuo</h2>
               <div className="role-heading-ornament" aria-hidden="true">
                 <span />
               </div>
@@ -1546,51 +1611,51 @@ export default function VampireGame({
             <div className="role-emblem" aria-hidden="true">
               <span className={`role-emblem-art role-art-${currentRoleInfo.art || 'citizen'}`} />
             </div>
-            <div className="role-name">{myRole?.role || '???'}</div>
+            <div className="role-name">{myRole?.role ? getRoleLabel(myRole.role) : '???'}</div>
             <div className="role-details">
               <div className="role-detail-row">
                 <span className="role-detail-icon" aria-hidden="true"><UsersRound /></span>
                 <span className="role-detail-copy">
-                  <span className="detail-label">Alignment</span>
+                  <span className="detail-label">Pusė</span>
                   <span className={`detail-value alignment-${currentRoleAlignment}`}>
-                    {currentRoleInfo.alignment || myRole?.alignment || 'Unknown'}
+                    {getAlignmentLabel(currentRoleInfo.alignment || myRole?.alignment)}
                   </span>
                 </span>
               </div>
               <div className="role-detail-row">
                 <span className="role-detail-icon" aria-hidden="true"><Eye /></span>
                 <span className="role-detail-copy">
-                  <span className="detail-label">Ability</span>
-                  <span className="detail-value">{currentRoleInfo.ability || 'Unknown ability'}</span>
+                  <span className="detail-label">Gebėjimas</span>
+                  <span className="detail-value">{currentRoleInfo.ability || 'Gebėjimas nežinomas'}</span>
                 </span>
               </div>
               <div className="role-detail-row">
                 <span className="role-detail-icon" aria-hidden="true"><Crosshair /></span>
                 <span className="role-detail-copy">
-                  <span className="detail-label">Goal</span>
-                  <span className="detail-value">{currentRoleInfo.goal || 'Unknown goal'}</span>
+                  <span className="detail-label">Tikslas</span>
+                  <span className="detail-value">{currentRoleInfo.goal || 'Tikslas nežinomas'}</span>
                 </span>
               </div>
             </div>
-            <button className="role-panel-close" onClick={() => setRoleRevealed(false)}>Close</button>
+            <button className="role-panel-close" onClick={() => setRoleRevealed(false)}>Uždaryti</button>
           </div>
         </div>
       )}
 
-      {amIAlive === false && <div className="banner-dead">YOU ARE DEAD</div>}
+      {amIAlive === false && <div className="banner-dead">JŪS ŽUVOTE</div>}
 
       {/* Vampire voting info panel */}
       {myRole?.role === 'Vampire' && isNight && canTurn && gameState?.vampireInfo?.needsVoting && (
         <div className="vampire-voting-banner">
-          🧛 Vampire Vote: {gameState.vampireInfo.totalVampires} vampires active.
-          Target with the most votes will be turned!
+          🧛 Vampyrų balsavimas: {gameState.vampireInfo.totalVampires} {pluralizeLt(gameState.vampireInfo.totalVampires, 'aktyvus vampyras', 'aktyvūs vampyrai', 'aktyvių vampyrų')}.
+          Daugiausia balsų gavęs taikinys bus paverstas!
         </div>
       )}
 
       {/* Doctor Info Banner */}
       {myRole?.role === 'Doctor' && (
         <div className="role-info-banner doctor-banner">
-          💉 You have <strong>{gameState?.healsRemaining ?? '?'}</strong> heals remaining.
+          💉 Jums liko <strong>{gameState?.healsRemaining ?? '?'}</strong> {typeof gameState?.healsRemaining === 'number' ? pluralizeLt(gameState.healsRemaining, 'gydymas', 'gydymai', 'gydymų') : 'gydymų'}.
         </div>
       )}
 
@@ -1598,20 +1663,20 @@ export default function VampireGame({
       {isNight && gameState?.jailInfo && (
         <div className="jail-modal">
           <div className="jail-modal-content">
-            <h2>🔒 {gameState.jailInfo.isJailor ? `Interrogating: ${gameState.jailInfo.prisonerName}` : 'You are in Jail!'}</h2>
+            <h2>🔒 {gameState.jailInfo.isJailor ? `Apklausiamas: ${gameState.jailInfo.prisonerName}` : 'Jūs esate kalėjime!'}</h2>
             {gameState.jailInfo.isJailed && (
-              <p className="jail-subtitle">The Jailor wishes to speak with you. You cannot perform your night action.</p>
+              <p className="jail-subtitle">Kalėjimo prižiūrėtojas nori su jumis pasikalbėti. Šią naktį negalite atlikti savo veiksmo.</p>
             )}
 
             <div className="jail-chat-messages" ref={jailChatMessagesRef}>
               {(jailChat.length > 0 ? jailChat : (gameState.jailInfo.jailChat || [])).map((msg, i) => (
                 <div key={i} className={`jail-chat-message ${msg.sender === 'Jailor' ? 'jailor-msg' : 'prisoner-msg'}`}>
-                  <span className="chat-sender">{msg.sender}:</span>
+                  <span className="chat-sender">{getRoleLabel(msg.sender)}:</span>
                   <span className="chat-text">{msg.message}</span>
                 </div>
               ))}
               {(jailChat.length > 0 ? jailChat : (gameState.jailInfo.jailChat || [])).length === 0 && (
-                <div className="jail-chat-empty">No messages yet. Start the interrogation!</div>
+                <div className="jail-chat-empty">Žinučių dar nėra. Pradėkite apklausą!</div>
               )}
             </div>
 
@@ -1619,7 +1684,7 @@ export default function VampireGame({
               <input
                 type="text"
                 className="jail-chat-input"
-                placeholder="Type a message..."
+                placeholder="Įveskite žinutę..."
                 value={jailChatInput}
                 onChange={e => setJailChatInput(e.target.value)}
                 onKeyPress={e => {
@@ -1638,7 +1703,7 @@ export default function VampireGame({
                   }
                 }}
               >
-                Send
+                Siųsti
               </button>
             </div>
 
@@ -1658,7 +1723,7 @@ export default function VampireGame({
                   }
                 }}
               >
-                {executionPending ? '❌ Cancel Execution' : '☠️ Execute Prisoner'}
+                {executionPending ? '❌ Atšaukti egzekuciją' : '☠️ Nubausti kalinį mirtimi'}
               </button>
             )}
           </div>
@@ -1668,25 +1733,25 @@ export default function VampireGame({
       {gameState?.state === 'GAME_OVER' &&
         <div className="modal-overlay">
           <div className="modal-content game-over-panel">
-            <h1>GAME OVER</h1>
+            <h1>ŽAIDIMAS BAIGTAS</h1>
             <h2 className={`winner-title ${gameState.winner === 'GOOD' ? 'good-win' : gameState.winner === 'EVIL' ? 'evil-win' : 'neutral-win'}`}>
-              Winner: {gameState.winner === 'GOOD' ? 'Citizens' : gameState.winner === 'EVIL' ? 'Vampires' : gameState.winner}
+              Laimėtojai: {gameState.winner === 'GOOD' ? 'Miestiečiai' : gameState.winner === 'EVIL' ? 'Vampyrai' : getAlignmentLabel(gameState.winner)}
             </h2>
 
             <div className="game-over-summary">
-              <h3>Player Roles</h3>
+              <h3>Žaidėjų vaidmenys</h3>
               <div className="summary-grid">
                 {gameState.players.map(p => (
                   <div key={p.id} className={`summary-card ${p.alignment || 'unknown'}`}>
-                    <div className="summary-name">{p.name} {p.id === myId && '(You)'}</div>
-                    <div className="summary-role">{p.role || 'Unknown'}</div>
-                    {!p.alive && <div className="summary-dead">👻 Dead</div>}
+                    <div className="summary-name">{p.name} {p.id === myId && '(jūs)'}</div>
+                    <div className="summary-role">{getRoleLabel(p.role)}</div>
+                    {!p.alive && <div className="summary-dead">👻 Miręs</div>}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="waiting-text">Waiting for the teacher to return everyone to the lobby...</div>
+            <div className="waiting-text">Laukiama, kol mokytojas grąžins visus į laukimo kambarį...</div>
           </div>
         </div>
       }
@@ -1699,22 +1764,22 @@ export default function VampireGame({
             {selectedPlayerRole.isNPC && <span className="npc-badge">🤖 NPC</span>}
             <div className="role-info-display">
               <div className={`role-value large ${selectedPlayerRole.alignment}`}>
-                {selectedPlayerRole.role || 'No role assigned'}
+                {getRoleLabel(selectedPlayerRole.role)}
               </div>
               <p className="alignment-text">
-                Alignment: <strong>{selectedPlayerRole.alignment || 'Unknown'}</strong>
+                Pusė: <strong>{getAlignmentLabel(selectedPlayerRole.alignment)}</strong>
               </p>
               {/* New Status Display */}
               <p className="status-text">
-                Status: <strong className={selectedPlayerRole.alive ? 'status-alive' : 'status-dead'}>
-                  {selectedPlayerRole.alive ? 'Alive' : 'Dead'}
+                Būsena: <strong className={selectedPlayerRole.alive ? 'status-alive' : 'status-dead'}>
+                  {selectedPlayerRole.alive ? 'Gyvas' : 'Miręs'}
                 </strong>
               </p>
             </div>
 
             {/* Role Change Buttons for Host */}
             <div className="role-change-section">
-              <h4>Change Role</h4>
+              <h4>Keisti vaidmenį</h4>
               <div className="role-change-buttons">
                 {['Investigator', 'Lookout', 'Doctor', 'Jailor', 'Citizen', 'Vampire', 'Vampire Framer', 'Jester'].map(role => (
                   <button
@@ -1731,7 +1796,7 @@ export default function VampireGame({
                     {role === 'Vampire' && '🧛 '}
                     {role === 'Vampire Framer' && '🎭 '}
                     {role === 'Jester' && '🃏 '}
-                    {role}
+                    {getRoleLabel(role)}
                   </button>
                 ))}
               </div>
@@ -1739,7 +1804,7 @@ export default function VampireGame({
 
             {/* Kill/Revive Buttons for Host */}
             <div className="role-change-section" style={{ marginTop: '1rem' }}>
-              <h4>Lifecycle</h4>
+              <h4>Gyvybės būsena</h4>
               <div className="role-change-buttons">
                 <button
                   className="btn-role-change bad"
@@ -1747,7 +1812,7 @@ export default function VampireGame({
                   onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, false)}
                   disabled={!selectedPlayerRole.alive}
                 >
-                  💀 Kill
+                  💀 Pašalinti
                 </button>
                 <button
                   className="btn-role-change good"
@@ -1755,12 +1820,12 @@ export default function VampireGame({
                   onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, true)}
                   disabled={selectedPlayerRole.alive}
                 >
-                  😇 Revive
+                  😇 Atgaivinti
                 </button>
               </div>
             </div>
 
-            <button className="btn-secondary" onClick={() => setSelectedPlayerRole(null)}>Close</button>
+            <button className="btn-secondary" onClick={() => setSelectedPlayerRole(null)}>Uždaryti</button>
           </div>
         </div>
       )}
@@ -1772,7 +1837,7 @@ export default function VampireGame({
           aria-expanded={logsExpanded}
           onClick={() => setLogsExpanded(current => !current)}
         >
-          <span>Game Logs</span>
+          <span>Žaidimo įvykiai</span>
           <ChevronUp aria-hidden="true" />
         </button>
         {logsExpanded && (
@@ -1780,10 +1845,10 @@ export default function VampireGame({
             {gameLogEntries.length ? gameLogEntries.slice().reverse().map(entry => (
               <div key={entry.id} className={`log-entry ${entry.type}`}>
                 <time>{entry.time}</time>
-                <span>{entry.message}</span>
+                <span>{translateGameLogMessage(entry.message)}</span>
               </div>
             )) : (
-              <div className="logs-empty">No game events yet.</div>
+              <div className="logs-empty">Žaidimo įvykių dar nėra.</div>
             )}
           </div>
         )}
@@ -1795,7 +1860,7 @@ export default function VampireGame({
             <div key={p.id} className={`game-player-card ${isVoting ? 'voting' : ''} ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
               {/* Vampire teammate indicator - always visible to vampires */}
               {p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') && p.id !== myId && (
-                <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Framer' : '🧛 Vampire'}</div>
+                <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Šmeižikas' : '🧛 Vampyras'}</div>
               )}
               {/* Target indicator badges */}
               {nightTarget?.targetId === p.id && isNight && nightTarget.type !== 'BITE' && (
@@ -1812,18 +1877,18 @@ export default function VampireGame({
                 <span
                   className={`name ${isHost ? 'clickable-name' : ''}`}
                   onClick={() => isHost && viewPlayerRole(p.id)}
-                  title={isHost ? 'Click to view role' : ''}
+                  title={isHost ? 'Spustelėkite, kad peržiūrėtumėte vaidmenį' : ''}
                 >
                   {p.isNPC && '🤖 '}{p.name}
                 </span>
                 {/* Show vote count even if I can't vote */}
-                {(!amIAlive || !isVoting) && p.votes > 0 && <span className="vote-count">{p.votes} votes</span>}
+                {(!amIAlive || !isVoting) && p.votes > 0 && <span className="vote-count">{p.votes} {pluralizeLt(p.votes, 'balsas', 'balsai', 'balsų')}</span>}
               </div>
 
               {p.alive && isVoting && amIAlive && p.id !== myId && (
                 <div className="vote-action">
                   <button className={`btn-vote ${voteTarget === p.id ? 'voted' : ''}`} onClick={() => vote(p.id)}>
-                    Vote ({p.votes})
+                    Balsuoti ({p.votes})
                   </button>
                 </div>
               )}
@@ -1832,37 +1897,37 @@ export default function VampireGame({
                 <div className="action-buttons">
                   {myRole?.role === 'Investigator' && (
                     <button className={`btn-action ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'INVESTIGATE')}>
-                      {nightTarget?.targetId === p.id ? '✓ Investigating' : 'Investigate'}
+                      {nightTarget?.targetId === p.id ? '✓ Tiriamas' : 'Tirti'}
                     </button>
                   )}
                   {myRole?.role === 'Lookout' && (
                     <button className={`btn-action ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'LOOKOUT')}>
-                      {nightTarget?.targetId === p.id ? '✓ Watching' : 'Watch'}
+                      {nightTarget?.targetId === p.id ? '✓ Stebimas' : 'Stebėti'}
                     </button>
                   )}
                   {myRole?.role === 'Vampire' && canTurn && !p.isVampire && (
                     <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
-                      {nightTarget?.targetId === p.id ? '✓ Voted' : 'Vote to Turn'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                      {nightTarget?.targetId === p.id ? '✓ Balsuota' : 'Balsuoti už pavertimą'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
                     </button>
                   )}
                   {myRole?.role === 'Doctor' && (gameState?.healsRemaining > 0 || nightTarget?.type === 'HEAL') && (
                     <button className={`btn-action btn-good ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'HEAL')}>
-                      {nightTarget?.targetId === p.id ? '✓ Healing' : 'Heal'}
+                      {nightTarget?.targetId === p.id ? '✓ Gydomas' : 'Gydyti'}
                     </button>
                   )}
                   {myRole?.role === 'Jailor' && p.id !== myId && !gameState?.jailInfo?.isJailor && (
                     <button className={`btn-action btn-jail ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'JAIL')}>
-                      {nightTarget?.targetId === p.id ? '✓ Jailing' : '🔒 Jail'}
+                      {nightTarget?.targetId === p.id ? '✓ Kalinamas' : '🔒 Įkalinti'}
                     </button>
                   )}
                   {myRole?.role === 'Vampire Framer' && !p.isVampire && (
                     <>
                       <button className={`btn-action btn-frame ${frameTarget === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'FRAME')}>
-                        {frameTarget === p.id ? '✓ Framing' : '🎭 Frame'}
+                        {frameTarget === p.id ? '✓ Šmeižiamas' : '🎭 Apšmeižti'}
                       </button>
                       {canTurn && (
                         <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
-                          {nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? '✓ Voted' : 'Vote to Turn'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                          {nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? '✓ Balsuota' : 'Balsuoti už pavertimą'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
                         </button>
                       )}
                     </>
@@ -1881,12 +1946,12 @@ export default function VampireGame({
 
             return (
               <div className="panel voice-only-panel">
-                <h4>🎤 Voice Chat</h4>
+                <h4>🎤 Balso pokalbis</h4>
                 {gameState.voiceInputMode === 'voice-activity' ? (
                   <div className="voice-vad-container">
                     <div className="vad-status-indicator">
                       <div className="vad-status-text">
-                        {isRecording ? '🔴 Speaking...' : '🎤 Listening...'}
+                        {isRecording ? '🔴 Kalbama...' : '🎤 Klausomasi...'}
                       </div>
                       <div className="audio-level-bar">
                         <div className="audio-level-fill" style={{ width: `${audioLevel}%` }} />
@@ -1901,9 +1966,9 @@ export default function VampireGame({
                     onMouseLeave={() => isRecording && stopVoiceRecording()}
                     onTouchStart={startVoiceRecording}
                     onTouchEnd={stopVoiceRecording}
-                    title="Hold to speak"
+                    title="Laikykite nuspaudę ir kalbėkite"
                   >
-                    {isRecording ? '🔴 Recording...' : '🎤 Hold to Speak'}
+                    {isRecording ? '🔴 Įrašoma...' : '🎤 Laikykite ir kalbėkite'}
                   </button>
                 )}
               </div>
@@ -1920,7 +1985,7 @@ export default function VampireGame({
 
             return (
               <div className={`panel chat-panel ${isNight ? 'vampire-chat' : ''}`}>
-                <h4>{isNight ? '🧛 Vampire Chat' : '💬 Chat'}</h4>
+                <h4>{isNight ? '🧛 Vampyrų pokalbis' : '💬 Pokalbis'}</h4>
                 <div className="chat-messages" ref={chatMessagesRef}>
                   {gameChat.length > 0 ? (
                     gameChat.map((msg, i) => (
@@ -1930,7 +1995,7 @@ export default function VampireGame({
                       </div>
                     ))
                   ) : (
-                    <div className="chat-empty">No messages yet...</div>
+                    <div className="chat-empty">Žinučių dar nėra...</div>
                   )}
                 </div>
                 {canChat ? (
@@ -1938,7 +2003,7 @@ export default function VampireGame({
                     <input
                       type="text"
                       className="chat-input"
-                      placeholder={isNight ? 'Message fellow vampires...' : 'Type a message...'}
+                      placeholder={isNight ? 'Rašykite kitiems vampyrams...' : 'Įveskite žinutę...'}
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
                       onKeyPress={e => {
@@ -1957,11 +2022,11 @@ export default function VampireGame({
                         }
                       }}
                     >
-                      Send
+                      Siųsti
                     </button>
                   </div>
                 ) : !myPlayer?.alive ? (
-                  <div className="chat-disabled">Dead players cannot chat</div>
+                  <div className="chat-disabled">Mirę žaidėjai negali rašyti</div>
                 ) : null}
 
                 {/* Voice input button - only during DAY_DISCUSS phase */}
@@ -1970,7 +2035,7 @@ export default function VampireGame({
                     <div className="voice-vad-container">
                       <div className="vad-status-indicator">
                         <div className="vad-status-text">
-                          {isRecording ? '🔴 Speaking...' : '🎤 Listening...'}
+                          {isRecording ? '🔴 Kalbama...' : '🎤 Klausomasi...'}
                         </div>
                         <div className="audio-level-bar">
                           <div className="audio-level-fill" style={{ width: `${audioLevel}%` }} />
@@ -1985,9 +2050,9 @@ export default function VampireGame({
                       onMouseLeave={() => isRecording && stopVoiceRecording()}
                       onTouchStart={startVoiceRecording}
                       onTouchEnd={stopVoiceRecording}
-                      title="Hold to speak"
+                      title="Laikykite nuspaudę ir kalbėkite"
                     >
-                      {isRecording ? '🔴 Recording...' : '🎤 Hold to Speak'}
+                      {isRecording ? '🔴 Įrašoma...' : '🎤 Laikykite ir kalbėkite'}
                     </button>
                   )
                 )}

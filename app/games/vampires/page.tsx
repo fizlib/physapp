@@ -5,7 +5,7 @@ import { VampiresClassroomClient } from "./VampiresClassroomClient"
 import "./vampires.css"
 
 export const metadata: Metadata = {
-    title: "Vampires | Protus",
+    title: "Vampyrai | Protus",
     description: "Mokytojo valdomas klasės žaidimas",
 }
 
@@ -27,7 +27,7 @@ export default async function VampiresPage() {
     const displayName = [profile.first_name, profile.last_name].filter(Boolean).join(" ")
         || profile.email
         || user.email
-        || (profile.role === "teacher" ? "Teacher" : "Student")
+        || (profile.role === "teacher" ? "Mokytojas" : "Mokinys")
 
     const { data: classrooms } = profile.role === "teacher"
         ? await supabase
