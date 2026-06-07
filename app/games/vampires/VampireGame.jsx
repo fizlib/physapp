@@ -59,7 +59,11 @@ const ROLE_INFO = {
 const createGameLogEntry = (message, type = 'public') => ({
   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
   message: String(message).replace(/^>\s*/, ''),
-  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  time: new Date().toLocaleTimeString('lt-LT', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }),
   type,
 });
 
