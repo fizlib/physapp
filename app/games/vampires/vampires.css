@@ -987,53 +987,53 @@
   width: 84%;
   height: 84%;
   background: linear-gradient(145deg, var(--role-accent-strong), var(--role-accent));
-  -webkit-mask-image: url("/vampires/roles/role-atlas.png");
-  mask-image: url("/vampires/roles/role-atlas.png");
-  -webkit-mask-size: 400% 400%;
-  mask-size: 400% 400%;
+  -webkit-mask-size: contain;
+  mask-size: contain;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--role-accent) 38%, transparent));
 }
 
 .role-art-investigator {
-  -webkit-mask-position: 0 0;
-  mask-position: 0 0;
+  -webkit-mask-image: url("/vampires/roles/investigator.svg");
+  mask-image: url("/vampires/roles/investigator.svg");
 }
 
 .role-art-lookout {
-  -webkit-mask-position: 33.333% 0;
-  mask-position: 33.333% 0;
+  -webkit-mask-image: url("/vampires/roles/lookout.svg");
+  mask-image: url("/vampires/roles/lookout.svg");
 }
 
 .role-art-doctor {
-  -webkit-mask-position: 66.667% 0;
-  mask-position: 66.667% 0;
+  -webkit-mask-image: url("/vampires/roles/doctor.svg");
+  mask-image: url("/vampires/roles/doctor.svg");
 }
 
 .role-art-jailor {
-  -webkit-mask-position: 100% 0;
-  mask-position: 100% 0;
+  -webkit-mask-image: url("/vampires/roles/jailor.svg");
+  mask-image: url("/vampires/roles/jailor.svg");
 }
 
 .role-art-citizen {
-  -webkit-mask-position: 0 66.667%;
-  mask-position: 0 66.667%;
+  -webkit-mask-image: url("/vampires/roles/citizen.svg");
+  mask-image: url("/vampires/roles/citizen.svg");
 }
 
 .role-art-vampire {
-  -webkit-mask-position: 33.333% 66.667%;
-  mask-position: 33.333% 66.667%;
+  -webkit-mask-image: url("/vampires/roles/vampire.svg");
+  mask-image: url("/vampires/roles/vampire.svg");
 }
 
 .role-art-vampire-framer {
-  -webkit-mask-position: 66.667% 66.667%;
-  mask-position: 66.667% 66.667%;
+  -webkit-mask-image: url("/vampires/roles/vampire-framer.svg");
+  mask-image: url("/vampires/roles/vampire-framer.svg");
 }
 
 .role-art-jester {
-  -webkit-mask-position: 100% 66.667%;
-  mask-position: 100% 66.667%;
+  -webkit-mask-image: url("/vampires/roles/jester.svg");
+  mask-image: url("/vampires/roles/jester.svg");
 }
 
 .role-name {
