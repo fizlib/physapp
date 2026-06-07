@@ -87,7 +87,7 @@ interface RoleConfig {
 }
 
 const GAME_SERVER_URL = process.env.NEXT_PUBLIC_VAMPIRES_SERVER_URL
-    || "https://http--vampires-backend--k46wscvdzqkf.code.run"
+    || "https://http--vampires-classroom-backend--k46wscvdzqkf.code.run"
 
 const DEFAULT_SETTINGS: GameSettings = {
     discussionTime: 120,

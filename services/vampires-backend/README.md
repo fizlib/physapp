@@ -68,5 +68,5 @@ clears active games.
 Set this Vercel runtime variable and redeploy the platform:
 
 ```text
-NEXT_PUBLIC_VAMPIRES_SERVER_URL=https://http--vampires-backend--k46wscvdzqkf.code.run
+NEXT_PUBLIC_VAMPIRES_SERVER_URL=https://http--vampires-classroom-backend--k46wscvdzqkf.code.run
 ```
