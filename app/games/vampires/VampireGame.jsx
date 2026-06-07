@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronUp } from 'lucide-react';
+import { ChevronUp, Crosshair, Eye, UsersRound } from 'lucide-react';
 
 // Random username generator
 const generateRandomUsername = () => {
@@ -16,41 +16,49 @@ const generateRandomUsername = () => {
 const ROLE_INFO = {
   Investigator: {
     alignment: 'Good',
+    art: 'investigator',
     ability: 'Each night, investigate one player to learn if they are suspicious.',
     goal: 'Eliminate all vampires and survive.'
   },
   Lookout: {
     alignment: 'Good',
+    art: 'lookout',
     ability: 'Each night, watch one player to see who visits them.',
     goal: 'Eliminate all vampires and survive.'
   },
   Doctor: {
     alignment: 'Good',
+    art: 'doctor',
     ability: 'Each night, heal one player to save them from vampire attacks. You have 3 heals per game.',
     goal: 'Eliminate all vampires and survive.'
   },
   Jailor: {
     alignment: 'Good',
+    art: 'jailor',
     ability: 'Each night, jail one player for private interrogation. You can choose to execute the prisoner.',
     goal: 'Eliminate all vampires and survive. Warning: executing an innocent will cost your life!'
   },
   Citizen: {
     alignment: 'Good',
+    art: 'citizen',
     ability: 'No special ability. Use your vote wisely during the day.',
     goal: 'Eliminate all vampires and survive.'
   },
   Vampire: {
     alignment: 'Evil',
+    art: 'vampire',
     ability: 'Every other night, vote to turn a citizen. The target with the most votes is turned (ties are random)!',
     goal: 'Turn or eliminate all non-vampires.'
   },
   'Vampire Framer': {
     alignment: 'Evil',
+    art: 'vampire-framer',
     ability: 'Each night, frame one player to appear as a vampire to investigators. Every other night, also vote to turn someone.',
     goal: 'Turn or eliminate all non-vampires.'
   },
   Jester: {
     alignment: 'Neutral',
+    art: 'jester',
     ability: 'No special night ability. Try to act suspicious!',
     goal: 'Get yourself voted out during the day to win.'
   }
@@ -1490,6 +1498,8 @@ export default function VampireGame({
   const isHost = gameState?.host === myId;
   const isGameActive = gameState?.state !== 'LOBBY' && gameState?.state !== 'GAME_OVER';
   const amIVampire = myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer';
+  const currentRoleInfo = ROLE_INFO[myRole?.role] || {};
+  const currentRoleAlignment = String(myRole?.alignment || currentRoleInfo.alignment || 'neutral').toLowerCase();
   const showVoicePanel = !gameState?.chatEnabled
     && gameState?.state === 'DAY_DISCUSS'
     && gameState?.enableSTT
@@ -1520,26 +1530,49 @@ export default function VampireGame({
       {/* My Role Info Panel */}
       {roleRevealed && (
         <div className="modal-overlay" onClick={() => setRoleRevealed(false)}>
-          <div className="modal-content role-info-panel" onClick={e => e.stopPropagation()}>
-            <h2>Your Role</h2>
-            <div className={`role-name ${myRole?.alignment}`}>{myRole?.role || '???'}</div>
+          <div
+            className={`modal-content role-info-panel role-alignment-${currentRoleAlignment}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-panel-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="role-panel-heading">
+              <h2 id="role-panel-title">Your Role</h2>
+              <div className="role-heading-ornament" aria-hidden="true">
+                <span />
+              </div>
+            </div>
+            <div className="role-emblem" aria-hidden="true">
+              <span className={`role-emblem-art role-art-${currentRoleInfo.art || 'citizen'}`} />
+            </div>
+            <div className="role-name">{myRole?.role || '???'}</div>
             <div className="role-details">
               <div className="role-detail-row">
-                <span className="detail-label">Alignment</span>
-                <span className={`detail-value alignment-${myRole?.alignment}`}>
-                  {ROLE_INFO[myRole?.role]?.alignment || myRole?.alignment || 'Unknown'}
+                <span className="role-detail-icon" aria-hidden="true"><UsersRound /></span>
+                <span className="role-detail-copy">
+                  <span className="detail-label">Alignment</span>
+                  <span className={`detail-value alignment-${currentRoleAlignment}`}>
+                    {currentRoleInfo.alignment || myRole?.alignment || 'Unknown'}
+                  </span>
                 </span>
               </div>
               <div className="role-detail-row">
-                <span className="detail-label">Ability</span>
-                <span className="detail-value">{ROLE_INFO[myRole?.role]?.ability || 'Unknown ability'}</span>
+                <span className="role-detail-icon" aria-hidden="true"><Eye /></span>
+                <span className="role-detail-copy">
+                  <span className="detail-label">Ability</span>
+                  <span className="detail-value">{currentRoleInfo.ability || 'Unknown ability'}</span>
+                </span>
               </div>
               <div className="role-detail-row">
-                <span className="detail-label">Goal</span>
-                <span className="detail-value">{ROLE_INFO[myRole?.role]?.goal || 'Unknown goal'}</span>
+                <span className="role-detail-icon" aria-hidden="true"><Crosshair /></span>
+                <span className="role-detail-copy">
+                  <span className="detail-label">Goal</span>
+                  <span className="detail-value">{currentRoleInfo.goal || 'Unknown goal'}</span>
+                </span>
               </div>
             </div>
-            <button className="btn-secondary" onClick={() => setRoleRevealed(false)}>Close</button>
+            <button className="role-panel-close" onClick={() => setRoleRevealed(false)}>Close</button>
           </div>
         </div>
       )}
