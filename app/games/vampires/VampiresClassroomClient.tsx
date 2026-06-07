@@ -146,13 +146,13 @@ const ROLE_NAMES = [
 ] as const
 
 const ROLE_LABELS: Record<string, string> = {
-    Investigator: "Tyrėjas",
+    Investigator: "Šerifas",
     Lookout: "Stebėtojas",
     Doctor: "Gydytojas",
     Jailor: "Kalėjimo prižiūrėtojas",
     Citizen: "Miestietis",
     Vampire: "Vampyras",
-    "Vampire Framer": "Vampyras šmeižikas",
+    "Vampire Framer": "Vampyras klastotojas",
     Jester: "Juokdarys",
 }
 
@@ -318,7 +318,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                     <div className="vampires-spinner" aria-hidden="true" />
                     <h1>Vampyrai</h1>
                     <p>Laukiama, kol mokytojas pradės žaidimą...</p>
-                    <span>{connected ? "Prisijungta prie klasės laukiamojo" : "Jungiamasi prie žaidimo serverio"}</span>
+                    {!connected && <span>Jungiamasi prie žaidimo serverio</span>}
                     {preparedGroup && (
                         <div className="vampires-student-group">
                             <strong>Jūsų grupė</strong>
@@ -628,7 +628,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                         </p>
                                         <p className="status-text">
                                             Būsena: <strong className={selectedPlayer.alive ? "status-alive" : "status-dead"}>
-                                                {selectedPlayer.alive ? "Gyvas" : "Miręs"}
+                                                {selectedPlayer.alive ? "Žaidime" : "Nedalyvauja"}
                                             </strong>
                                         </p>
                                     </div>
@@ -659,7 +659,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                         </div>
                                     </div>
                                     <div className="role-change-section">
-                                        <h4>Gyvybės būsena</h4>
+                                        <h4>Dalyvavimo būsena</h4>
                                         <div className="role-change-buttons">
                                             <button
                                                 type="button"
@@ -683,7 +683,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                     alive: true,
                                                 })}
                                             >
-                                                Atgaivinti
+                                                Grąžinti į žaidimą
                                             </button>
                                         </div>
                                     </div>

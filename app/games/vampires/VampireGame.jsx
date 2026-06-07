@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronUp, Crosshair, Eye, UsersRound } from 'lucide-react';
 
 const ROLE_LABELS = {
-  Investigator: 'Tyrėjas',
+  Investigator: 'Šerifas',
   Lookout: 'Stebėtojas',
   Doctor: 'Gydytojas',
   Jailor: 'Kalėjimo prižiūrėtojas',
   Citizen: 'Miestietis',
   Vampire: 'Vampyras',
-  'Vampire Framer': 'Vampyras šmeižikas',
+  'Vampire Framer': 'Vampyras klastotojas',
   Jester: 'Juokdarys',
 };
 
@@ -57,15 +57,120 @@ const translateServerMessage = message => ({
 
 const translateGameLogMessage = message => {
   if (typeof message !== 'string') return message;
-  const night = message.match(/^Night (\d+) started$/);
-  if (night) return `Prasidėjo ${night[1]} naktis`;
-  const day = message.match(/^Day (\d+) started$/);
-  if (day) return `Prasidėjo ${day[1]} diena`;
-  return ({
+
+  let source = message.trim().replace(/^>\s*/, '');
+  let phasePrefix = '';
+  const phaseMatch = source.match(/^\[(Day|Night)\s+(\d+)\]\s*(.*)$/i);
+  if (phaseMatch) {
+    phasePrefix = `[${phaseMatch[2]} ${phaseMatch[1].toLowerCase() === 'day' ? 'diena' : 'naktis'}]`;
+    source = phaseMatch[3].trim();
+  }
+
+  const withPhase = translated => phasePrefix ? `${phasePrefix} ${translated}` : translated;
+  const role = rawRole => getRoleLabel(String(rawRole).trim().replace(/[.!]+$/, ''));
+  const removedWithRole = (playerName, roleName, context = '') => withPhase(
+    `${context ? `${context}: ` : ''}${playerName} nebedalyvauja žaidime. Vaidmuo – ${role(roleName)}.`
+  );
+
+  let match = source.match(/^Night (\d+) started[.!]?$/i);
+  if (match) return `Prasidėjo ${match[1]} naktis`;
+  match = source.match(/^Day (\d+) started[.!]?$/i);
+  if (match) return `Prasidėjo ${match[1]} diena`;
+
+  match = source.match(/^(.+?) was lynched!?\s*They were an? (.+?)[.!]*$/i);
+  if (match) return removedWithRole(match[1], match[2], 'Balsavimo rezultatas');
+  match = source.match(/^(.+?) was lynched[.!]?$/i);
+  if (match) return withPhase(`Balsavimo rezultatas: ${match[1]} nebedalyvauja žaidime.`);
+
+  match = source.match(/^(.+?) was executed by the Jailor!?\s*They were an? (.+?)[.!]*$/i);
+  if (match) return removedWithRole(match[1], match[2], 'Kalėjimo prižiūrėtojo sprendimas');
+  match = source.match(/^(.+?) was executed by the Jailor[.!]?$/i);
+  if (match) return withPhase(`Kalėjimo prižiūrėtojo sprendimas: ${match[1]} nebedalyvauja žaidime.`);
+
+  match = source.match(/^(.+?) (?:was killed(?: by (?:the )?.+?)?|was found dead(?: last night)?|died(?: last night| in jail)?|has died|was eliminated)[.!]?\s*They were an? (.+?)[.!]*$/i);
+  if (match) return removedWithRole(match[1], match[2]);
+  match = source.match(/^(.+?) (?:was killed(?: by (?:the )?.+?)?|was found dead(?: last night)?|died(?: last night| in jail)?|has died|was eliminated)[.!]?$/i);
+  if (match) return withPhase(`${match[1]} nebedalyvauja žaidime.`);
+
+  match = source.match(/^(.+?) was removed from the game[.!]?$/i);
+  if (match) return withPhase(`${match[1]} nebedalyvauja žaidime.`);
+  match = source.match(/^(.+?) was returned to the game[.!]?$/i);
+  if (match) return withPhase(`${match[1]} vėl dalyvauja žaidime.`);
+  match = source.match(/^(.+?) was revived[.!]?$/i);
+  if (match) return withPhase(`${match[1]} vėl dalyvauja žaidime.`);
+
+  match = source.match(/^(.+?) (?:was converted|has been converted) (?:into|to) an? Vampire[.!]?$/i);
+  if (match) return withPhase(`${match[1]} tapo vampyru.`);
+  match = source.match(/^(.+?) was bitten by the Vampires?[.!]?$/i);
+  if (match) return withPhase(`Vampyrai pasirinko paversti ${match[1]} vampyru.`);
+
+  match = source.match(/^(.+?) was framed[.!]?$/i);
+  if (match) return withPhase(`Suklastoti duomenys apie ${match[1]}.`);
+  match = source.match(/^(.+?) was jailed[.!]?$/i);
+  if (match) return withPhase(`Privati apklausa: ${match[1]}.`);
+  match = source.match(/^(.+?) was healed(?: by the Doctor)?[.!]?$/i);
+  if (match) return withPhase(`Gydytojas apsaugojo ${match[1]}.`);
+
+  match = source.match(/^(.+?) voted (?:for|against) (.+?)[.!]?$/i);
+  if (match) return withPhase(`${match[1]} balsavo už ${match[2]}.`);
+  match = source.match(/^(.+?) (?:cancelled|canceled|withdrew) (?:their )?vote[.!]?$/i);
+  if (match) return withPhase(`${match[1]} atšaukė savo balsą.`);
+
+  match = source.match(/^(.+?) joined the game[.!]?$/i);
+  if (match) return withPhase(`${match[1]} prisijungė prie žaidimo.`);
+  match = source.match(/^(.+?) (?:left the game|disconnected)[.!]?$/i);
+  if (match) return withPhase(`${match[1]} pasitraukė iš žaidimo.`);
+
+  match = source.match(/^(.+?) is suspicious[.!]?$/i);
+  if (match) return withPhase(`${match[1]} kelia įtarimų.`);
+  match = source.match(/^(.+?) is not suspicious[.!]?$/i);
+  if (match) return withPhase(`${match[1]} nekelia įtarimų.`);
+  match = source.match(/^Nobody visited (.+?)[.!]?$/i);
+  if (match) return withPhase(`Pas ${match[1]} niekas neapsilankė.`);
+  match = source.match(/^(.+?) was visited by (.+?)[.!]?$/i);
+  if (match) return withPhase(`Apsilankymai pas ${match[1]}: ${match[2]}.`);
+
+  match = source.match(/^They were an? (.+?)[.!]*$/i);
+  if (match) return withPhase(`Vaidmuo – ${role(match[1])}.`);
+
+  const exactTranslations = {
     'Voting started': 'Prasidėjo balsavimas',
-    'Cancelled framing': 'Šmeižimas atšauktas',
+    'Voting ended': 'Balsavimas baigtas',
+    'No one was lynched.': 'Balsavimu niekas nepašalintas iš žaidimo.',
+    'No one was lynched!': 'Balsavimu niekas nepašalintas iš žaidimo.',
+    'No one died.': 'Niekas nepašalintas iš žaidimo.',
+    'No one died last night.': 'Praėjusią naktį niekas nepašalintas iš žaidimo.',
+    'Cancelled framing': 'Klastojimas atšauktas',
     'Cancelled action': 'Veiksmas atšauktas',
-  }[message] || message);
+    'The Town has won!': 'Laimėjo miestiečiai!',
+    'The Good team has won!': 'Laimėjo gerųjų komanda!',
+    'The Vampires have won!': 'Laimėjo vampyrai!',
+    'The Evil team has won!': 'Laimėjo blogųjų komanda!',
+    'The Jester has won!': 'Laimėjo juokdarys!',
+    'Game over': 'Žaidimas baigtas',
+    'Game over!': 'Žaidimas baigtas!',
+  };
+  if (exactTranslations[source]) return withPhase(exactTranslations[source]);
+
+  const partiallyTranslated = source
+    .replace(/\bVampire Framer\b/g, getRoleLabel('Vampire Framer'))
+    .replace(/\bInvestigator\b/g, getRoleLabel('Investigator'))
+    .replace(/\bLookout\b/g, getRoleLabel('Lookout'))
+    .replace(/\bDoctor\b/g, getRoleLabel('Doctor'))
+    .replace(/\bJailor\b/g, getRoleLabel('Jailor'))
+    .replace(/\bCitizen\b/g, getRoleLabel('Citizen'))
+    .replace(/\bVampire\b/g, getRoleLabel('Vampire'))
+    .replace(/\bJester\b/g, getRoleLabel('Jester'))
+    .replace(/\bwas lynched\b/gi, 'pašalintas balsavimu')
+    .replace(/\bwas executed(?: by the Kalėjimo prižiūrėtojas)?\b/gi, 'pašalintas iš žaidimo')
+    .replace(/\bwas killed(?: by .+)?\b/gi, 'pašalintas iš žaidimo')
+    .replace(/\bwas found dead\b/gi, 'pašalintas iš žaidimo')
+    .replace(/\bdied\b/gi, 'pašalintas iš žaidimo')
+    .replace(/\bThey were an?\b/gi, 'Vaidmuo –')
+    .replace(/\bVoting started\b/gi, 'Prasidėjo balsavimas')
+    .replace(/\bVoting ended\b/gi, 'Balsavimas baigtas');
+
+  return withPhase(partiallyTranslated);
 };
 
 // Random username generator
@@ -82,32 +187,32 @@ const ROLE_INFO = {
   Investigator: {
     alignment: 'Good',
     art: 'investigator',
-    ability: 'Kiekvieną naktį ištirkite vieną žaidėją ir sužinokite, ar jis kelia įtarimų.',
-    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
+    ability: 'Kiekvieną naktį patikrinkite vieną žaidėją ir sužinokite, ar jis kelia įtarimų.',
+    goal: 'Pašalinkite visus vampyrus ir likite žaidime.'
   },
   Lookout: {
     alignment: 'Good',
     art: 'lookout',
     ability: 'Kiekvieną naktį stebėkite vieną žaidėją ir sužinokite, kas jį aplanko.',
-    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
+    goal: 'Pašalinkite visus vampyrus ir likite žaidime.'
   },
   Doctor: {
     alignment: 'Good',
     art: 'doctor',
     ability: 'Kiekvieną naktį išgydykite vieną žaidėją ir apsaugokite jį nuo vampyrų atakos. Per žaidimą turite 3 gydymus.',
-    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
+    goal: 'Pašalinkite visus vampyrus ir likite žaidime.'
   },
   Jailor: {
     alignment: 'Good',
     art: 'jailor',
-    ability: 'Kiekvieną naktį įkalinkite vieną žaidėją privačiai apklausai. Galite nuspręsti kalinį nubausti mirtimi.',
-    goal: 'Pašalinkite visus vampyrus ir išgyvenkite. Įspėjimas: nubaudę nekaltąjį, žūsite ir jūs!'
+    ability: 'Kiekvieną naktį įkalinkite vieną žaidėją privačiai apklausai. Nuspręskite, ar pašalinti kalinį iš žaidimo.',
+    goal: 'Pašalinkite visus vampyrus ir likite žaidime. Įspėjimas: pašalinę nekaltą žaidėją, būsite pašalinti ir jūs!'
   },
   Citizen: {
     alignment: 'Good',
     art: 'citizen',
     ability: 'Ypatingų gebėjimų neturite. Dieną balsuokite išmintingai.',
-    goal: 'Pašalinkite visus vampyrus ir išgyvenkite.'
+    goal: 'Pašalinkite visus vampyrus ir likite žaidime.'
   },
   Vampire: {
     alignment: 'Evil',
@@ -118,14 +223,14 @@ const ROLE_INFO = {
   'Vampire Framer': {
     alignment: 'Evil',
     art: 'vampire-framer',
-    ability: 'Kiekvieną naktį apšmeižkite vieną žaidėją, kad tyrėjams jis atrodytų kaip vampyras. Kas antrą naktį taip pat balsuokite, ką paversti.',
+    ability: 'Kiekvieną naktį suklastokite vieno žaidėjo duomenis, kad šerifui jis atrodytų kaip vampyras. Kas antrą naktį taip pat balsuokite, ką paversti.',
     goal: 'Paverskite arba pašalinkite visus, kurie nėra vampyrai.'
   },
   Jester: {
     alignment: 'Neutral',
     art: 'jester',
     ability: 'Ypatingo naktinio gebėjimo neturite. Stenkitės elgtis įtartinai!',
-    goal: 'Kad laimėtumėte, dieną turite būti išbalsuotas.'
+    goal: 'Kad laimėtumėte, dieną turite būti pašalinti balsavimu.'
   }
 };
 
@@ -886,13 +991,13 @@ export default function VampireGame({
       if (frameTarget === targetId) {
         socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
         setFrameTarget(null);
-        appendGameLog('Šmeižimas atšauktas', 'private');
+        appendGameLog('Klastojimas atšauktas', 'private');
         return;
       }
       socket.emit('night_action', { code, action: { targetId, type } });
       setFrameTarget(targetId);
       const targetPlayer = gameState?.players.find(p => p.id === targetId);
-      appendGameLog(`Šmeižiamas ${targetPlayer?.name || 'nežinomas žaidėjas'}`, 'private');
+      appendGameLog(`Klastojami žaidėjo ${targetPlayer?.name || 'nežinomas žaidėjas'} duomenys`, 'private');
       return;
     }
 
@@ -906,7 +1011,7 @@ export default function VampireGame({
     socket.emit('night_action', { code, action: { targetId, type } });
     setNightTarget({ targetId, type });
     const targetPlayer = gameState?.players.find(p => p.id === targetId);
-    const actionNames = { 'INVESTIGATE': 'Tiriamas', 'LOOKOUT': 'Stebimas', 'BITE': 'Balsuojama už', 'HEAL': 'Gydomas', 'JAIL': 'Kalinamas', 'FRAME': 'Šmeižiamas' };
+    const actionNames = { 'INVESTIGATE': 'Tikrinamas', 'LOOKOUT': 'Stebimas', 'BITE': 'Balsuojama už', 'HEAL': 'Gydomas', 'JAIL': 'Kalinamas', 'FRAME': 'Klastojami duomenys apie' };
     appendGameLog(`${actionNames[type] || 'Veiksmas su'} ${targetPlayer?.name || 'nežinomu žaidėju'}`, 'private');
   };
   const vote = (targetId) => {
@@ -1476,7 +1581,7 @@ export default function VampireGame({
               <div className="role-config-default-message">
                 Vaidmenys bus automatiškai paskirti pagal žaidėjų skaičių.
                 <br />
-                <small>(maždaug po 10 % tyrėjų, stebėtojų ir vampyrų, 1 juokdarys, likusieji – miestiečiai)</small>
+                <small>(maždaug po 10 % šerifų, stebėtojų ir vampyrų, 1 juokdarys, likusieji – miestiečiai)</small>
               </div>
             ) : (
               <>
@@ -1642,7 +1747,7 @@ export default function VampireGame({
         </div>
       )}
 
-      {amIAlive === false && <div className="banner-dead">JŪS ŽUVOTE</div>}
+      {amIAlive === false && <div className="banner-dead">JŪS NEBEDALYVAUJATE ŽAIDIME</div>}
 
       {/* Vampire voting info panel */}
       {myRole?.role === 'Vampire' && isNight && canTurn && gameState?.vampireInfo?.needsVoting && (
@@ -1723,7 +1828,7 @@ export default function VampireGame({
                   }
                 }}
               >
-                {executionPending ? '❌ Atšaukti egzekuciją' : '☠️ Nubausti kalinį mirtimi'}
+                {executionPending ? 'Atšaukti pašalinimą' : 'Pašalinti kalinį iš žaidimo'}
               </button>
             )}
           </div>
@@ -1745,7 +1850,7 @@ export default function VampireGame({
                   <div key={p.id} className={`summary-card ${p.alignment || 'unknown'}`}>
                     <div className="summary-name">{p.name} {p.id === myId && '(jūs)'}</div>
                     <div className="summary-role">{getRoleLabel(p.role)}</div>
-                    {!p.alive && <div className="summary-dead">👻 Miręs</div>}
+                    {!p.alive && <div className="summary-dead">Nedalyvauja žaidime</div>}
                   </div>
                 ))}
               </div>
@@ -1772,7 +1877,7 @@ export default function VampireGame({
               {/* New Status Display */}
               <p className="status-text">
                 Būsena: <strong className={selectedPlayerRole.alive ? 'status-alive' : 'status-dead'}>
-                  {selectedPlayerRole.alive ? 'Gyvas' : 'Miręs'}
+                  {selectedPlayerRole.alive ? 'Žaidime' : 'Nedalyvauja'}
                 </strong>
               </p>
             </div>
@@ -1804,7 +1909,7 @@ export default function VampireGame({
 
             {/* Kill/Revive Buttons for Host */}
             <div className="role-change-section" style={{ marginTop: '1rem' }}>
-              <h4>Gyvybės būsena</h4>
+              <h4>Dalyvavimo būsena</h4>
               <div className="role-change-buttons">
                 <button
                   className="btn-role-change bad"
@@ -1812,7 +1917,7 @@ export default function VampireGame({
                   onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, false)}
                   disabled={!selectedPlayerRole.alive}
                 >
-                  💀 Pašalinti
+                  Pašalinti iš žaidimo
                 </button>
                 <button
                   className="btn-role-change good"
@@ -1820,7 +1925,7 @@ export default function VampireGame({
                   onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, true)}
                   disabled={selectedPlayerRole.alive}
                 >
-                  😇 Atgaivinti
+                  Grąžinti į žaidimą
                 </button>
               </div>
             </div>
@@ -1860,15 +1965,15 @@ export default function VampireGame({
             <div key={p.id} className={`game-player-card ${isVoting ? 'voting' : ''} ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
               {/* Vampire teammate indicator - always visible to vampires */}
               {p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') && p.id !== myId && (
-                <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Šmeižikas' : '🧛 Vampyras'}</div>
+                <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Klastotojas' : '🧛 Vampyras'}</div>
               )}
               {/* Target indicator badges */}
               {nightTarget?.targetId === p.id && isNight && nightTarget.type !== 'BITE' && (
                 <div className="target-badge night-target-badge">
-                  {nightTarget.type === 'INVESTIGATE' && '🔍 Investigating'}
-                  {nightTarget.type === 'LOOKOUT' && '👁️ Watching'}
-                  {nightTarget.type === 'HEAL' && '💉 Healing'}
-                  {nightTarget.type === 'JAIL' && '🔒 Jailing'}
+                  {nightTarget.type === 'INVESTIGATE' && '🔍 Tikrinamas'}
+                  {nightTarget.type === 'LOOKOUT' && '👁️ Stebimas'}
+                  {nightTarget.type === 'HEAL' && '💉 Gydomas'}
+                  {nightTarget.type === 'JAIL' && '🔒 Kalinamas'}
                 </div>
               )}
 
@@ -1923,7 +2028,7 @@ export default function VampireGame({
                   {myRole?.role === 'Vampire Framer' && !p.isVampire && (
                     <>
                       <button className={`btn-action btn-frame ${frameTarget === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'FRAME')}>
-                        {frameTarget === p.id ? '✓ Šmeižiamas' : '🎭 Apšmeižti'}
+                        {frameTarget === p.id ? '✓ Duomenys klastojami' : '🎭 Suklastoti duomenis'}
                       </button>
                       {canTurn && (
                         <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
@@ -2026,7 +2131,7 @@ export default function VampireGame({
                     </button>
                   </div>
                 ) : !myPlayer?.alive ? (
-                  <div className="chat-disabled">Mirę žaidėjai negali rašyti</div>
+                  <div className="chat-disabled">Žaidime nebedalyvaujantys žaidėjai negali rašyti</div>
                 ) : null}
 
                 {/* Voice input button - only during DAY_DISCUSS phase */}

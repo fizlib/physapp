@@ -802,13 +802,13 @@ class Game {
 
           // Notify prisoner
           if (prisoner.socketId) {
-            io.to(prisoner.socketId).emit('private_message', '☠️ The Jailor has decided to execute you!');
+            io.to(prisoner.socketId).emit('private_message', '🚫 The Jailor has decided to remove you from the game!');
           }
 
           // Send final message
           const finalMsg = {
             sender: 'Jailor',
-            message: `Your time has come. ${decision.reason || 'Justice will be served.'}`,
+            message: `You are being removed from the game. ${decision.reason || 'Justice will be served.'}`,
             timestamp: Date.now()
           };
           this.jailChat.push(finalMsg);
@@ -1289,24 +1289,24 @@ class Game {
 
             if (isJailed) {
               // Jailed players are protected from vampire bites
-              this.logs.push(`[Night ${this.round}] The vampires tried to attack, but their target was unreachable!`);
+              this.logs.push(`[Night ${this.round}] The vampires tried to turn their target, but they were unreachable!`);
               aliveVampires.forEach(vamp => {
                 if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Your target was protected by the Jailor!`);
               });
             } else if (isHealed) {
-              this.logs.push(`[Night ${this.round}] The vampires tried to attack, but their target was saved by a doctor!`);
+              this.logs.push(`[Night ${this.round}] The vampires tried to turn their target, but they were saved by a Doctor!`);
               aliveVampires.forEach(vamp => {
                 if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Your target was saved by a Doctor!`);
               });
               doctorHeals.filter(h => h.targetId === potentialTargetId).forEach(h => {
                 const doc = this.players.find(p => p.id === h.actorId);
                 if (doc && doc.socketId) {
-                  io.to(doc.socketId).emit('private_message', `💉 You successfully saved your target from a vampire attack!`);
+                  io.to(doc.socketId).emit('private_message', `💉 You successfully saved your target from being turned!`);
                 }
                 // Record being saved in the target NPC's receivedEvents
                 if (target.isNPC) {
                   if (!target.receivedEvents) target.receivedEvents = [];
-                  target.receivedEvents.push({ round: this.round, event: 'WAS_SAVED', note: 'A Doctor saved you from a vampire attack.' });
+                  target.receivedEvents.push({ round: this.round, event: 'WAS_SAVED', note: 'A Doctor saved you from being turned.' });
                 }
               });
             } else {
@@ -1419,13 +1419,13 @@ class Game {
       if (jailAction && jailAction.type === 'EXECUTE' && prisoner && prisoner.alive) {
         // Execute the prisoner
         prisoner.alive = false;
-        this.logs.push(`[Night ${this.round}] ${prisoner.name} was executed by the Jailor.`);
+        this.logs.push(`[Night ${this.round}] ${prisoner.name} was removed by the Jailor.`);
 
         // If prisoner was innocent (good alignment), jailor will die
         if (prisoner.alignment === 'good') {
           this.jailorPendingDeath = true;
           if (jailor && jailor.socketId) {
-            io.to(jailor.socketId).emit('private_message', '⚠️ You executed an innocent person! Guilt consumes you...');
+            io.to(jailor.socketId).emit('private_message', '⚠️ You eliminated an innocent person! Guilt consumes you...');
           }
         } else {
           if (jailor && jailor.socketId) {
@@ -1452,12 +1452,12 @@ class Game {
   startDayDiscuss() {
     this.state = 'DAY_DISCUSS';
 
-    // Jailor dies if they executed an innocent
+    // Jailor is eliminated if they executed an innocent
     if (this.jailorPendingDeath) {
       const jailor = this.players.find(p => p.id === this.jailorId);
       if (jailor && jailor.alive) {
         jailor.alive = false;
-        this.logs.push(`[Day ${this.round}] ${jailor.name} was consumed by guilt and died!`);
+        this.logs.push(`[Day ${this.round}] ${jailor.name} was consumed by guilt and was eliminated!`);
       }
       this.jailorPendingDeath = false;
     }
@@ -1506,7 +1506,7 @@ class Game {
 
       if (victim.role === 'Jester') {
         this.logs.push({
-          message: `[Day ${this.round}] ${victim.name} was lynched! They were the Jester. Jester wins!`,
+          message: `[Day ${this.round}] ${victim.name} was eliminated! They were the Jester. Jester wins!`,
           type: 'evil'
         });
         this.state = 'GAME_OVER';
@@ -1519,7 +1519,7 @@ class Game {
 
       const roleReveal = this.settings.revealRole ? ` They were a ${victim.role}.` : '';
       this.logs.push({
-        message: `[Day ${this.round}] ${victim.name} was lynched!${roleReveal}`,
+        message: `[Day ${this.round}] ${victim.name} was eliminated!${roleReveal}`,
         type: this.settings.revealRole
           ? (victim.alignment === 'good' ? 'good' : 'evil')
           : 'public'
@@ -2162,7 +2162,7 @@ io.on('connection', async (socket) => {
       if (action.type === 'EXECUTE') {
         if (player.role !== 'Jailor') return;
         if (game.jailorId !== player.id) {
-          socket.emit('private_message', 'You have no prisoner to execute.');
+          socket.emit('private_message', 'You have no prisoner to remove.');
           return;
         }
 
@@ -2170,9 +2170,9 @@ io.on('connection', async (socket) => {
         game.nightActions[player.id] = { type: 'EXECUTE', actorId: player.id, targetId: game.jailedPlayerId };
 
         const prisoner = game.players.find(p => p.id === game.jailedPlayerId);
-        socket.emit('private_message', `\u2620\ufe0f You have decided to execute ${prisoner?.name || 'the prisoner'}.`);
+        socket.emit('private_message', `🚫 You have decided to remove ${prisoner?.name || 'the prisoner'} from the game.`);
         if (prisoner && prisoner.socketId) {
-          io.to(prisoner.socketId).emit('private_message', '\u2620\ufe0f The Jailor has decided to execute you!');
+          io.to(prisoner.socketId).emit('private_message', '🚫 The Jailor has decided to remove you from the game!');
         }
 
         game.broadcastUpdate();

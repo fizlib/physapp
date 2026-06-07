@@ -221,7 +221,7 @@ class AIController {
 
         // Language instruction based on nationality
         const languageInstruction = this.nationality === 'lithuanian'
-            ? 'IMPORTANT: You MUST respond in Lithuanian language. EXCEPTION: Role names must ALWAYS be written in English (Investigator, Lookout, Doctor, Jailor, Citizen, Vampire, Vampire Framer, Jester). For example: "Aš esu Investigator" NOT "Aš esu Tyrėjas".'
+            ? 'IMPORTANT: You MUST respond in Lithuanian language. EXCEPTION: Role names must ALWAYS be written in English (Investigator, Lookout, Doctor, Jailor, Citizen, Vampire, Vampire Framer, Jester). For example: "Aš esu Investigator" NOT "Aš esu Šerifas".'
             : 'Respond in English.';
 
         // Build appropriate speaking instruction based on context
