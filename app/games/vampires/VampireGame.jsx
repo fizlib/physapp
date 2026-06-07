@@ -149,8 +149,59 @@ const translateGameLogMessage = message => {
     'The Jester has won!': 'Laimėjo juokdarys!',
     'Game over': 'Žaidimas baigtas',
     'Game over!': 'Žaidimas baigtas!',
+    // Investigation results (now sent in Lithuanian from backend)
+    'Taikinys yra vampyras': 'Šerifas nustatė: taikinys yra vampyras',
+    'Niekas neapsilankė.': 'Pas stebimą žaidėją niekas neapsilankė.',
+    // Win conditions (now sent in Lithuanian from backend)
+    'Vampyrai buvo pašalinti! Laimėjo gerieji!': 'Laimėjo gerųjų komanda!',
+    'Vampyrai perėmė valdymą! Laimėjo blogieji!': 'Laimėjo blogųjų komanda!',
+    'Vedėjas baigė žaidimą.': 'Vedėjas baigė žaidimą.',
+    // Voting
+    'Niekas nesurinko pakankamai balsų.': 'Balsavimu niekas nepašalintas iš žaidimo.',
   };
   if (exactTranslations[source]) return withPhase(exactTranslations[source]);
+
+  // Dark ritual message (vampire conversion - public log)
+  match = source.match(/^\u012evyko tamsos ritualas\.\.\. ka\u017ekieno prigimtis pasikeit\u0117\.?$/i);
+  if (match) return withPhase('Kažkas buvo paverstas vampyru...');
+
+  // No votes message
+  match = source.match(/^Niekas nesurink\u0117 pakankamai bals\u0173\.?$/i);
+  if (match) return withPhase('Balsavimu niekas nepašalintas iš žaidimo.');
+
+  // Investigation result: "Taikinio vaidmuo – RoleName"
+  match = source.match(/^Taikinio vaidmuo \u2013 (.+)$/i);
+  if (match) return withPhase(`Šerifas nustatė: taikinio vaidmuo – ${role(match[1])}.`);
+
+  // Lookout result: "Aplankė: Name1, Name2"
+  match = source.match(/^Aplankė: (.+)$/i);
+  if (match) return withPhase(`Apsilankymai: ${match[1]}.`);
+
+  // Host revive/kill log entries (now in Lithuanian from backend)
+  match = source.match(/^Vedėjas grąžino (.+?) į žaidimą\.?$/i);
+  if (match) return withPhase(`${match[1]} vėl dalyvauja žaidime.`);
+  match = source.match(/^Vedėjas pašalino (.+?) iš žaidimo\.?$/i);
+  if (match) return withPhase(`${match[1]} nebedalyvauja žaidime.`);
+
+  // Vampire bite failure messages (from backend)
+  match = source.match(/^Vampyrai bandė paversti savo taikinį, tačiau jis buvo nepasiekiamas!?$/i);
+  if (match) return withPhase('Vampyrams nepavyko paversti taikinio – jis buvo apsaugotas.');
+  match = source.match(/^Vampyrai bandė paversti savo taikinį, tačiau jį išgelbėjo gydytojas!?$/i);
+  if (match) return withPhase('Vampyrams nepavyko paversti taikinio – jį išgelbėjo gydytojas.');
+
+  // Already-translated backend messages pass through
+  match = source.match(/^(.+?) buvo pašalintas!\s*Vaidmuo \u2013 (.+?)\.?$/i);
+  if (match) return removedWithRole(match[1], match[2], 'Balsavimo rezultatas');
+  match = source.match(/^(.+?) buvo pašalintas kalėjimo prižiūrėtojo\.?$/i);
+  if (match) return withPhase(`Kalėjimo prižiūrėtojo sprendimas: ${match[1]} nebedalyvauja žaidime.`);
+  match = source.match(/^(.+?) buvo apimtas kaltės jausmo ir pašalintas iš žaidimo!?$/i);
+  if (match) return withPhase(`${match[1]} nebedalyvauja žaidime (kaltės jausmas).`);
+  match = source.match(/^(.+?) buvo pašalintas! Jo vaidmuo \u2013 juokdarys\. Juokdarys laimėjo!$/i);
+  if (match) return withPhase(`Balsavimo rezultatas: ${match[1]} nebedalyvauja žaidime. Vaidmuo – ${getRoleLabel('Jester')}. ${getRoleLabel('Jester')} laimėjo!`);
+
+  // Role change notification (now partially Lithuanian from backend)
+  match = source.match(/^🎭 Jūsų vaidmuo pakeistas į (.+?)!$/i);
+  if (match) return withPhase(`🎭 Jūsų vaidmuo pakeistas į ${role(match[1])}!`);
 
   const partiallyTranslated = source
     .replace(/\bVampire Framer\b/g, getRoleLabel('Vampire Framer'))
@@ -329,6 +380,7 @@ export default function VampireGame({
   const publicLogCountRef = useRef(0);
   const previousLoggedPhaseRef = useRef(null);
   const roleAutoShownRef = useRef(false);
+  const gameLogScrollRef = useRef(null); // Ref for auto-scrolling game log to top on phase change
 
   // Voice input (Speech-to-Text) state
   const [isRecording, setIsRecording] = useState(false);
@@ -792,6 +844,16 @@ export default function VampireGame({
       previousLoggedPhaseRef.current = data.state;
       setGameState(data);
       setTimer(data.timer);
+
+      // Auto-scroll game log to top on phase change
+      if (phaseChanged) {
+        setLogsExpanded(true);
+        requestAnimationFrame(() => {
+          if (gameLogScrollRef.current) {
+            gameLogScrollRef.current.scrollTop = 0;
+          }
+        });
+      }
       // Update view based on game state
       if (data.state === 'LOBBY') {
         setView('LOBBY');
@@ -1946,7 +2008,7 @@ export default function VampireGame({
           <ChevronUp aria-hidden="true" />
         </button>
         {logsExpanded && (
-          <div className="scroll-box game-log-list">
+          <div className="scroll-box game-log-list" ref={gameLogScrollRef}>
             {gameLogEntries.length ? gameLogEntries.slice().reverse().map(entry => (
               <div key={entry.id} className={`log-entry ${entry.type}`}>
                 <time>{entry.time}</time>

@@ -499,7 +499,7 @@ class Game {
 
                 // Notify both parties
                 if (jailTarget.socketId) {
-                  io.to(jailTarget.socketId).emit('private_message', '🔒 You have been jailed! The Jailor wishes to speak with you.');
+                  io.to(jailTarget.socketId).emit('private_message', '🔒 Jūs buvote įkalinti! Kalėjimo prižiūrėtojas nori su jumis pasikalbėti.');
                 }
 
                 this.broadcastUpdate();
@@ -802,13 +802,13 @@ class Game {
 
           // Notify prisoner
           if (prisoner.socketId) {
-            io.to(prisoner.socketId).emit('private_message', '🚫 The Jailor has decided to remove you from the game!');
+            io.to(prisoner.socketId).emit('private_message', '🚫 Kalėjimo prižiūrėtojas nusprendė jus pašalinti iš žaidimo!');
           }
 
           // Send final message
           const finalMsg = {
             sender: 'Jailor',
-            message: `You are being removed from the game. ${decision.reason || 'Justice will be served.'}`,
+            message: `Jūs būsite pašalintas iš žaidimo. ${decision.reason || 'Teisingumas bus įvykdytas.'}`,
             timestamp: Date.now()
           };
           this.jailChat.push(finalMsg);
@@ -823,7 +823,7 @@ class Game {
           // Spare the prisoner
           const spareMsg = {
             sender: 'Jailor',
-            message: `I'll let you go... for now. ${decision.reason || 'Stay out of trouble.'}`,
+            message: `Šį kartą paleisiu... ${decision.reason || 'Elkitės padoriai.'}`,
             timestamp: Date.now()
           };
           this.jailChat.push(spareMsg);
@@ -1274,7 +1274,7 @@ class Game {
           if (topTargets.length > 1) {
             aliveVampires.forEach(vamp => {
               if (vamp.socketId) {
-                io.to(vamp.socketId).emit('private_message', '🧛 The vampire vote was tied! A target was picked randomly among the top votes.');
+                io.to(vamp.socketId).emit('private_message', '🧛 Vampyrų balsavime buvo lygiosios! Taikinys buvo parinktas atsitiktinai.');
               }
             });
           }
@@ -1289,19 +1289,19 @@ class Game {
 
             if (isJailed) {
               // Jailed players are protected from vampire bites
-              this.logs.push(`[Night ${this.round}] The vampires tried to turn their target, but they were unreachable!`);
+              this.logs.push(`[Night ${this.round}] Vampyrai bandė paversti savo taikinį, tačiau jis buvo nepasiekiamas!`);
               aliveVampires.forEach(vamp => {
-                if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Your target was protected by the Jailor!`);
+                if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Jūsų taikinį apsaugojo kalėjimo prižiūrėtojas!`);
               });
             } else if (isHealed) {
-              this.logs.push(`[Night ${this.round}] The vampires tried to turn their target, but they were saved by a Doctor!`);
+              this.logs.push(`[Night ${this.round}] Vampyrai bandė paversti savo taikinį, tačiau jį išgelbėjo gydytojas!`);
               aliveVampires.forEach(vamp => {
-                if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Your target was saved by a Doctor!`);
+                if (vamp.socketId) io.to(vamp.socketId).emit('private_message', `🧛 Jūsų taikinį išgelbėjo gydytojas!`);
               });
               doctorHeals.filter(h => h.targetId === potentialTargetId).forEach(h => {
                 const doc = this.players.find(p => p.id === h.actorId);
                 if (doc && doc.socketId) {
-                  io.to(doc.socketId).emit('private_message', `💉 You successfully saved your target from being turned!`);
+                  io.to(doc.socketId).emit('private_message', `💉 Jūs sėkmingai išgelbėjote savo taikinį nuo pavertimo!`);
                 }
                 // Record being saved in the target NPC's receivedEvents
                 if (target.isNPC) {
@@ -1315,7 +1315,7 @@ class Game {
               target.isTurned = true;
               turnedPlayer = target;
               this.logs.push({
-                message: `[Night ${this.round}] A dark ritual took place... someone's nature has changed.`,
+                message: `[Night ${this.round}] Įvyko tamsos ritualas... kažkieno prigimtis pasikeitė.`,
                 type: 'evil'
               });
 
@@ -1339,7 +1339,7 @@ class Game {
           this.framedPlayers[action.targetId] = true;
           if (actor.socketId) {
             const target = this.players.find(p => p.id === action.targetId);
-            io.to(actor.socketId).emit('private_message', `🎭 You have framed ${target?.name || 'your target'}. They will appear as a Vampire to investigators tonight.`);
+            io.to(actor.socketId).emit('private_message', `🎭 Suklastojote ${target?.name || 'savo taikinį'} duomenis. Šerifui jis atrodys kaip vampyras.`);
           }
         }
       }
@@ -1353,9 +1353,9 @@ class Game {
         // Check if target is framed - framed players appear as Vampire
         const isFramed = this.framedPlayers[action.targetId];
         if (isFramed) {
-          investigationResults[actorId] = 'Target is a Vampire';
+          investigationResults[actorId] = 'Taikinys yra vampyras';
         } else {
-          investigationResults[actorId] = target ? `Target is a ${target.role}` : 'Unknown';
+          investigationResults[actorId] = target ? `Taikinio vaidmuo – ${target.role}` : 'Nežinoma';
         }
       }
     });
@@ -1368,8 +1368,8 @@ class Game {
         const actorName = this.players.find(p => p.id === actorId)?.name;
         const filtered = visitors.filter(name => name !== actorName);
         investigationResults[actorId] = filtered.length > 0
-          ? `Visited by: ${filtered.join(', ')}`
-          : 'No one visited.';
+          ? `Aplankė: ${filtered.join(', ')}`
+          : 'Niekas neapsilankė.';
       }
     });
 
@@ -1393,7 +1393,7 @@ class Game {
     // Notify turned player and send updated role info
     if (turnedPlayer && turnedPlayer.socketId) {
       // Send private notification about being turned
-      io.to(turnedPlayer.socketId).emit('private_message', '🧛 You have been turned into a Vampire! You are now part of the vampire faction.');
+      io.to(turnedPlayer.socketId).emit('private_message', '🧛 Jūs buvote paverstas vampyru! Dabar priklausote vampyrų pusei.');
 
       // Send updated role info immediately
       io.to(turnedPlayer.socketId).emit('role_info', {
@@ -1406,7 +1406,7 @@ class Game {
         .filter(p => p.role === 'Vampire' && p.alive && p.id !== turnedPlayer.id)
         .map(p => p.name);
       if (otherVampires.length > 0) {
-        io.to(turnedPlayer.socketId).emit('private_message', `🧛 Your fellow vampires are: ${otherVampires.join(', ')}`);
+        io.to(turnedPlayer.socketId).emit('private_message', `🧛 Jūsų bendražygiai vampyrai: ${otherVampires.join(', ')}`);
       }
     }
 
@@ -1419,23 +1419,23 @@ class Game {
       if (jailAction && jailAction.type === 'EXECUTE' && prisoner && prisoner.alive) {
         // Execute the prisoner
         prisoner.alive = false;
-        this.logs.push(`[Night ${this.round}] ${prisoner.name} was removed by the Jailor.`);
+        this.logs.push(`[Night ${this.round}] ${prisoner.name} buvo pašalintas kalėjimo prižiūrėtojo.`);
 
         // If prisoner was innocent (good alignment), jailor will die
         if (prisoner.alignment === 'good') {
           this.jailorPendingDeath = true;
           if (jailor && jailor.socketId) {
-            io.to(jailor.socketId).emit('private_message', '⚠️ You eliminated an innocent person! Guilt consumes you...');
+            io.to(jailor.socketId).emit('private_message', '⚠️ Pašalinote nekaltą žaidėją! Jus apima kaltės jausmas...');
           }
         } else {
           if (jailor && jailor.socketId) {
-            io.to(jailor.socketId).emit('private_message', '🔒 Justice served. The prisoner was guilty.');
+            io.to(jailor.socketId).emit('private_message', '🔒 Teisingumas įvykdytas. Kalinys buvo kaltas.');
           }
         }
       } else {
         // Prisoner was not executed, just released
         if (prisoner && prisoner.socketId) {
-          io.to(prisoner.socketId).emit('private_message', '🔓 Dawn breaks. The Jailor releases you from jail.');
+          io.to(prisoner.socketId).emit('private_message', '🔓 Išaušo rytas. Kalėjimo prižiūrėtojas jus paleidžia.');
         }
         // Record being released in NPC prisoner's receivedEvents
         if (prisoner && prisoner.isNPC) {
@@ -1457,7 +1457,7 @@ class Game {
       const jailor = this.players.find(p => p.id === this.jailorId);
       if (jailor && jailor.alive) {
         jailor.alive = false;
-        this.logs.push(`[Day ${this.round}] ${jailor.name} was consumed by guilt and was eliminated!`);
+        this.logs.push(`[Day ${this.round}] ${jailor.name} buvo apimtas kaltės jausmo ir pašalintas iš žaidimo!`);
       }
       this.jailorPendingDeath = false;
     }
@@ -1506,7 +1506,7 @@ class Game {
 
       if (victim.role === 'Jester') {
         this.logs.push({
-          message: `[Day ${this.round}] ${victim.name} was eliminated! They were the Jester. Jester wins!`,
+          message: `[Day ${this.round}] ${victim.name} buvo pašalintas! Jo vaidmuo – juokdarys. Juokdarys laimėjo!`,
           type: 'evil'
         });
         this.state = 'GAME_OVER';
@@ -1517,15 +1517,15 @@ class Game {
         return;
       }
 
-      const roleReveal = this.settings.revealRole ? ` They were a ${victim.role}.` : '';
+      const roleReveal = this.settings.revealRole ? ` Vaidmuo – ${victim.role}.` : '';
       this.logs.push({
-        message: `[Day ${this.round}] ${victim.name} was eliminated!${roleReveal}`,
+        message: `[Day ${this.round}] ${victim.name} buvo pašalintas!${roleReveal}`,
         type: this.settings.revealRole
           ? (victim.alignment === 'good' ? 'good' : 'evil')
           : 'public'
       });
     } else {
-      this.logs.push(`[Day ${this.round}] No one received enough votes.`);
+      this.logs.push(`[Day ${this.round}] Niekas nesurinko pakankamai balsų.`);
     }
 
     this.checkWinCondition();
@@ -1540,7 +1540,7 @@ class Game {
       this.state = 'GAME_OVER';
       this.winner = 'GOOD';
       if (this.interval) clearInterval(this.interval);
-      this.logs.push('The vampires have been eliminated! Good wins!');
+      this.logs.push('Vampyrai buvo pašalinti! Laimėjo gerieji!');
       // Save logs when game ends naturally
       if (this.logger) this.logger.saveLogs(this.players);
       this.broadcastUpdate();
@@ -1548,7 +1548,7 @@ class Game {
       this.state = 'GAME_OVER';
       this.winner = 'EVIL';
       if (this.interval) clearInterval(this.interval);
-      this.logs.push('The vampires have taken over! Evil wins!');
+      this.logs.push('Vampyrai perėmė valdymą! Laimėjo blogieji!');
       // Save logs when game ends naturally
       if (this.logger) this.logger.saveLogs(this.players);
       this.broadcastUpdate();
@@ -1591,7 +1591,7 @@ class Game {
     if (this.interval) clearInterval(this.interval);
     this.state = 'GAME_OVER';
     this.winner = winner;
-    this.logs.push('The host has ended the game.');
+    this.logs.push('Vedėjas baigė žaidimą.');
     // Save logs when host ends game
     if (this.logger) this.logger.saveLogs(this.players);
     this.broadcastUpdate();
@@ -2063,7 +2063,7 @@ io.on('connection', async (socket) => {
           if (aliveVampires.length > 1) {
             aliveVampires.forEach(vamp => {
               if (vamp.socketId && vamp.id !== player.id) {
-                io.to(vamp.socketId).emit('private_message', `🧛 ${player.name} cancelled their vote`);
+                io.to(vamp.socketId).emit('private_message', `🧛 ${player.name} atšaukė savo balsą`);
               }
             });
           }
@@ -2083,7 +2083,7 @@ io.on('connection', async (socket) => {
       if (action.type === 'BITE') {
         const target = game.players.find(p => p.id === action.targetId);
         if (target && (target.role === 'Vampire' || target.role === 'Vampire Framer')) {
-          socket.emit('private_message', 'Cannot turn a fellow vampire!');
+          socket.emit('private_message', 'Negalima paversti savo bendražygio vampyro!');
           return;
         }
 
@@ -2092,7 +2092,7 @@ io.on('connection', async (socket) => {
         if (aliveVampires.length > 1 && target) {
           aliveVampires.forEach(vamp => {
             if (vamp.socketId && vamp.id !== player.id) {
-              io.to(vamp.socketId).emit('private_message', `🧛 ${player.name} voted to turn ${target.name}`);
+              io.to(vamp.socketId).emit('private_message', `🧛 ${player.name} balsavo už ${target.name} pavertimą`);
             }
           });
         }
@@ -2102,7 +2102,7 @@ io.on('connection', async (socket) => {
       if (action.type === 'HEAL') {
         if (player.role !== 'Doctor') return;
         if ((player.healsRemaining || 0) <= 0) {
-          socket.emit('private_message', 'You have no heals remaining!');
+          socket.emit('private_message', 'Nebeliko gydymų!');
           return;
         }
       }
@@ -2114,11 +2114,11 @@ io.on('connection', async (socket) => {
 
         const target = game.players.find(p => p.id === action.targetId);
         if (!target || !target.alive) {
-          socket.emit('private_message', 'Invalid target for jail.');
+          socket.emit('private_message', 'Netinkamas taikinys įkalinimui.');
           return;
         }
         if (target.id === player.id) {
-          socket.emit('private_message', 'You cannot jail yourself!');
+          socket.emit('private_message', 'Negalite įkalinti savęs!');
           return;
         }
 
@@ -2135,7 +2135,7 @@ io.on('connection', async (socket) => {
             const aliveVampires = game.players.filter(p => p.role === 'Vampire' && p.alive && p.id !== target.id);
             aliveVampires.forEach(vamp => {
               if (vamp.socketId) {
-                io.to(vamp.socketId).emit('private_message', `🧛 ${target.name}'s vote was cancelled (jailed)`);
+                io.to(vamp.socketId).emit('private_message', `🧛 ${target.name} balsas buvo atšauktas (įkalintas)`);
               }
             });
           }
@@ -2149,9 +2149,9 @@ io.on('connection', async (socket) => {
         }
 
         // Notify both parties
-        socket.emit('private_message', `\ud83d\udd12 You have jailed ${target.name}. You may now interrogate them.`);
+        socket.emit('private_message', `\ud83d\udd12 Jūs įkalinote ${target.name}. Dabar galite jį apklausti.`);
         if (target.socketId) {
-          io.to(target.socketId).emit('private_message', '\ud83d\udd12 You have been jailed! The Jailor wishes to speak with you. Your night action has been cancelled.');
+          io.to(target.socketId).emit('private_message', '\ud83d\udd12 Jūs buvote įkalinti! Kalėjimo prižiūrėtojas nori su jumis pasikalbėti. Jūsų naktinis veiksmas buvo atšauktas.');
         }
 
         game.broadcastUpdate();
@@ -2162,7 +2162,7 @@ io.on('connection', async (socket) => {
       if (action.type === 'EXECUTE') {
         if (player.role !== 'Jailor') return;
         if (game.jailorId !== player.id) {
-          socket.emit('private_message', 'You have no prisoner to remove.');
+          socket.emit('private_message', 'Neturite kalinio, kurį pašalinti.');
           return;
         }
 
@@ -2170,9 +2170,9 @@ io.on('connection', async (socket) => {
         game.nightActions[player.id] = { type: 'EXECUTE', actorId: player.id, targetId: game.jailedPlayerId };
 
         const prisoner = game.players.find(p => p.id === game.jailedPlayerId);
-        socket.emit('private_message', `🚫 You have decided to remove ${prisoner?.name || 'the prisoner'} from the game.`);
+        socket.emit('private_message', `🚫 Jūs nuspręndėte pašalinti ${prisoner?.name || 'kalinį'} iš žaidimo.`);
         if (prisoner && prisoner.socketId) {
-          io.to(prisoner.socketId).emit('private_message', '🚫 The Jailor has decided to remove you from the game!');
+          io.to(prisoner.socketId).emit('private_message', '🚫 Kalėjimo prižiūrėtojas nusprendė jus pašalinti iš žaidimo!');
         }
 
         game.broadcastUpdate();
@@ -2189,9 +2189,9 @@ io.on('connection', async (socket) => {
           delete game.nightActions[player.id];
 
           const prisoner = game.players.find(p => p.id === game.jailedPlayerId);
-          socket.emit('private_message', `\u274c Execution cancelled. ${prisoner?.name || 'The prisoner'} will be released at dawn.`);
+          socket.emit('private_message', `\u274c Pašalinimas atšauktas. ${prisoner?.name || 'Kalinys'} bus paleistas auštant.`);
           if (prisoner && prisoner.socketId) {
-            io.to(prisoner.socketId).emit('private_message', '\ud83d\ude0c The Jailor has decided to spare you.');
+            io.to(prisoner.socketId).emit('private_message', '\ud83d\ude0c Kalėjimo prižiūrėtojas nusprendė jus paleisti.');
           }
         }
         return;
@@ -2199,7 +2199,7 @@ io.on('connection', async (socket) => {
 
       // Block jailed players from performing night actions
       if (game.jailedPlayerId === player.id) {
-        socket.emit('private_message', '\ud83d\udd12 You are in jail and cannot perform your night action.');
+        socket.emit('private_message', '\ud83d\udd12 Jūs esate kalėjime ir negalite atlikti naktinio veiksmo.');
         return;
       }
 
@@ -2210,11 +2210,11 @@ io.on('connection', async (socket) => {
 
         const target = game.players.find(p => p.id === action.targetId);
         if (!target || !target.alive) {
-          socket.emit('private_message', 'Invalid target for framing.');
+          socket.emit('private_message', 'Netinkamas taikinys klastojimui.');
           return;
         }
         if (target.role === 'Vampire' || target.role === 'Vampire Framer') {
-          socket.emit('private_message', 'Cannot frame a fellow vampire!');
+          socket.emit('private_message', 'Negalima klastoti savo bendražygio vampyro!');
           return;
         }
 
@@ -2371,7 +2371,7 @@ io.on('connection', async (socket) => {
             role: target.role,
             alignment: target.alignment
           });
-          io.to(target.socketId).emit('private_message', `🎭 Your role has been changed to ${newRole}!`);
+          io.to(target.socketId).emit('private_message', `🎭 Jūsų vaidmuo pakeistas į ${newRole}!`);
         }
 
         // Confirm to the host
@@ -2405,8 +2405,8 @@ io.on('connection', async (socket) => {
         // Notify the player
         if (target.socketId) {
           const msg = alive
-            ? "😇 You have been revived by the host!"
-            : "💀 You have been killed by the host!";
+            ? "😇 Vedėjas grąžino jus į žaidimą!"
+            : "💀 Vedėjas pašalino jus iš žaidimo!";
           io.to(target.socketId).emit('private_message', msg);
         }
 
@@ -2423,8 +2423,8 @@ io.on('connection', async (socket) => {
 
         // Log to game log
         const logMsg = alive
-          ? `The host revived ${target.name}.`
-          : `The host struck down ${target.name}.`;
+          ? `Vedėjas grąžino ${target.name} į žaidimą.`
+          : `Vedėjas pašalino ${target.name} iš žaidimo.`;
         game.logs.push(logMsg);
 
         game.broadcastUpdate();
