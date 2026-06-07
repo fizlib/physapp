@@ -138,6 +138,7 @@ export default function VampireGame({
   const ttsIsPlaying = useRef(false); // Track if TTS audio is currently playing
   const publicLogCountRef = useRef(0);
   const previousLoggedPhaseRef = useRef(null);
+  const roleAutoShownRef = useRef(false);
 
   // Voice input (Speech-to-Text) state
   const [isRecording, setIsRecording] = useState(false);
@@ -370,6 +371,22 @@ export default function VampireGame({
     prevGameState.current = gameState;
   }, [gameState, gameChat]);
 
+  useEffect(() => {
+    if (gameState?.state === 'LOBBY') {
+      roleAutoShownRef.current = false;
+      setRoleRevealed(false);
+      return;
+    }
+
+    const gameHasStarted = gameState?.state
+      && gameState.state !== 'GAME_OVER';
+
+    if (gameHasStarted && myRole?.role && !roleAutoShownRef.current) {
+      roleAutoShownRef.current = true;
+      setRoleRevealed(true);
+    }
+  }, [gameState?.state, myRole?.role]);
+
   // Request microphone permission when game starts (if voice chat is enabled)
   useEffect(() => {
     // Check if game is now in a playing state (not LOBBY)
@@ -537,6 +554,7 @@ export default function VampireGame({
     setGameLogEntries([]);
     publicLogCountRef.current = 0;
     previousLoggedPhaseRef.current = null;
+    roleAutoShownRef.current = false;
   }, [gameCode, playerId]);
 
   useEffect(() => {
@@ -1705,9 +1723,8 @@ export default function VampireGame({
         </button>
         {logsExpanded && (
           <div className="scroll-box game-log-list">
-            {gameLogEntries.length ? gameLogEntries.map(entry => (
+            {gameLogEntries.length ? gameLogEntries.slice().reverse().map(entry => (
               <div key={entry.id} className={`log-entry ${entry.type}`}>
-                <span className="log-dot" aria-hidden="true" />
                 <time>{entry.time}</time>
                 <span>{entry.message}</span>
               </div>
@@ -1803,7 +1820,6 @@ export default function VampireGame({
                   )}
                 </div>
               )}
-              <span className="player-action-empty" aria-hidden="true">-</span>
             </div>
           ))}
         </div>
