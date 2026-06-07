@@ -56,16 +56,22 @@ const ROLE_INFO = {
   }
 };
 
-const createGameLogEntry = (message, type = 'public') => ({
-  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  message: String(message).replace(/^>\s*/, ''),
-  time: new Date().toLocaleTimeString('lt-LT', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }),
-  type,
-});
+const createGameLogEntry = (log, fallbackType = 'public') => {
+  const logData = typeof log === 'object' && log !== null
+    ? log
+    : { message: log };
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    message: String(logData.message ?? '').replace(/^>\s*/, ''),
+    time: new Date().toLocaleTimeString('lt-LT', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }),
+    type: logData.type || fallbackType,
+  };
+};
 
 const getPhaseLogEntry = (state, round) => {
   if (state === 'NIGHT') return { message: `Night ${round} started`, type: 'night' };
@@ -592,7 +598,7 @@ export default function VampireGame({
 
       const freshPublicLogs = publicLogs
         .slice(publicLogCountRef.current)
-        .map(message => createGameLogEntry(message, 'public'));
+        .map(log => createGameLogEntry(log, 'public'));
       const phaseChanged = data.state !== previousLoggedPhaseRef.current;
       const phaseLog = phaseChanged ? getPhaseLogEntry(data.state, data.round) : null;
 
@@ -1759,20 +1765,12 @@ export default function VampireGame({
                 <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Framer' : '🧛 Vampire'}</div>
               )}
               {/* Target indicator badges */}
-              {nightTarget?.targetId === p.id && isNight && (
+              {nightTarget?.targetId === p.id && isNight && nightTarget.type !== 'BITE' && (
                 <div className="target-badge night-target-badge">
                   {nightTarget.type === 'INVESTIGATE' && '🔍 Investigating'}
                   {nightTarget.type === 'LOOKOUT' && '👁️ Watching'}
-                  {nightTarget.type === 'BITE' && '🧛 Voted'}
                   {nightTarget.type === 'HEAL' && '💉 Healing'}
                   {nightTarget.type === 'JAIL' && '🔒 Jailing'}
-                </div>
-              )}
-
-              {/* Vampire vote count badge - visible to vampires during turning nights */}
-              {myRole?.role === 'Vampire' && isNight && canTurn && !p.isVampire && p.vampireVotes > 0 && (
-                <div className="vampire-vote-count-badge">
-                  🩸 {p.vampireVotes} vote{p.vampireVotes > 1 ? 's' : ''}
                 </div>
               )}
 

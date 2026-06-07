@@ -1314,7 +1314,10 @@ class Game {
               target.alignment = 'evil';
               target.isTurned = true;
               turnedPlayer = target;
-              this.logs.push(`[Night ${this.round}] A dark ritual took place... someone's nature has changed.`);
+              this.logs.push({
+                message: `[Night ${this.round}] A dark ritual took place... someone's nature has changed.`,
+                type: 'evil'
+              });
 
               // Record being turned in the NPC's receivedEvents
               if (target.isNPC) {
@@ -1500,21 +1503,27 @@ class Game {
     if (lynchedId) {
       const victim = this.players.find(p => p.id === lynchedId);
       victim.alive = false;
-      this.logs.push(`[Day ${this.round}] ${victim.name} was lynched!`);
 
       if (victim.role === 'Jester') {
+        this.logs.push({
+          message: `[Day ${this.round}] ${victim.name} was lynched! They were the Jester. Jester wins!`,
+          type: 'evil'
+        });
         this.state = 'GAME_OVER';
         this.winner = 'Jester';
-        this.logs.push(`[Day ${this.round}] The Jester was lynched! Jester Wins!`);
         // Save logs when Jester wins
         if (this.logger) this.logger.saveLogs(this.players);
         this.broadcastUpdate();
         return;
       }
 
-      if (this.settings.revealRole) {
-        this.logs.push(`[Day ${this.round}] ${victim.name} was a ${victim.role}`);
-      }
+      const roleReveal = this.settings.revealRole ? ` They were a ${victim.role}.` : '';
+      this.logs.push({
+        message: `[Day ${this.round}] ${victim.name} was lynched!${roleReveal}`,
+        type: this.settings.revealRole
+          ? (victim.alignment === 'good' ? 'good' : 'evil')
+          : 'public'
+      });
     } else {
       this.logs.push(`[Day ${this.round}] No one received enough votes.`);
     }

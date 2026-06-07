@@ -150,7 +150,10 @@ function formatLogsWithTimeline(logs, currentRound) {
 
     // Get last 10 logs for context
     const recentLogs = logs.slice(-10);
-    return recentLogs.join("\n");
+    return recentLogs
+        .map(log => typeof log === "string" ? log : log?.message)
+        .filter(Boolean)
+        .join("\n");
 }
 
 /**
