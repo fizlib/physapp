@@ -381,7 +381,7 @@ export default function VampireGame({
   const publicLogCountRef = useRef(0);
   const previousLoggedPhaseRef = useRef(null);
   const roleAutoShownRef = useRef(false);
-  const gameLogScrollRef = useRef(null); // Ref for auto-scrolling game log to top on phase change
+  const gameLogScrollRef = useRef(null); // Ref for keeping the newest game log entry visible
 
   // Voice input (Speech-to-Text) state
   const [isRecording, setIsRecording] = useState(false);
@@ -789,6 +789,18 @@ export default function VampireGame({
     setGameLogEntries(current => [...current, createGameLogEntry(message, type)]);
   }, []);
 
+  useEffect(() => {
+    if (!gameLogEntries.length || !logsExpanded) return undefined;
+
+    const animationFrame = requestAnimationFrame(() => {
+      if (gameLogScrollRef.current) {
+        gameLogScrollRef.current.scrollTop = 0;
+      }
+    });
+
+    return () => cancelAnimationFrame(animationFrame);
+  }, [gameLogEntries.length, logsExpanded]);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem('vampire_code');
     localStorage.removeItem('vampire_id');
@@ -846,14 +858,8 @@ export default function VampireGame({
       setGameState(data);
       setTimer(data.timer);
 
-      // Auto-scroll game log to top on phase change
       if (phaseChanged) {
         setLogsExpanded(true);
-        requestAnimationFrame(() => {
-          if (gameLogScrollRef.current) {
-            gameLogScrollRef.current.scrollTop = 0;
-          }
-        });
       }
       // Update view based on game state
       if (data.state === 'LOBBY') {
