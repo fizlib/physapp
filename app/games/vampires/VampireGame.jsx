@@ -29,8 +29,8 @@ const ALIGNMENT_LABELS = {
 const PHASE_LABELS = {
   LOBBY: 'Laukimo kambarys',
   NIGHT: 'Naktis',
-  DAY_DISCUSS: 'Dienos diskusija',
-  DAY_VOTE: 'Dienos balsavimas',
+  DAY_DISCUSS: 'Diskusija',
+  DAY_VOTE: 'Balsavimas',
   GAME_OVER: 'Žaidimas baigtas',
 };
 
@@ -2012,7 +2012,7 @@ export default function VampireGame({
                   )}
                   {myRole?.role === 'Vampire' && canTurn && !p.isVampire && (
                     <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
-                      {nightTarget?.targetId === p.id ? '✓ Balsuota' : 'Balsuoti už pavertimą'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                      {nightTarget?.targetId === p.id ? '✓ Balsuota' : 'Paversti'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
                     </button>
                   )}
                   {myRole?.role === 'Doctor' && (gameState?.healsRemaining > 0 || nightTarget?.type === 'HEAL') && (
@@ -2028,11 +2028,11 @@ export default function VampireGame({
                   {myRole?.role === 'Vampire Framer' && !p.isVampire && (
                     <>
                       <button className={`btn-action btn-frame ${frameTarget === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'FRAME')}>
-                        {frameTarget === p.id ? '✓ Duomenys klastojami' : '🎭 Suklastoti duomenis'}
+                        {frameTarget === p.id ? '✓ Duomenys klastojami' : '🎭 Suklastoti'}
                       </button>
                       {canTurn && (
                         <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
-                          {nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? '✓ Balsuota' : 'Balsuoti už pavertimą'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                          {nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? '✓ Balsuota' : 'Paversti'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
                         </button>
                       )}
                     </>

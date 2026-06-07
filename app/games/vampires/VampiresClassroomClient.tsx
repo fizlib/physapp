@@ -165,8 +165,8 @@ const ALIGNMENT_LABELS: Record<string, string> = {
 const GAME_STATE_LABELS: Record<string, string> = {
     LOBBY: "Laukimo kambarys",
     NIGHT: "Naktis",
-    DAY_DISCUSS: "Dienos diskusija",
-    DAY_VOTE: "Dienos balsavimas",
+    DAY_DISCUSS: "Diskusija",
+    DAY_VOTE: "Balsavimas",
     GAME_OVER: "Žaidimas baigtas",
 }
 
