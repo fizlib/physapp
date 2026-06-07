@@ -8,6 +8,7 @@ const ROLE_LABELS = {
   Lookout: 'Stebėtojas',
   Doctor: 'Gydytojas',
   Jailor: 'Kalėjimo prižiūrėtojas',
+  Prisoner: 'Kalinys',
   Citizen: 'Miestietis',
   Vampire: 'Vampyras',
   'Vampire Framer': 'Vampyras klastotojas',
@@ -1838,7 +1839,7 @@ export default function VampireGame({
             <div className="jail-chat-messages" ref={jailChatMessagesRef}>
               {(jailChat.length > 0 ? jailChat : (gameState.jailInfo.jailChat || [])).map((msg, i) => (
                 <div key={i} className={`jail-chat-message ${msg.sender === 'Jailor' ? 'jailor-msg' : 'prisoner-msg'}`}>
-                  <span className="chat-sender">{getRoleLabel(msg.sender)}:</span>
+                  <span className="chat-sender">{msg.sender === 'Jailor' ? 'Prižiūrėtojas' : msg.sender === 'Prisoner' ? 'Kalinys' : msg.sender}:</span>
                   <span className="chat-text">{msg.message}</span>
                 </div>
               ))}
@@ -1912,7 +1913,6 @@ export default function VampireGame({
                   <div key={p.id} className={`summary-card ${p.alignment || 'unknown'}`}>
                     <div className="summary-name">{p.name} {p.id === myId && '(jūs)'}</div>
                     <div className="summary-role">{getRoleLabel(p.role)}</div>
-                    {!p.alive && <div className="summary-dead">Nedalyvauja žaidime</div>}
                   </div>
                 ))}
               </div>
