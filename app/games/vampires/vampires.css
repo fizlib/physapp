@@ -989,8 +989,8 @@
   background: linear-gradient(145deg, var(--role-accent-strong), var(--role-accent));
   -webkit-mask-image: url("/vampires/roles/role-atlas.png");
   mask-image: url("/vampires/roles/role-atlas.png");
-  -webkit-mask-size: 400% 200%;
-  mask-size: 400% 200%;
+  -webkit-mask-size: 400% 400%;
+  mask-size: 400% 400%;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--role-accent) 38%, transparent));
@@ -1017,23 +1017,23 @@
 }
 
 .role-art-citizen {
-  -webkit-mask-position: 0 100%;
-  mask-position: 0 100%;
+  -webkit-mask-position: 0 66.667%;
+  mask-position: 0 66.667%;
 }
 
 .role-art-vampire {
-  -webkit-mask-position: 33.333% 100%;
-  mask-position: 33.333% 100%;
+  -webkit-mask-position: 33.333% 66.667%;
+  mask-position: 33.333% 66.667%;
 }
 
 .role-art-vampire-framer {
-  -webkit-mask-position: 66.667% 100%;
-  mask-position: 66.667% 100%;
+  -webkit-mask-position: 66.667% 66.667%;
+  mask-position: 66.667% 66.667%;
 }
 
 .role-art-jester {
-  -webkit-mask-position: 100% 100%;
-  mask-position: 100% 100%;
+  -webkit-mask-position: 100% 66.667%;
+  mask-position: 100% 66.667%;
 }
 
 .role-name {
