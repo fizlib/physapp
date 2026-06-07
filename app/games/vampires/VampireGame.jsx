@@ -74,6 +74,8 @@ const getPhaseLogEntry = (state, round) => {
   return null;
 };
 
+const getRoleAutoShownKey = gameCode => `vampire_role_auto_shown_${gameCode}`;
+
 // Pre-generate snowflake data outside component to prevent regeneration
 const SNOWFLAKE_DATA = Array.from({ length: 50 }, (_, i) => ({
   id: i,
@@ -376,7 +378,10 @@ export default function VampireGame({
   }, [gameState, gameChat]);
 
   useEffect(() => {
+    const storageKey = getRoleAutoShownKey(gameCode);
+
     if (gameState?.state === 'LOBBY') {
+      localStorage.removeItem(storageKey);
       roleAutoShownRef.current = false;
       setRoleRevealed(false);
       return;
@@ -387,9 +392,14 @@ export default function VampireGame({
 
     if (gameHasStarted && myRole?.role && !roleAutoShownRef.current) {
       roleAutoShownRef.current = true;
-      setRoleRevealed(true);
+      const roleWasAlreadyShown = localStorage.getItem(storageKey) === 'true';
+
+      if (!roleWasAlreadyShown) {
+        localStorage.setItem(storageKey, 'true');
+        setRoleRevealed(true);
+      }
     }
-  }, [gameState?.state, myRole?.role]);
+  }, [gameCode, gameState?.state, myRole?.role]);
 
   // Request microphone permission when game starts (if voice chat is enabled)
   useEffect(() => {
@@ -551,6 +561,7 @@ export default function VampireGame({
     localStorage.removeItem('vampire_private_msg');
     localStorage.removeItem('vampire_settings');
     localStorage.removeItem('vampire_role_config');
+    localStorage.removeItem(getRoleAutoShownKey(gameCode));
     setView('GAME');
     setCode(gameCode);
     setMyId(playerId);
@@ -1742,7 +1753,7 @@ export default function VampireGame({
       <div className={`game-board ${!showVoicePanel && !showChatPanel ? 'players-only' : ''}`}>
         <div className="players-section">
           {gameState?.players.map((p, index) => (
-            <div key={p.id} className={`game-player-card ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
+            <div key={p.id} className={`game-player-card ${isVoting ? 'voting' : ''} ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
               {/* Vampire teammate indicator - always visible to vampires */}
               {p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') && p.id !== myId && (
                 <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Framer' : '🧛 Vampire'}</div>
@@ -1774,14 +1785,17 @@ export default function VampireGame({
                 >
                   {p.isNPC && '🤖 '}{p.name}
                 </span>
-                {p.alive && isVoting && amIAlive && p.id !== myId && (
-                  <button className={`btn-vote ${voteTarget === p.id ? 'voted' : ''}`} onClick={() => vote(p.id)}>
-                    {voteTarget === p.id ? '✓ Voted' : 'Vote'} ({p.votes})
-                  </button>
-                )}
                 {/* Show vote count even if I can't vote */}
                 {(!amIAlive || !isVoting) && p.votes > 0 && <span className="vote-count">{p.votes} votes</span>}
               </div>
+
+              {p.alive && isVoting && amIAlive && p.id !== myId && (
+                <div className="vote-action">
+                  <button className={`btn-vote ${voteTarget === p.id ? 'voted' : ''}`} onClick={() => vote(p.id)}>
+                    Vote ({p.votes})
+                  </button>
+                </div>
+              )}
 
               {p.alive && isNight && amIAlive && (p.id !== myId || myRole?.role === 'Doctor') && (
                 <div className="action-buttons">
