@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ChevronUp } from 'lucide-react';
 
 // Random username generator
 const generateRandomUsername = () => {
@@ -55,6 +56,20 @@ const ROLE_INFO = {
   }
 };
 
+const createGameLogEntry = (message, type = 'public') => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  message: String(message).replace(/^>\s*/, ''),
+  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  type,
+});
+
+const getPhaseLogEntry = (state, round) => {
+  if (state === 'NIGHT') return { message: `Night ${round} started`, type: 'night' };
+  if (state === 'DAY_DISCUSS') return { message: `Day ${round} started`, type: 'day' };
+  if (state === 'DAY_VOTE') return { message: 'Voting started', type: 'day' };
+  return null;
+};
+
 // Pre-generate snowflake data outside component to prevent regeneration
 const SNOWFLAKE_DATA = Array.from({ length: 50 }, (_, i) => ({
   id: i,
@@ -101,7 +116,8 @@ export default function VampireGame({
   const [gameState, setGameState] = useState(null);
   const [myRole, setMyRole] = useState(null);
   const [myId, setMyId] = useState(playerId);
-  const [privateMsg, setPrivateMsg] = useState('');
+  const [gameLogEntries, setGameLogEntries] = useState([]);
+  const [logsExpanded, setLogsExpanded] = useState(true);
   const [timer, setTimer] = useState(0);
   const [selectedPlayerRole, setSelectedPlayerRole] = useState(null); // For host role viewing modal
   const [nightTarget, setNightTarget] = useState(null); // Track who we targeted at night
@@ -120,6 +136,8 @@ export default function VampireGame({
   const jailChatMessagesRef = useRef(null); // Ref for auto-scrolling jail chat
   const ttsAudioQueue = useRef([]); // Queue for TTS audio to prevent overlap
   const ttsIsPlaying = useRef(false); // Track if TTS audio is currently playing
+  const publicLogCountRef = useRef(0);
+  const previousLoggedPhaseRef = useRef(null);
 
   // Voice input (Speech-to-Text) state
   const [isRecording, setIsRecording] = useState(false);
@@ -499,6 +517,10 @@ export default function VampireGame({
     setMyId(id);
   }, []);
 
+  const appendGameLog = useCallback((message, type = 'private') => {
+    setGameLogEntries(current => [...current, createGameLogEntry(message, type)]);
+  }, []);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem('vampire_code');
     localStorage.removeItem('vampire_id');
@@ -512,7 +534,9 @@ export default function VampireGame({
     setCode(gameCode);
     setMyId(playerId);
     setMyRole(null);
-    setPrivateMsg('');
+    setGameLogEntries([]);
+    publicLogCountRef.current = 0;
+    previousLoggedPhaseRef.current = null;
   }, [gameCode, playerId]);
 
   useEffect(() => {
@@ -528,6 +552,27 @@ export default function VampireGame({
     };
 
     const handleGameUpdate = (data) => {
+      const publicLogs = Array.isArray(data.logs) ? data.logs : [];
+      if (publicLogs.length < publicLogCountRef.current) {
+        publicLogCountRef.current = 0;
+      }
+
+      const freshPublicLogs = publicLogs
+        .slice(publicLogCountRef.current)
+        .map(message => createGameLogEntry(message, 'public'));
+      const phaseChanged = data.state !== previousLoggedPhaseRef.current;
+      const phaseLog = phaseChanged ? getPhaseLogEntry(data.state, data.round) : null;
+
+      if (freshPublicLogs.length || phaseLog) {
+        setGameLogEntries(current => [
+          ...current,
+          ...freshPublicLogs,
+          ...(phaseLog ? [createGameLogEntry(phaseLog.message, phaseLog.type)] : []),
+        ]);
+      }
+
+      publicLogCountRef.current = publicLogs.length;
+      previousLoggedPhaseRef.current = data.state;
       setGameState(data);
       setTimer(data.timer);
       // Update view based on game state
@@ -548,11 +593,7 @@ export default function VampireGame({
     };
 
     const handlePrivateMessage = (msg) => {
-      setPrivateMsg(prev => {
-        const newMsg = `> ${msg}\n` + prev;
-        localStorage.setItem('vampire_private_msg', newMsg);
-        return newMsg;
-      });
+      appendGameLog(msg, 'private');
     };
 
     const handleKicked = () => {
@@ -686,7 +727,7 @@ export default function VampireGame({
       socket.off('stt_available', handleSTTAvailable);
     };
     // Debug connection events removed
-  }, [clearSession, saveSession, socket]);
+  }, [appendGameLog, clearSession, saveSession, socket]);
 
   // Actions
   const initiateCreateGame = () => {
@@ -733,21 +774,13 @@ export default function VampireGame({
       if (frameTarget === targetId) {
         socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
         setFrameTarget(null);
-        setPrivateMsg(prev => {
-          const newMsg = `> Cancelled framing\n` + prev;
-          localStorage.setItem('vampire_private_msg', newMsg);
-          return newMsg;
-        });
+        appendGameLog('Cancelled framing', 'private');
         return;
       }
       socket.emit('night_action', { code, action: { targetId, type } });
       setFrameTarget(targetId);
       const targetPlayer = gameState?.players.find(p => p.id === targetId);
-      setPrivateMsg(prev => {
-        const newMsg = `> 🎭 Framing: ${targetPlayer?.name || 'Unknown'}\n` + prev;
-        localStorage.setItem('vampire_private_msg', newMsg);
-        return newMsg;
-      });
+      appendGameLog(`Framing ${targetPlayer?.name || 'Unknown'}`, 'private');
       return;
     }
 
@@ -755,22 +788,14 @@ export default function VampireGame({
     if (nightTarget?.targetId === targetId && nightTarget?.type === type) {
       socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
       setNightTarget(null);
-      setPrivateMsg(prev => {
-        const newMsg = `> Cancelled action\n` + prev;
-        localStorage.setItem('vampire_private_msg', newMsg);
-        return newMsg;
-      });
+      appendGameLog('Cancelled action', 'private');
       return;
     }
     socket.emit('night_action', { code, action: { targetId, type } });
     setNightTarget({ targetId, type });
     const targetPlayer = gameState?.players.find(p => p.id === targetId);
-    setPrivateMsg(prev => {
-      const actionNames = { 'INVESTIGATE': 'Investigating', 'LOOKOUT': 'Watching', 'BITE': 'Voting for', 'HEAL': 'Healing', 'JAIL': '🔒 Jailing', 'FRAME': '🎭 Framing' };
-      const newMsg = `> ${actionNames[type] || 'Action on'}: ${targetPlayer?.name || 'Unknown'}\n` + prev;
-      localStorage.setItem('vampire_private_msg', newMsg);
-      return newMsg;
-    });
+    const actionNames = { 'INVESTIGATE': 'Investigating', 'LOOKOUT': 'Watching', 'BITE': 'Voting for', 'HEAL': 'Healing', 'JAIL': 'Jailing', 'FRAME': 'Framing' };
+    appendGameLog(`${actionNames[type] || 'Action on'} ${targetPlayer?.name || 'Unknown'}`, 'private');
   };
   const vote = (targetId) => {
     // Toggle behavior: if clicking same target, unvote
@@ -1425,6 +1450,13 @@ export default function VampireGame({
   const canTurn = (gameState?.round % 2 === 0);
   const isHost = gameState?.host === myId;
   const isGameActive = gameState?.state !== 'LOBBY' && gameState?.state !== 'GAME_OVER';
+  const amIVampire = myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer';
+  const showVoicePanel = !gameState?.chatEnabled
+    && gameState?.state === 'DAY_DISCUSS'
+    && gameState?.enableSTT
+    && sttAvailable
+    && amIAlive;
+  const showChatPanel = gameState?.chatEnabled && (!isNight || amIVampire);
 
   return (
     <div id="vampires-game-root" className="vampires-shell container game-layout">
@@ -1661,9 +1693,34 @@ export default function VampireGame({
         </div>
       )}
 
-      <div className="game-board">
+      <section className={`panel logs-panel ${logsExpanded ? '' : 'collapsed'}`}>
+        <button
+          type="button"
+          className="logs-panel-heading"
+          aria-expanded={logsExpanded}
+          onClick={() => setLogsExpanded(current => !current)}
+        >
+          <span>Game Logs</span>
+          <ChevronUp aria-hidden="true" />
+        </button>
+        {logsExpanded && (
+          <div className="scroll-box game-log-list">
+            {gameLogEntries.length ? gameLogEntries.map(entry => (
+              <div key={entry.id} className={`log-entry ${entry.type}`}>
+                <span className="log-dot" aria-hidden="true" />
+                <time>{entry.time}</time>
+                <span>{entry.message}</span>
+              </div>
+            )) : (
+              <div className="logs-empty">No game events yet.</div>
+            )}
+          </div>
+        )}
+      </section>
+
+      <div className={`game-board ${!showVoicePanel && !showChatPanel ? 'players-only' : ''}`}>
         <div className="players-section">
-          {gameState?.players.map(p => (
+          {gameState?.players.map((p, index) => (
             <div key={p.id} className={`game-player-card ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
               {/* Vampire teammate indicator - always visible to vampires */}
               {p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') && p.id !== myId && (
@@ -1687,6 +1744,7 @@ export default function VampireGame({
                 </div>
               )}
 
+              <span className="player-number">{index + 1}</span>
               <div className="card-top">
                 <span
                   className={`name ${isHost ? 'clickable-name' : ''}`}
@@ -1745,13 +1803,14 @@ export default function VampireGame({
                   )}
                 </div>
               )}
+              <span className="player-action-empty" aria-hidden="true">-</span>
             </div>
           ))}
         </div>
 
         <div className="sidebar">
           {/* Voice-Only Panel - shows when chat is disabled but voice is enabled */}
-          {!gameState?.chatEnabled && gameState?.state === 'DAY_DISCUSS' && gameState?.enableSTT && sttAvailable && (() => {
+          {showVoicePanel && (() => {
             const myPlayer = gameState?.players.find(p => p.id === myId);
             if (!myPlayer?.alive) return null;
 
@@ -1787,15 +1846,12 @@ export default function VampireGame({
           })()}
 
           {/* Chat Panel - only show if chat is enabled and (day phase OR vampire at night) */}
-          {gameState?.chatEnabled && (() => {
+          {showChatPanel && (() => {
             const isNight = gameState?.state === 'NIGHT';
             const isDayPhase = gameState?.state === 'DAY_DISCUSS' || gameState?.state === 'DAY_VOTE';
             const myPlayer = gameState?.players.find(p => p.id === myId);
             const amIVampire = myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer';
             const canChat = myPlayer?.alive && (isDayPhase || (isNight && amIVampire));
-
-            // Hide chat panel completely for non-vampires at night
-            if (isNight && !amIVampire) return null;
 
             return (
               <div className={`panel chat-panel ${isNight ? 'vampire-chat' : ''}`}>
@@ -1873,18 +1929,6 @@ export default function VampireGame({
               </div>
             );
           })()}
-          <div className="panel logs-panel">
-            <h4>Game Logs</h4>
-            <div className="scroll-box">
-              {gameState?.logs.slice().reverse().map((l, i) => <div key={i} className="log-entry">{l}</div>)}
-            </div>
-          </div>
-          <div className="panel private-panel">
-            <h4>Private Notes</h4>
-            <div className="scroll-box private-text">
-              <pre>{privateMsg || "No private info yet..."}</pre>
-            </div>
-          </div>
         </div>
       </div>
     </div>
