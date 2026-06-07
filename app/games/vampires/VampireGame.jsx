@@ -1,0 +1,1907 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+// Random username generator
+const generateRandomUsername = () => {
+  const adjectives = ['Shadow', 'Dark', 'Blood', 'Night', 'Crimson', 'Silent', 'Mystic', 'Ancient', 'Pale', 'Eternal'];
+  const nouns = ['Hunter', 'Walker', 'Stalker', 'Slayer', 'Seeker', 'Watcher', 'Phantom', 'Specter', 'Raven', 'Wolf'];
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const num = Math.floor(Math.random() * 100);
+  return `${adj}${noun}${num}`;
+};
+
+const ROLE_INFO = {
+  Investigator: {
+    alignment: 'Good',
+    ability: 'Each night, investigate one player to learn if they are suspicious.',
+    goal: 'Eliminate all vampires and survive.'
+  },
+  Lookout: {
+    alignment: 'Good',
+    ability: 'Each night, watch one player to see who visits them.',
+    goal: 'Eliminate all vampires and survive.'
+  },
+  Doctor: {
+    alignment: 'Good',
+    ability: 'Each night, heal one player to save them from vampire attacks. You have 3 heals per game.',
+    goal: 'Eliminate all vampires and survive.'
+  },
+  Jailor: {
+    alignment: 'Good',
+    ability: 'Each night, jail one player for private interrogation. You can choose to execute the prisoner.',
+    goal: 'Eliminate all vampires and survive. Warning: executing an innocent will cost your life!'
+  },
+  Citizen: {
+    alignment: 'Good',
+    ability: 'No special ability. Use your vote wisely during the day.',
+    goal: 'Eliminate all vampires and survive.'
+  },
+  Vampire: {
+    alignment: 'Evil',
+    ability: 'Every other night, vote to turn a citizen. The target with the most votes is turned (ties are random)!',
+    goal: 'Turn or eliminate all non-vampires.'
+  },
+  'Vampire Framer': {
+    alignment: 'Evil',
+    ability: 'Each night, frame one player to appear as a vampire to investigators. Every other night, also vote to turn someone.',
+    goal: 'Turn or eliminate all non-vampires.'
+  },
+  Jester: {
+    alignment: 'Neutral',
+    ability: 'No special night ability. Try to act suspicious!',
+    goal: 'Get yourself voted out during the day to win.'
+  }
+};
+
+// Pre-generate snowflake data outside component to prevent regeneration
+const SNOWFLAKE_DATA = Array.from({ length: 50 }, (_, i) => ({
+  id: i,
+  left: `${Math.random() * 100}%`,
+  animationDuration: `${5 + Math.random() * 10}s`,
+  animationDelay: `${Math.random() * 5}s`,
+  fontSize: `${0.5 + Math.random() * 1}rem`,
+}));
+
+// Snowfall component defined outside App to prevent re-creation
+const Snowfall = React.memo(function Snowfall() {
+  return (
+    <div className="snowfall">
+      {SNOWFLAKE_DATA.map((flake) => (
+        <div
+          key={flake.id}
+          className="snowflake"
+          style={{
+            left: flake.left,
+            animationDuration: flake.animationDuration,
+            animationDelay: flake.animationDelay,
+            fontSize: flake.fontSize,
+          }}
+        >
+          ❄
+        </div>
+      ))}
+    </div>
+  );
+});
+
+export default function VampireGame({
+  socket,
+  gameCode,
+  playerId,
+  displayName,
+  initialTheme = 'dark',
+}) {
+  const [view, setView] = useState('GAME');
+  const [name, setName] = useState(displayName);
+  const [code, setCode] = useState(gameCode);
+  const [pendingCode, setPendingCode] = useState(''); // Code waiting for username
+  const [isCreating, setIsCreating] = useState(false); // Track if we're creating vs joining
+  const [gameState, setGameState] = useState(null);
+  const [myRole, setMyRole] = useState(null);
+  const [myId, setMyId] = useState(playerId);
+  const [privateMsg, setPrivateMsg] = useState('');
+  const [timer, setTimer] = useState(0);
+  const [selectedPlayerRole, setSelectedPlayerRole] = useState(null); // For host role viewing modal
+  const [nightTarget, setNightTarget] = useState(null); // Track who we targeted at night
+  const [frameTarget, setFrameTarget] = useState(null); // Track frame target for Vampire Framer (separate from nightTarget)
+  const [voteTarget, setVoteTarget] = useState(null); // Track who we voted for
+  const [roleRevealed, setRoleRevealed] = useState(false); // Track if role is revealed
+  const [jailChatInput, setJailChatInput] = useState(''); // Jail chat input
+  const [jailChat, setJailChat] = useState([]); // Jail chat messages
+  const [executionPending, setExecutionPending] = useState(false); // Track if Jailor decided to execute
+  const [gameChat, setGameChat] = useState([]); // Game chat messages
+  const [chatInput, setChatInput] = useState(''); // Game chat input
+  const [editingNPC, setEditingNPC] = useState(null); // NPC being edited (holds { id, name, personality, talkingStyle, elevenlabsVoiceId })
+  const [elevenlabsOptions, setElevenlabsOptions] = useState({ models: [], voices: [] }); // ElevenLabs models and voices
+  const prevGameState = useRef(null); // Track previous game state for transitions
+  const chatMessagesRef = useRef(null); // Ref for auto-scrolling chat
+  const jailChatMessagesRef = useRef(null); // Ref for auto-scrolling jail chat
+  const ttsAudioQueue = useRef([]); // Queue for TTS audio to prevent overlap
+  const ttsIsPlaying = useRef(false); // Track if TTS audio is currently playing
+
+  // Voice input (Speech-to-Text) state
+  const [isRecording, setIsRecording] = useState(false);
+  const [sttAvailable, setSTTAvailable] = useState(false);
+  const [isListening, setIsListening] = useState(false); // For VAD mode
+  const [audioLevel, setAudioLevel] = useState(0); // For VAD visual indicator
+  const mediaRecorderRef = useRef(null);
+  const audioStreamRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const vadTimeoutRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const micPermissionRequestedRef = useRef(false); // Track if we've requested mic permission this game
+
+  // Settings - also persist these
+  const [settings, setSettings] = useState(() => {
+    const defaultSettings = {
+      discussionTime: 120,
+      nightTime: 60,
+      votingTime: 15,
+      revealRole: true,
+      chatEnabled: true,
+      enableAI: false,
+      enableTTS: false,
+      enableSTT: false,
+      voiceInputMode: 'push-to-talk',
+      ttsProvider: 'google',
+      sttProvider: 'deepgram',
+      elevenlabsModel: 'eleven_turbo_v2_5',
+      npcNationality: 'english',
+      npcAllowedRoles: {
+        Investigator: true,
+        Lookout: true,
+        Doctor: true,
+        Jailor: true,
+        Vampire: true,
+        'Vampire Framer': true,
+        Jester: true,
+        Citizen: true
+      }
+    };
+    return defaultSettings;
+  });
+
+  // Role configuration for custom games
+  const [roleConfig, setRoleConfig] = useState(() => {
+    const defaultConfig = {
+      useDefault: true,
+      Investigator: 1,
+      Lookout: 1,
+      Doctor: 1,
+      Jailor: 0,
+      Vampire: 1,
+      'Vampire Framer': 0,
+      Jester: 1
+    };
+    return defaultConfig;
+  });
+
+  const [selectedTheme, setSelectedTheme] = useState(initialTheme);
+
+  useEffect(() => {
+    setSelectedTheme(initialTheme);
+  }, [initialTheme]);
+  
+  // Voice Activity Detection (VAD) functions - defined early to avoid "use before define"
+  const stopVADListening = useCallback(() => {
+    setIsListening(false);
+    setAudioLevel(0);
+
+    if (vadTimeoutRef.current) {
+      cancelAnimationFrame(vadTimeoutRef.current);
+      vadTimeoutRef.current = null;
+    }
+
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+  }, []);
+
+  const startVADListening = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+
+      // Set up audio analysis for VAD
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+      analyser.fftSize = 256;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let isCurrentlyRecording = false;
+      let audioChunks = [];
+      let mediaRecorder = null;
+      let cooldownUntil = 0; // Timestamp until which new recordings are blocked
+
+      const SILENCE_THRESHOLD = 25; // Audio level threshold
+      const SILENCE_DURATION = 800; // ms of silence before stopping recording
+      const COOLDOWN_DURATION = 1000; // ms to wait after sending before allowing new recording
+
+      const checkAudioLevel = () => {
+        if (!analyserRef.current) return;
+
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        setAudioLevel(Math.min(100, average * 2)); // Scale for visual indicator
+
+        const now = Date.now();
+
+        if (average > SILENCE_THRESHOLD) {
+          // Voice detected
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+
+          // Only start recording if not in cooldown period
+          if (!isCurrentlyRecording && now >= cooldownUntil) {
+            // Start recording
+            isCurrentlyRecording = true;
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+
+            mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                audioChunks.push(event.data);
+              }
+            };
+
+            mediaRecorder.onstop = () => {
+              if (audioChunks.length > 0) {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  const base64Audio = reader.result.split(',')[1];
+                  socket.emit('voice_audio_chunk', { code, audioChunk: base64Audio });
+                  // Set cooldown to prevent immediate re-recording
+                  cooldownUntil = Date.now() + COOLDOWN_DURATION;
+                };
+                reader.readAsDataURL(audioBlob);
+              }
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+          }
+        } else if (isCurrentlyRecording && !silenceTimeoutRef.current) {
+          // Silence detected while recording, start countdown
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+              mediaRecorder.stop();
+              isCurrentlyRecording = false;
+              setIsRecording(false);
+            }
+            silenceTimeoutRef.current = null;
+          }, SILENCE_DURATION);
+        }
+
+        vadTimeoutRef.current = requestAnimationFrame(checkAudioLevel);
+      };
+
+      setIsListening(true);
+      checkAudioLevel();
+    } catch (err) {
+      console.error('[Voice VAD] Microphone access denied:', err);
+      alert('Microphone access denied. Please allow microphone permissions in your browser settings.');
+    }
+  }, [code, socket]);
+
+  useEffect(() => {
+    setCode(gameCode);
+    setMyId(playerId);
+    setName(displayName);
+    setView('GAME');
+    socket.emit('rejoin_game', { code: gameCode, playerId });
+  }, [displayName, gameCode, playerId, socket]);
+
+  // 1.2 Handle phase transitions/side-effects
+  useEffect(() => {
+    const prev = prevGameState.current;
+    if (!gameState) return;
+
+    // Reset nightTarget and frameTarget when entering a new NIGHT phase (different round)
+    if (gameState.state === 'NIGHT' && (!prev || prev.state !== 'NIGHT' || prev.round !== gameState.round)) {
+      setNightTarget(null);
+      setFrameTarget(null);
+      setJailChat([]); // Reset jail chat for new night
+      setExecutionPending(false); // Reset execution state for new night
+    }
+    // Reset voteTarget when entering DAY_VOTE
+    if (gameState.state === 'DAY_VOTE' && prev?.state !== 'DAY_VOTE') {
+      setVoteTarget(null);
+    }
+    // Reset game chat when entering DAY_DISCUSS (cleared by server)
+    if (gameState.state === 'DAY_DISCUSS' && prev?.state !== 'DAY_DISCUSS') {
+      setGameChat(gameState.gameChat || []);
+    }
+
+    // Sync game chat from gameState
+    if (gameState.gameChat && JSON.stringify(gameState.gameChat) !== JSON.stringify(gameChat)) {
+      setGameChat(gameState.gameChat);
+    }
+
+    // Sync jail chat from gameState when we first enter jail (jailInfo appears)
+    if (gameState.jailInfo && (!prev?.jailInfo) && gameState.jailInfo.jailChat) {
+      setJailChat(gameState.jailInfo.jailChat);
+    }
+
+    prevGameState.current = gameState;
+  }, [gameState, gameChat]);
+
+  // Request microphone permission when game starts (if voice chat is enabled)
+  useEffect(() => {
+    // Check if game is now in a playing state (not LOBBY)
+    const isPlaying = gameState?.state && gameState.state !== 'LOBBY';
+
+    // Check if voice chat is enabled (using gameState settings which are broadcast from server)
+    const voiceChatEnabled = gameState?.enableSTT && sttAvailable;
+
+    // Reset the flag when returning to LOBBY
+    if (gameState?.state === 'LOBBY') {
+      micPermissionRequestedRef.current = false;
+      return;
+    }
+
+    // Request permission once when game starts with voice chat enabled
+    if (isPlaying && voiceChatEnabled && !micPermissionRequestedRef.current) {
+      micPermissionRequestedRef.current = true;
+      console.log('[Voice] Game started with voice chat enabled - requesting microphone permission');
+      // Request microphone permission but immediately release it
+      // This prompts the user without keeping the mic active
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          console.log('[Voice] Microphone permission granted');
+          // Stop all tracks immediately - we just wanted permission
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(err => {
+          console.error('[Voice] Microphone permission denied:', err);
+          alert('Microphone access denied. Voice chat will not work. Please allow microphone permissions in your browser settings.');
+        });
+    }
+  }, [gameState?.state, gameState?.enableSTT, sttAvailable]);
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [gameChat]);
+
+  // Auto-scroll jail chat to bottom when new messages arrive
+  useEffect(() => {
+    if (jailChatMessagesRef.current) {
+      jailChatMessagesRef.current.scrollTop = jailChatMessagesRef.current.scrollHeight;
+    }
+  }, [jailChat]);
+
+  // 1.5 Theme switching based on game phase and user selection
+  useEffect(() => {
+    const isDayPhase = gameState?.state === 'DAY_DISCUSS' || gameState?.state === 'DAY_VOTE';
+    const isNightPhase = gameState?.state === 'NIGHT';
+    const isInGame = gameState?.state && gameState.state !== 'LOBBY';
+    const gameRoot = document.getElementById('vampires-game-root');
+    if (!gameRoot) return;
+
+    // Always remove phase attribute first
+    gameRoot.removeAttribute('data-phase');
+
+    if (selectedTheme === 'christmas') {
+      // Christmas theme with day/night variants
+      if (isInGame) {
+        if (isDayPhase) {
+          gameRoot.setAttribute('data-theme', 'christmas-day');
+        } else if (isNightPhase) {
+          gameRoot.setAttribute('data-theme', 'christmas-night');
+        } else {
+          gameRoot.setAttribute('data-theme', 'christmas');
+        }
+      } else {
+        // Menu/lobby uses base christmas theme
+        gameRoot.setAttribute('data-theme', 'christmas');
+      }
+    } else if (isInGame) {
+      // During gameplay with non-Christmas theme, use day/night themes
+      if (isDayPhase) {
+        gameRoot.setAttribute('data-theme', 'day');
+      } else if (isNightPhase) {
+        gameRoot.removeAttribute('data-theme');
+        gameRoot.setAttribute('data-phase', 'night');
+      } else {
+        gameRoot.removeAttribute('data-theme');
+      }
+    } else {
+      // In menu/lobby with non-Christmas theme
+      if (selectedTheme === 'day') {
+        gameRoot.setAttribute('data-theme', 'day');
+      } else {
+        gameRoot.removeAttribute('data-theme');
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      gameRoot.removeAttribute('data-theme');
+      gameRoot.removeAttribute('data-phase');
+    };
+  }, [gameState?.state, selectedTheme]);
+
+  // Auto-start/stop VAD listening based on game phase and settings
+  useEffect(() => {
+    const isDayDiscuss = gameState?.state === 'DAY_DISCUSS';
+    const myPlayer = gameState?.players.find(p => p.id === myId);
+    // Use gameState settings (broadcast from server) so all players get the host's settings
+    const shouldAutoStartVAD =
+      isDayDiscuss &&
+      myPlayer?.alive &&
+      gameState?.voiceInputMode === 'voice-activity' &&
+      gameState?.enableSTT &&
+      sttAvailable;
+
+    if (shouldAutoStartVAD && !isListening) {
+      startVADListening();
+    } else if (!isDayDiscuss && isListening) {
+      stopVADListening();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (isListening) {
+        stopVADListening();
+      }
+    };
+  }, [gameState?.state, gameState?.players, myId, gameState?.voiceInputMode, gameState?.enableSTT, sttAvailable, isListening, startVADListening, stopVADListening]);
+
+  // Handle theme change
+  const changeTheme = (theme) => {
+    setSelectedTheme(theme);
+    localStorage.setItem('vampire_theme', theme);
+  };
+
+  // 2. Socket Listeners - setup once on mount
+  // Use refs to access current values inside socket handlers to avoid stale closures
+  const nameRef = useRef(name);
+  useEffect(() => {
+    nameRef.current = name;
+  }, [name]);
+
+  // Helpers
+  const saveSession = useCallback((c, id, n) => {
+    localStorage.setItem('vampire_code', c);
+    localStorage.setItem('vampire_id', id);
+    localStorage.setItem('vampire_name', n);
+    localStorage.setItem('vampire_view', 'LOBBY');
+    setCode(c);
+    setMyId(id);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    localStorage.removeItem('vampire_code');
+    localStorage.removeItem('vampire_id');
+    localStorage.removeItem('vampire_name');
+    localStorage.removeItem('vampire_view');
+    localStorage.removeItem('vampire_role');
+    localStorage.removeItem('vampire_private_msg');
+    localStorage.removeItem('vampire_settings');
+    localStorage.removeItem('vampire_role_config');
+    setView('GAME');
+    setCode(gameCode);
+    setMyId(playerId);
+    setMyRole(null);
+    setPrivateMsg('');
+  }, [gameCode, playerId]);
+
+  useEffect(() => {
+    const handleGameCreated = ({ code, playerId }) => {
+      saveSession(code, playerId, nameRef.current);
+      setView('LOBBY');
+    };
+
+    const handleJoined = ({ code, playerId }) => {
+      saveSession(code, playerId, nameRef.current);
+      setMyId(playerId);
+      setView('GAME');
+    };
+
+    const handleGameUpdate = (data) => {
+      setGameState(data);
+      setTimer(data.timer);
+      // Update view based on game state
+      if (data.state === 'LOBBY') {
+        setView('LOBBY');
+        localStorage.setItem('vampire_view', 'LOBBY');
+      } else if (data.state !== 'LOBBY') {
+        setView('GAME');
+        localStorage.setItem('vampire_view', 'GAME');
+      }
+    };
+
+    const handleTimerUpdate = (t) => setTimer(t);
+
+    const handleRoleInfo = (data) => {
+      setMyRole(data);
+      localStorage.setItem('vampire_role', JSON.stringify(data));
+    };
+
+    const handlePrivateMessage = (msg) => {
+      setPrivateMsg(prev => {
+        const newMsg = `> ${msg}\n` + prev;
+        localStorage.setItem('vampire_private_msg', newMsg);
+        return newMsg;
+      });
+    };
+
+    const handleKicked = () => {
+      clearSession();
+      alert("You have been kicked from the game.");
+      window.location.reload();
+    };
+
+    const handleError = (msg) => {
+      // If error related to rejoin, clear storage
+      if (msg === 'Game no longer exists.') clearSession();
+      alert(msg);
+    };
+
+    const handlePlayerRoleInfo = (data) => {
+      setSelectedPlayerRole(data);
+    };
+
+    const handleJailChatUpdate = (chatMessages) => {
+      setJailChat(chatMessages);
+    };
+
+    const handleChatUpdate = (chatMessages) => {
+      setGameChat(chatMessages);
+    };
+
+    const handleNPCDetails = (data) => {
+      setEditingNPC(data);
+    };
+
+    const handleElevenlabsOptions = (data) => {
+      setElevenlabsOptions(data);
+    };
+
+    // TTS Audio handler with queue for sequential playback
+    const handleTTSAudio = ({ audio, senderName, senderId }) => {
+      console.log(`[TTS] Received audio for ${senderName}`);
+
+      // Add to queue
+      ttsAudioQueue.current.push({ audio, senderName, senderId });
+
+      // Process queue if not already playing
+      const processQueue = () => {
+        if (ttsIsPlaying.current || ttsAudioQueue.current.length === 0) return;
+
+        ttsIsPlaying.current = true;
+        const { audio } = ttsAudioQueue.current.shift();
+
+        try {
+          // Decode base64 to binary
+          const binaryString = atob(audio);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          // Create blob and audio element
+          const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audioElement = new Audio(audioUrl);
+
+          audioElement.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            ttsIsPlaying.current = false;
+            processQueue(); // Play next in queue
+          };
+
+          audioElement.onerror = (err) => {
+            console.error('[TTS] Audio playback error:', err);
+            URL.revokeObjectURL(audioUrl);
+            ttsIsPlaying.current = false;
+            processQueue(); // Try next in queue
+          };
+
+          audioElement.play().catch(err => {
+            console.error('[TTS] Failed to play audio:', err);
+            ttsIsPlaying.current = false;
+            processQueue();
+          });
+        } catch (err) {
+          console.error('[TTS] Error processing audio:', err);
+          ttsIsPlaying.current = false;
+          processQueue();
+        }
+      };
+
+      processQueue();
+    };
+
+    socket.on('game_created', handleGameCreated);
+    socket.on('joined', handleJoined);
+    socket.on('game_update', handleGameUpdate);
+    socket.on('timer_update', handleTimerUpdate);
+    socket.on('role_info', handleRoleInfo);
+    socket.on('private_message', handlePrivateMessage);
+    socket.on('kicked', handleKicked);
+    socket.on('error', handleError);
+    socket.on('player_role_info', handlePlayerRoleInfo);
+    socket.on('jail_chat_update', handleJailChatUpdate);
+    socket.on('chat_update', handleChatUpdate);
+    socket.on('npc_details', handleNPCDetails);
+    socket.on('tts_audio', handleTTSAudio);
+    socket.on('elevenlabs_options', handleElevenlabsOptions);
+
+    // STT availability handler
+    const handleSTTAvailable = (available) => {
+      setSTTAvailable(available);
+    };
+    socket.on('stt_available', handleSTTAvailable);
+
+    // Request ElevenLabs options and STT availability on mount
+    socket.emit('get_elevenlabs_options');
+    socket.emit('get_stt_available');
+
+    // Cleanup: remove only the specific listeners we added
+    return () => {
+      socket.off('game_created', handleGameCreated);
+      socket.off('joined', handleJoined);
+      socket.off('game_update', handleGameUpdate);
+      socket.off('timer_update', handleTimerUpdate);
+      socket.off('role_info', handleRoleInfo);
+      socket.off('private_message', handlePrivateMessage);
+      socket.off('kicked', handleKicked);
+      socket.off('error', handleError);
+      socket.off('player_role_info', handlePlayerRoleInfo);
+      socket.off('jail_chat_update', handleJailChatUpdate);
+      socket.off('chat_update', handleChatUpdate);
+      socket.off('npc_details', handleNPCDetails);
+      socket.off('tts_audio', handleTTSAudio);
+      socket.off('elevenlabs_options', handleElevenlabsOptions);
+      socket.off('stt_available', handleSTTAvailable);
+    };
+    // Debug connection events removed
+  }, [clearSession, saveSession, socket]);
+
+  // Actions
+  const initiateCreateGame = () => {
+    setIsCreating(true);
+    setView('ENTER_USERNAME');
+  };
+
+  const initiateJoinGame = () => {
+    if (!code.trim()) return alert("Code required");
+    setPendingCode(code.toUpperCase());
+    setIsCreating(false);
+    setView('ENTER_USERNAME');
+  };
+
+  const submitUsername = () => {
+    const finalName = name.trim() || generateRandomUsername();
+    setName(finalName);
+
+    if (isCreating) {
+      socket.emit('create_game', { name: finalName, settings, roleConfig });
+    } else {
+      socket.emit('join_game', { code: pendingCode, name: finalName });
+    }
+  };
+
+  const kickPlayer = (targetId) => {
+    if (window.confirm("Kick this player?")) {
+      socket.emit('kick_player', { code, targetId });
+    }
+  };
+
+  const startGame = () => socket.emit('start_game', { code, roleConfig });
+  const sendAction = (targetId, type) => {
+    // Special handling for EXECUTE - no targetId, target is the jailed player
+    // Server sends the private message, so we don't add one here
+    if (type === 'EXECUTE') {
+      socket.emit('night_action', { code, action: { targetId: null, type } });
+      return;
+    }
+
+    // Special handling for FRAME - uses separate frameTarget state so Vampire Framer can do both FRAME and BITE
+    if (type === 'FRAME') {
+      // Toggle behavior: if clicking same target, clear it
+      if (frameTarget === targetId) {
+        socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
+        setFrameTarget(null);
+        setPrivateMsg(prev => {
+          const newMsg = `> Cancelled framing\n` + prev;
+          localStorage.setItem('vampire_private_msg', newMsg);
+          return newMsg;
+        });
+        return;
+      }
+      socket.emit('night_action', { code, action: { targetId, type } });
+      setFrameTarget(targetId);
+      const targetPlayer = gameState?.players.find(p => p.id === targetId);
+      setPrivateMsg(prev => {
+        const newMsg = `> 🎭 Framing: ${targetPlayer?.name || 'Unknown'}\n` + prev;
+        localStorage.setItem('vampire_private_msg', newMsg);
+        return newMsg;
+      });
+      return;
+    }
+
+    // Toggle behavior: if clicking same target with same action, clear it
+    if (nightTarget?.targetId === targetId && nightTarget?.type === type) {
+      socket.emit('night_action', { code, action: { targetId: null, type, clear: true } });
+      setNightTarget(null);
+      setPrivateMsg(prev => {
+        const newMsg = `> Cancelled action\n` + prev;
+        localStorage.setItem('vampire_private_msg', newMsg);
+        return newMsg;
+      });
+      return;
+    }
+    socket.emit('night_action', { code, action: { targetId, type } });
+    setNightTarget({ targetId, type });
+    const targetPlayer = gameState?.players.find(p => p.id === targetId);
+    setPrivateMsg(prev => {
+      const actionNames = { 'INVESTIGATE': 'Investigating', 'LOOKOUT': 'Watching', 'BITE': 'Voting for', 'HEAL': 'Healing', 'JAIL': '🔒 Jailing', 'FRAME': '🎭 Framing' };
+      const newMsg = `> ${actionNames[type] || 'Action on'}: ${targetPlayer?.name || 'Unknown'}\n` + prev;
+      localStorage.setItem('vampire_private_msg', newMsg);
+      return newMsg;
+    });
+  };
+  const vote = (targetId) => {
+    // Toggle behavior: if clicking same target, unvote
+    if (voteTarget === targetId) {
+      socket.emit('day_vote', { code, targetId: null });
+      setVoteTarget(null);
+      return;
+    }
+    socket.emit('day_vote', { code, targetId });
+    setVoteTarget(targetId);
+  };
+  const skipTimer = () => socket.emit('skip_timer', { code });
+  const endGame = () => {
+    if (window.confirm("Are you sure you want to end the game?")) {
+      socket.emit('end_game', { code });
+    }
+  };
+
+  const addNPC = () => socket.emit('add_npc', { code });
+
+  const viewPlayerRole = (targetId) => {
+    socket.emit('get_player_role', { code, targetId });
+  };
+
+  const changePlayerRole = (targetId, newRole) => {
+    socket.emit('change_player_role', { code, targetId, newRole });
+  };
+
+  const changePlayerAliveStatus = (targetId, isAlive) => {
+    socket.emit('set_player_alive_status', { code, targetId, alive: isAlive });
+  };
+
+  // Voice recording functions
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      const audioChunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = reader.result.split(',')[1];
+          socket.emit('voice_audio_chunk', { code, audioChunk: base64Audio });
+        };
+        reader.readAsDataURL(audioBlob);
+
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('[Voice] Microphone access denied:', err);
+      alert('Microphone access denied. Please allow microphone permissions in your browser settings.');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  // (VAD functions moved higher up to avoid "use before define")
+
+  // --- RENDER ---
+
+  if (view !== 'GAME') {
+    return (
+      <div id="vampires-game-root" className="vampires-shell container center-screen">
+        {selectedTheme === 'christmas' && <Snowfall />}
+        <div className="card menu-card">
+          <h2>Preparing your classroom game...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'MENU') {
+    return (
+      <div id="vampires-game-root" className="vampires-shell container center-screen">
+        {selectedTheme === 'christmas' && <Snowfall />}
+        <h1 className="title-blood">VAMPIRES</h1>
+
+        <div className="row">
+          <div className="card menu-card">
+            <h3>Create Room</h3>
+            <p className="hint-text">Configure game settings in the lobby</p>
+            <button className="btn-primary" onClick={initiateCreateGame}>Create Game</button>
+          </div>
+
+          <div className="card menu-card">
+            <h3>Join Room</h3>
+            <input className="input-modern" placeholder="ROOM CODE" value={code} onChange={e => setCode(e.target.value.toUpperCase())} />
+            <button className="btn-secondary" onClick={initiateJoinGame}>Join Game</button>
+          </div>
+        </div>
+
+        {/* Theme Selector */}
+        <div className="theme-selector">
+          <button
+            className={`theme-btn theme-dark ${selectedTheme === 'dark' ? 'active' : ''}`}
+            onClick={() => changeTheme('dark')}
+            title="Dark Theme"
+          >
+            🌙
+          </button>
+          <button
+            className={`theme-btn theme-light ${selectedTheme === 'day' ? 'active' : ''}`}
+            onClick={() => changeTheme('day')}
+            title="Light Theme"
+          >
+            ☀️
+          </button>
+          <button
+            className={`theme-btn theme-christmas ${selectedTheme === 'christmas' ? 'active' : ''}`}
+            onClick={() => changeTheme('christmas')}
+            title="Christmas Theme"
+          >
+            🎄
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'ENTER_USERNAME') {
+    return (
+      <div id="vampires-game-root" className="vampires-shell container center-screen">
+        {selectedTheme === 'christmas' && <Snowfall />}
+        <h1 className="title-blood">VAMPIRES</h1>
+        <div className="card menu-card username-card">
+          <h3>{isCreating ? 'Create Your Identity' : 'Enter Your Identity'}</h3>
+          <p className="hint-text">Leave empty for a random name</p>
+          <div className="input-group">
+            <input
+              className="input-modern"
+              placeholder="Enter Username (optional)"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyPress={e => e.key === 'Enter' && submitUsername()}
+              autoFocus
+            />
+          </div>
+          <div className="button-row">
+            <button className="btn-secondary" onClick={() => { setView('MENU'); setName(''); }}>Back</button>
+            <button className="btn-primary" onClick={submitUsername}>
+              {name.trim() ? 'Continue' : 'Get Random Name'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'LOBBY') {
+    const isHost = gameState?.host === myId;
+    const playerCount = gameState?.players?.length || 0;
+
+    // Role configuration helpers
+    const roleData = [
+      { key: 'Investigator', icon: '🔍', alignment: 'good', name: 'Investigator' },
+      { key: 'Lookout', icon: '👁️', alignment: 'good', name: 'Lookout' },
+      { key: 'Doctor', icon: '💉', alignment: 'good', name: 'Doctor' },
+      { key: 'Jailor', icon: '🔒', alignment: 'good', name: 'Jailor' },
+      { key: 'Vampire', icon: '🧛', alignment: 'evil', name: 'Vampire' },
+      { key: 'Vampire Framer', icon: '🎭', alignment: 'evil', name: 'Vampire Framer' },
+      { key: 'Jester', icon: '🃏', alignment: 'neutral', name: 'Jester' }
+    ];
+
+    const totalConfiguredRoles = roleConfig.Investigator + roleConfig.Lookout + roleConfig.Doctor + (roleConfig.Jailor || 0) + roleConfig.Vampire + (roleConfig['Vampire Framer'] || 0) + roleConfig.Jester;
+    const citizenCount = Math.max(0, playerCount - totalConfiguredRoles);
+
+    const updateRoleCount = (roleKey, delta) => {
+      const newCount = Math.max(0, (roleConfig[roleKey] || 0) + delta);
+      const newConfig = { ...roleConfig, [roleKey]: newCount };
+      setRoleConfig(newConfig);
+      localStorage.setItem('vampire_role_config', JSON.stringify(newConfig));
+    };
+
+    const toggleRoleMode = (useDefault) => {
+      const newConfig = { ...roleConfig, useDefault };
+      setRoleConfig(newConfig);
+      localStorage.setItem('vampire_role_config', JSON.stringify(newConfig));
+    };
+
+    return (
+      <div id="vampires-game-root" className="vampires-shell container">
+        {selectedTheme === 'christmas' && <Snowfall />}
+        <div className="lobby-header">
+          <h1>Preparing classroom game...</h1>
+        </div>
+
+        {/* NPC Edit Modal */}
+        {editingNPC && (
+          <div className="modal-overlay" onClick={() => setEditingNPC(null)}>
+            <div className="modal-content npc-edit-modal" onClick={e => e.stopPropagation()}>
+              <h2>🤖 Edit NPC</h2>
+
+              <div className="npc-edit-form">
+                <div className="form-group">
+                  <label>Name</label>
+                  <input
+                    type="text"
+                    className="input-modern"
+                    value={editingNPC.name}
+                    onChange={e => setEditingNPC({ ...editingNPC, name: e.target.value })}
+                    placeholder="NPC Name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Personality Description</label>
+                  <textarea
+                    className="input-modern textarea-modern"
+                    value={editingNPC.personality}
+                    onChange={e => setEditingNPC({ ...editingNPC, personality: e.target.value })}
+                    placeholder="e.g., paranoid, aggressive, analytical, quiet..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Talking Style</label>
+                  <textarea
+                    className="input-modern textarea-modern"
+                    value={editingNPC.talkingStyle}
+                    onChange={e => setEditingNPC({ ...editingNPC, talkingStyle: e.target.value })}
+                    placeholder="e.g., uses slang, formal, stutters, speaks in riddles..."
+                    rows={3}
+                  />
+                </div>
+
+                {settings.ttsProvider === 'elevenlabs' && settings.enableTTS && (
+                  <div className="form-group">
+                    <label>🔊 ElevenLabs Voice</label>
+                    <select
+                      className="input-modern"
+                      value={editingNPC.elevenlabsVoiceId || ''}
+                      onChange={e => setEditingNPC({ ...editingNPC, elevenlabsVoiceId: e.target.value })}
+                    >
+                      <option value="">Random (Auto-assign)</option>
+                      {elevenlabsOptions.voices.map(voice => (
+                        <option key={voice.id} value={voice.id}>{voice.name} ({voice.gender})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="button-row">
+                <button className="btn-secondary" onClick={() => setEditingNPC(null)}>Cancel</button>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    socket.emit('update_npc', {
+                      code,
+                      targetId: editingNPC.id,
+                      name: editingNPC.name,
+                      personality: editingNPC.personality,
+                      talkingStyle: editingNPC.talkingStyle,
+                      elevenlabsVoiceId: editingNPC.elevenlabsVoiceId || null
+                    });
+                    setEditingNPC(null);
+                  }}
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="player-grid">
+          {gameState?.players.map(p => (
+            <div
+              key={p.id}
+              className={`player-chip ${p.isNPC ? 'npc-player' : ''} ${isHost && p.isNPC ? 'npc-editable' : ''}`}
+              onClick={() => {
+                if (isHost && p.isNPC) {
+                  socket.emit('get_npc_details', { code, targetId: p.id });
+                }
+              }}
+            >
+              <div className="avatar">{p.isNPC ? '🤖' : p.name.charAt(0).toUpperCase()}</div>
+              <span className="player-name">{p.name} {p.id === myId ? '(You)' : ''}</span>
+              {isHost && p.isNPC && <span className="npc-edit-icon">✏️</span>}
+              {isHost && p.id !== myId && (
+                <button className="btn-kick" onClick={(e) => { e.stopPropagation(); kickPlayer(p.id); }}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {isHost && (
+          <button className="btn-secondary btn-add-npc" onClick={addNPC}>
+            + Add NPC Player
+          </button>
+        )}
+
+        {/* Game Settings Panel - Host Only */}
+        {isHost && (
+          <div className="game-settings-panel">
+            <div className="game-settings-header">
+              <h3>⚙️ Game Settings</h3>
+            </div>
+            <div className="game-settings-grid">
+              <div className="game-setting-item">
+                <label>Discussion Time</label>
+                <div className="game-setting-input-row">
+                  <input
+                    type="number"
+                    min="10"
+                    max="600"
+                    value={settings.discussionTime}
+                    onChange={e => {
+                      const newSettings = { ...settings, discussionTime: parseInt(e.target.value) || 120 };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  />
+                  <span className="setting-unit">sec</span>
+                </div>
+              </div>
+              <div className="game-setting-item">
+                <label>Night Time</label>
+                <div className="game-setting-input-row">
+                  <input
+                    type="number"
+                    min="10"
+                    max="300"
+                    value={settings.nightTime}
+                    onChange={e => {
+                      const newSettings = { ...settings, nightTime: parseInt(e.target.value) || 60 };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  />
+                  <span className="setting-unit">sec</span>
+                </div>
+              </div>
+              <div className="game-setting-item">
+                <label>Voting Time</label>
+                <div className="game-setting-input-row">
+                  <input
+                    type="number"
+                    min="5"
+                    max="120"
+                    value={settings.votingTime}
+                    onChange={e => {
+                      const newSettings = { ...settings, votingTime: parseInt(e.target.value) || 15 };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  />
+                  <span className="setting-unit">sec</span>
+                </div>
+              </div>
+              <div className="game-setting-item checkbox-setting">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.chatEnabled !== false}
+                    onChange={e => {
+                      const newSettings = { ...settings, chatEnabled: e.target.checked };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  />
+                  Enable Chat
+                </label>
+              </div>
+              <div className="game-setting-item checkbox-setting">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={settings.enableAI || false}
+                    onChange={e => {
+                      const newSettings = { ...settings, enableAI: e.target.checked };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  />
+                  Enable AI NPCs
+                </label>
+              </div>
+              {settings.enableAI && (
+                <div className="game-setting-item">
+                  <label>NPCs Nationality</label>
+                  <select
+                    className="setting-select"
+                    value={settings.npcNationality || 'english'}
+                    onChange={e => {
+                      const newSettings = { ...settings, npcNationality: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  >
+                    <option value="english">English</option>
+                    <option value="lithuanian">Lithuanian</option>
+                  </select>
+                </div>
+              )}
+              {settings.enableAI && (
+                <div className="game-setting-item">
+                  <label>NPC Allowed Roles:</label>
+                  <div className="npc-roles-grid">
+                    {['Investigator', 'Lookout', 'Doctor', 'Jailor', 'Vampire', 'Vampire Framer', 'Jester', 'Citizen'].map(role => (
+                      <label key={role} className="npc-role-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={settings.npcAllowedRoles?.[role] !== false}
+                          onChange={e => {
+                            const newNpcAllowedRoles = {
+                              ...settings.npcAllowedRoles,
+                              [role]: e.target.checked
+                            };
+                            const newSettings = { ...settings, npcAllowedRoles: newNpcAllowedRoles };
+                            setSettings(newSettings);
+                            localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                            socket.emit('update_settings', { code, settings: newSettings });
+                          }}
+                        />
+                        <span className="role-name">{role}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {settings.enableAI && (
+                <div className="game-setting-item checkbox-setting">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableTTS || false}
+                      onChange={e => {
+                        const newSettings = { ...settings, enableTTS: e.target.checked };
+                        setSettings(newSettings);
+                        localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                        socket.emit('update_settings', { code, settings: newSettings });
+                      }}
+                    />
+                    🔊 NPC Text-to-Speech
+                  </label>
+                </div>
+              )}
+              {settings.enableAI && settings.enableTTS && (
+                <div className="game-setting-item">
+                  <label>TTS Provider:</label>
+                  <select
+                    value={settings.ttsProvider || 'google'}
+                    onChange={e => {
+                      const newSettings = { ...settings, ttsProvider: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  >
+                    <option value="google">Google Cloud TTS</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                  </select>
+                </div>
+              )}
+              {settings.enableAI && settings.enableTTS && settings.ttsProvider === 'elevenlabs' && (
+                <div className="game-setting-item">
+                  <label>ElevenLabs Model:</label>
+                  <select
+                    value={settings.elevenlabsModel || 'eleven_turbo_v2_5'}
+                    onChange={e => {
+                      const newSettings = { ...settings, elevenlabsModel: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  >
+                    {elevenlabsOptions.models.map(model => (
+                      <option key={model.id} value={model.id}>{model.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {settings.enableAI && (
+                <div className="game-setting-item checkbox-setting">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableSTT || false}
+                      disabled={!sttAvailable}
+                      onChange={e => {
+                        const newSettings = { ...settings, enableSTT: e.target.checked };
+                        setSettings(newSettings);
+                        localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                        socket.emit('update_settings', { code, settings: newSettings });
+                      }}
+                    />
+                    🎤 Enable Voice Chat {!sttAvailable && '(Not Available)'}
+                  </label>
+                </div>
+              )}
+              {settings.enableAI && settings.enableSTT && sttAvailable && (
+                <div className="game-setting-item">
+                  <label>STT Provider:</label>
+                  <select
+                    value={settings.sttProvider || 'deepgram'}
+                    onChange={e => {
+                      const newSettings = { ...settings, sttProvider: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  >
+                    <option value="deepgram">Deepgram NOVA-3</option>
+                    <option value="google">Google Cloud STT</option>
+                  </select>
+                </div>
+              )}
+              {settings.enableAI && settings.enableSTT && sttAvailable && (
+                <div className="game-setting-item">
+                  <label>Voice Input Mode:</label>
+                  <select
+                    className="setting-select"
+                    value={settings.voiceInputMode || 'push-to-talk'}
+                    onChange={e => {
+                      const newSettings = { ...settings, voiceInputMode: e.target.value };
+                      setSettings(newSettings);
+                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
+                      socket.emit('update_settings', { code, settings: newSettings });
+                    }}
+                  >
+                    <option value="push-to-talk">Push to Talk</option>
+                    <option value="voice-activity">Voice Activity Detection</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Role Configuration Panel - Host Only */}
+        {isHost && (
+          <div className="role-config-panel">
+            <div className="role-config-header">
+              <h3>🎭 Role Configuration</h3>
+              <div className="role-config-toggle">
+                <button
+                  className={`toggle-btn ${roleConfig.useDefault ? 'active' : ''}`}
+                  onClick={() => toggleRoleMode(true)}
+                >
+                  Default
+                </button>
+                <button
+                  className={`toggle-btn ${!roleConfig.useDefault ? 'active' : ''}`}
+                  onClick={() => toggleRoleMode(false)}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+
+            {roleConfig.useDefault ? (
+              <div className="role-config-default-message">
+                Roles will be automatically assigned based on player count.
+                <br />
+                <small>(~10% each for Investigators, Lookouts, Vampires, 1 Jester, rest Citizens)</small>
+              </div>
+            ) : (
+              <>
+                <div className="role-config-grid">
+                  {roleData.map(role => (
+                    <div key={role.key} className={`role-config-card ${role.alignment}`}>
+                      <div className="role-config-card-header">
+                        <div className="role-config-card-title">
+                          <span className="role-config-icon">{role.icon}</span>
+                          <span className="role-config-name">{role.name}</span>
+                        </div>
+                        <span className={`role-config-alignment ${role.alignment}`}>
+                          {role.alignment}
+                        </span>
+                      </div>
+                      <div className="role-config-counter">
+                        <button
+                          className="counter-btn"
+                          onClick={() => updateRoleCount(role.key, -1)}
+                          disabled={roleConfig[role.key] <= 0}
+                        >
+                          −
+                        </button>
+                        <span className="counter-value">{roleConfig[role.key] || 0}</span>
+                        <button
+                          className="counter-btn"
+                          onClick={() => updateRoleCount(role.key, 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Citizen card - shows auto-calculated count */}
+                  <div className="role-config-card good">
+                    <div className="role-config-card-header">
+                      <div className="role-config-card-title">
+                        <span className="role-config-icon">👤</span>
+                        <span className="role-config-name">Citizen</span>
+                      </div>
+                      <span className="role-config-alignment good">good</span>
+                    </div>
+                    <div className="role-config-counter">
+                      <span className="counter-value" style={{ minWidth: 'auto', opacity: 0.7 }}>
+                        {citizenCount} (auto)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="role-config-summary">
+                  <div className="role-summary-item">
+                    Players: <span>{playerCount}</span>
+                  </div>
+                  <div className="role-summary-item">
+                    Configured: <span>{totalConfiguredRoles}</span> + <span>{citizenCount}</span> Citizens
+                  </div>
+                  {totalConfiguredRoles > playerCount && (
+                    <div className="role-summary-warning">
+                      ⚠️ More roles than players! Some roles will be randomly excluded.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {isHost ? (
+          <button className="btn-primary btn-large" onClick={startGame}>START NIGHT</button>
+        ) : (
+          <div className="waiting-text">Waiting for host to start...</div>
+        )}
+      </div>
+    );
+  }
+
+  // GAME VIEW
+  const amIAlive = gameState?.players.find(p => p.id === myId)?.alive;
+  const isNight = gameState?.state === 'NIGHT';
+  const isVoting = gameState?.state === 'DAY_VOTE';
+  const canTurn = (gameState?.round % 2 === 0);
+  const isHost = gameState?.host === myId;
+  const isGameActive = gameState?.state !== 'LOBBY' && gameState?.state !== 'GAME_OVER';
+
+  return (
+    <div id="vampires-game-root" className="vampires-shell container game-layout">
+      {selectedTheme === 'christmas' && <Snowfall />}
+      <div className="game-header">
+        <div className="phase-indicator">
+          <span className="phase-label">{gameState?.state.replace('_', ' ')}</span>
+          <span className="timer-badge">{timer}s</span>
+        </div>
+        <div className="role-display" onClick={() => setRoleRevealed(true)} title="Click to see your role">
+          <span className="role-label">Role</span>
+          <span className="role-value">Show</span>
+        </div>
+        {isHost && isGameActive && (
+          <div className="host-controls">
+            <button className="btn-small btn-skip" onClick={skipTimer}>Skip Timer</button>
+            <button className="btn-small btn-end" onClick={endGame}>End Game</button>
+          </div>
+        )}
+      </div>
+
+      {/* My Role Info Panel */}
+      {roleRevealed && (
+        <div className="modal-overlay" onClick={() => setRoleRevealed(false)}>
+          <div className="modal-content role-info-panel" onClick={e => e.stopPropagation()}>
+            <h2>Your Role</h2>
+            <div className={`role-name ${myRole?.alignment}`}>{myRole?.role || '???'}</div>
+            <div className="role-details">
+              <div className="role-detail-row">
+                <span className="detail-label">Alignment</span>
+                <span className={`detail-value alignment-${myRole?.alignment}`}>
+                  {ROLE_INFO[myRole?.role]?.alignment || myRole?.alignment || 'Unknown'}
+                </span>
+              </div>
+              <div className="role-detail-row">
+                <span className="detail-label">Ability</span>
+                <span className="detail-value">{ROLE_INFO[myRole?.role]?.ability || 'Unknown ability'}</span>
+              </div>
+              <div className="role-detail-row">
+                <span className="detail-label">Goal</span>
+                <span className="detail-value">{ROLE_INFO[myRole?.role]?.goal || 'Unknown goal'}</span>
+              </div>
+            </div>
+            <button className="btn-secondary" onClick={() => setRoleRevealed(false)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      {amIAlive === false && <div className="banner-dead">YOU ARE DEAD</div>}
+
+      {/* Vampire voting info panel */}
+      {myRole?.role === 'Vampire' && isNight && canTurn && gameState?.vampireInfo?.needsVoting && (
+        <div className="vampire-voting-banner">
+          🧛 Vampire Vote: {gameState.vampireInfo.totalVampires} vampires active.
+          Target with the most votes will be turned!
+        </div>
+      )}
+
+      {/* Doctor Info Banner */}
+      {myRole?.role === 'Doctor' && (
+        <div className="role-info-banner doctor-banner">
+          💉 You have <strong>{gameState?.healsRemaining ?? '?'}</strong> heals remaining.
+        </div>
+      )}
+
+      {/* Jail Chat Modal - shows for Jailor with prisoner or jailed player */}
+      {isNight && gameState?.jailInfo && (
+        <div className="jail-modal">
+          <div className="jail-modal-content">
+            <h2>🔒 {gameState.jailInfo.isJailor ? `Interrogating: ${gameState.jailInfo.prisonerName}` : 'You are in Jail!'}</h2>
+            {gameState.jailInfo.isJailed && (
+              <p className="jail-subtitle">The Jailor wishes to speak with you. You cannot perform your night action.</p>
+            )}
+
+            <div className="jail-chat-messages" ref={jailChatMessagesRef}>
+              {(jailChat.length > 0 ? jailChat : (gameState.jailInfo.jailChat || [])).map((msg, i) => (
+                <div key={i} className={`jail-chat-message ${msg.sender === 'Jailor' ? 'jailor-msg' : 'prisoner-msg'}`}>
+                  <span className="chat-sender">{msg.sender}:</span>
+                  <span className="chat-text">{msg.message}</span>
+                </div>
+              ))}
+              {(jailChat.length > 0 ? jailChat : (gameState.jailInfo.jailChat || [])).length === 0 && (
+                <div className="jail-chat-empty">No messages yet. Start the interrogation!</div>
+              )}
+            </div>
+
+            <div className="jail-chat-input-container">
+              <input
+                type="text"
+                className="jail-chat-input"
+                placeholder="Type a message..."
+                value={jailChatInput}
+                onChange={e => setJailChatInput(e.target.value)}
+                onKeyPress={e => {
+                  if (e.key === 'Enter' && jailChatInput.trim()) {
+                    socket.emit('jail_chat_message', { code: gameState.code, message: jailChatInput.trim() });
+                    setJailChatInput('');
+                  }
+                }}
+              />
+              <button
+                className="btn-send-message"
+                onClick={() => {
+                  if (jailChatInput.trim()) {
+                    socket.emit('jail_chat_message', { code: gameState.code, message: jailChatInput.trim() });
+                    setJailChatInput('');
+                  }
+                }}
+              >
+                Send
+              </button>
+            </div>
+
+            {gameState.jailInfo.isJailor && (
+              <button
+                className={`btn-execute ${executionPending ? 'cancel-mode' : ''}`}
+                onClick={() => {
+                  if (executionPending) {
+                    // Cancel execution
+                    socket.emit('night_action', { code: gameState.code, action: { type: 'CANCEL_EXECUTE' } });
+                    // Server sends the private message, so we don't add one here
+                    setExecutionPending(false);
+                  } else {
+                    // Execute
+                    sendAction(null, 'EXECUTE');
+                    setExecutionPending(true);
+                  }
+                }}
+              >
+                {executionPending ? '❌ Cancel Execution' : '☠️ Execute Prisoner'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {gameState?.state === 'GAME_OVER' &&
+        <div className="modal-overlay">
+          <div className="modal-content game-over-panel">
+            <h1>GAME OVER</h1>
+            <h2 className={`winner-title ${gameState.winner === 'GOOD' ? 'good-win' : gameState.winner === 'EVIL' ? 'evil-win' : 'neutral-win'}`}>
+              Winner: {gameState.winner === 'GOOD' ? 'Citizens' : gameState.winner === 'EVIL' ? 'Vampires' : gameState.winner}
+            </h2>
+
+            <div className="game-over-summary">
+              <h3>Player Roles</h3>
+              <div className="summary-grid">
+                {gameState.players.map(p => (
+                  <div key={p.id} className={`summary-card ${p.alignment || 'unknown'}`}>
+                    <div className="summary-name">{p.name} {p.id === myId && '(You)'}</div>
+                    <div className="summary-role">{p.role || 'Unknown'}</div>
+                    {!p.alive && <div className="summary-dead">👻 Dead</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="waiting-text">Waiting for the teacher to return everyone to the lobby...</div>
+          </div>
+        </div>
+      }
+
+      {/* Role Info Modal for Host */}
+      {selectedPlayerRole && (
+        <div className="modal-overlay" onClick={() => setSelectedPlayerRole(null)}>
+          <div className="modal-content role-modal" onClick={e => e.stopPropagation()}>
+            <h2>{selectedPlayerRole.name}</h2>
+            {selectedPlayerRole.isNPC && <span className="npc-badge">🤖 NPC</span>}
+            <div className="role-info-display">
+              <div className={`role-value large ${selectedPlayerRole.alignment}`}>
+                {selectedPlayerRole.role || 'No role assigned'}
+              </div>
+              <p className="alignment-text">
+                Alignment: <strong>{selectedPlayerRole.alignment || 'Unknown'}</strong>
+              </p>
+              {/* New Status Display */}
+              <p className="status-text">
+                Status: <strong className={selectedPlayerRole.alive ? 'status-alive' : 'status-dead'}>
+                  {selectedPlayerRole.alive ? 'Alive' : 'Dead'}
+                </strong>
+              </p>
+            </div>
+
+            {/* Role Change Buttons for Host */}
+            <div className="role-change-section">
+              <h4>Change Role</h4>
+              <div className="role-change-buttons">
+                {['Investigator', 'Lookout', 'Doctor', 'Jailor', 'Citizen', 'Vampire', 'Vampire Framer', 'Jester'].map(role => (
+                  <button
+                    key={role}
+                    className={`btn-role-change ${selectedPlayerRole.role === role ? 'active' : ''} ${role === 'Vampire' || role === 'Vampire Framer' ? 'evil' : role === 'Jester' ? 'neutral' : 'good'}`}
+                    onClick={() => changePlayerRole(selectedPlayerRole.playerId, role)}
+                    disabled={selectedPlayerRole.role === role}
+                  >
+                    {role === 'Investigator' && '🔍 '}
+                    {role === 'Lookout' && '👁️ '}
+                    {role === 'Doctor' && '💉 '}
+                    {role === 'Jailor' && '🔒 '}
+                    {role === 'Citizen' && '👤 '}
+                    {role === 'Vampire' && '🧛 '}
+                    {role === 'Vampire Framer' && '🎭 '}
+                    {role === 'Jester' && '🃏 '}
+                    {role}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Kill/Revive Buttons for Host */}
+            <div className="role-change-section" style={{ marginTop: '1rem' }}>
+              <h4>Lifecycle</h4>
+              <div className="role-change-buttons">
+                <button
+                  className="btn-role-change bad"
+                  style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }}
+                  onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, false)}
+                  disabled={!selectedPlayerRole.alive}
+                >
+                  💀 Kill
+                </button>
+                <button
+                  className="btn-role-change good"
+                  style={{ background: 'var(--primary)', color: 'white', borderColor: 'var(--primary)' }}
+                  onClick={() => changePlayerAliveStatus(selectedPlayerRole.playerId, true)}
+                  disabled={selectedPlayerRole.alive}
+                >
+                  😇 Revive
+                </button>
+              </div>
+            </div>
+
+            <button className="btn-secondary" onClick={() => setSelectedPlayerRole(null)}>Close</button>
+          </div>
+        </div>
+      )}
+
+      <div className="game-board">
+        <div className="players-section">
+          {gameState?.players.map(p => (
+            <div key={p.id} className={`game-player-card ${!p.alive ? 'dead' : ''} ${p.id === myId ? 'me' : ''} ${p.isNPC ? 'npc-card' : ''} ${nightTarget?.targetId === p.id && isNight ? 'target-night' : ''} ${p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') ? 'vampire-teammate' : ''}`}>
+              {/* Vampire teammate indicator - always visible to vampires */}
+              {p.isVampire && (myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer') && p.id !== myId && (
+                <div className="vampire-badge">{p.vampireRole === 'Vampire Framer' ? '🎭 Framer' : '🧛 Vampire'}</div>
+              )}
+              {/* Target indicator badges */}
+              {nightTarget?.targetId === p.id && isNight && (
+                <div className="target-badge night-target-badge">
+                  {nightTarget.type === 'INVESTIGATE' && '🔍 Investigating'}
+                  {nightTarget.type === 'LOOKOUT' && '👁️ Watching'}
+                  {nightTarget.type === 'BITE' && '🧛 Voted'}
+                  {nightTarget.type === 'HEAL' && '💉 Healing'}
+                  {nightTarget.type === 'JAIL' && '🔒 Jailing'}
+                </div>
+              )}
+
+              {/* Vampire vote count badge - visible to vampires during turning nights */}
+              {myRole?.role === 'Vampire' && isNight && canTurn && !p.isVampire && p.vampireVotes > 0 && (
+                <div className="vampire-vote-count-badge">
+                  🩸 {p.vampireVotes} vote{p.vampireVotes > 1 ? 's' : ''}
+                </div>
+              )}
+
+              <div className="card-top">
+                <span
+                  className={`name ${isHost ? 'clickable-name' : ''}`}
+                  onClick={() => isHost && viewPlayerRole(p.id)}
+                  title={isHost ? 'Click to view role' : ''}
+                >
+                  {p.isNPC && '🤖 '}{p.name}
+                </span>
+                {p.alive && isVoting && amIAlive && p.id !== myId && (
+                  <button className={`btn-vote ${voteTarget === p.id ? 'voted' : ''}`} onClick={() => vote(p.id)}>
+                    {voteTarget === p.id ? '✓ Voted' : 'Vote'} ({p.votes})
+                  </button>
+                )}
+                {/* Show vote count even if I can't vote */}
+                {(!amIAlive || !isVoting) && p.votes > 0 && <span className="vote-count">{p.votes} votes</span>}
+              </div>
+
+              {p.alive && isNight && amIAlive && (p.id !== myId || myRole?.role === 'Doctor') && (
+                <div className="action-buttons">
+                  {myRole?.role === 'Investigator' && (
+                    <button className={`btn-action ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'INVESTIGATE')}>
+                      {nightTarget?.targetId === p.id ? '✓ Investigating' : 'Investigate'}
+                    </button>
+                  )}
+                  {myRole?.role === 'Lookout' && (
+                    <button className={`btn-action ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'LOOKOUT')}>
+                      {nightTarget?.targetId === p.id ? '✓ Watching' : 'Watch'}
+                    </button>
+                  )}
+                  {myRole?.role === 'Vampire' && canTurn && !p.isVampire && (
+                    <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
+                      {nightTarget?.targetId === p.id ? '✓ Voted' : 'Vote to Turn'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                    </button>
+                  )}
+                  {myRole?.role === 'Doctor' && (gameState?.healsRemaining > 0 || nightTarget?.type === 'HEAL') && (
+                    <button className={`btn-action btn-good ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'HEAL')}>
+                      {nightTarget?.targetId === p.id ? '✓ Healing' : 'Heal'}
+                    </button>
+                  )}
+                  {myRole?.role === 'Jailor' && p.id !== myId && !gameState?.jailInfo?.isJailor && (
+                    <button className={`btn-action btn-jail ${nightTarget?.targetId === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'JAIL')}>
+                      {nightTarget?.targetId === p.id ? '✓ Jailing' : '🔒 Jail'}
+                    </button>
+                  )}
+                  {myRole?.role === 'Vampire Framer' && !p.isVampire && (
+                    <>
+                      <button className={`btn-action btn-frame ${frameTarget === p.id ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'FRAME')}>
+                        {frameTarget === p.id ? '✓ Framing' : '🎭 Frame'}
+                      </button>
+                      {canTurn && (
+                        <button className={`btn-action btn-danger ${nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? 'action-selected' : ''}`} onClick={() => sendAction(p.id, 'BITE')}>
+                          {nightTarget?.targetId === p.id && nightTarget?.type === 'BITE' ? '✓ Voted' : 'Vote to Turn'} {p.vampireVotes > 0 ? `(${p.vampireVotes})` : ''}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="sidebar">
+          {/* Voice-Only Panel - shows when chat is disabled but voice is enabled */}
+          {!gameState?.chatEnabled && gameState?.state === 'DAY_DISCUSS' && gameState?.enableSTT && sttAvailable && (() => {
+            const myPlayer = gameState?.players.find(p => p.id === myId);
+            if (!myPlayer?.alive) return null;
+
+            return (
+              <div className="panel voice-only-panel">
+                <h4>🎤 Voice Chat</h4>
+                {gameState.voiceInputMode === 'voice-activity' ? (
+                  <div className="voice-vad-container">
+                    <div className="vad-status-indicator">
+                      <div className="vad-status-text">
+                        {isRecording ? '🔴 Speaking...' : '🎤 Listening...'}
+                      </div>
+                      <div className="audio-level-bar">
+                        <div className="audio-level-fill" style={{ width: `${audioLevel}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className={`voice-btn ${isRecording ? 'recording' : ''}`}
+                    onMouseDown={startVoiceRecording}
+                    onMouseUp={stopVoiceRecording}
+                    onMouseLeave={() => isRecording && stopVoiceRecording()}
+                    onTouchStart={startVoiceRecording}
+                    onTouchEnd={stopVoiceRecording}
+                    title="Hold to speak"
+                  >
+                    {isRecording ? '🔴 Recording...' : '🎤 Hold to Speak'}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Chat Panel - only show if chat is enabled and (day phase OR vampire at night) */}
+          {gameState?.chatEnabled && (() => {
+            const isNight = gameState?.state === 'NIGHT';
+            const isDayPhase = gameState?.state === 'DAY_DISCUSS' || gameState?.state === 'DAY_VOTE';
+            const myPlayer = gameState?.players.find(p => p.id === myId);
+            const amIVampire = myRole?.role === 'Vampire' || myRole?.role === 'Vampire Framer';
+            const canChat = myPlayer?.alive && (isDayPhase || (isNight && amIVampire));
+
+            // Hide chat panel completely for non-vampires at night
+            if (isNight && !amIVampire) return null;
+
+            return (
+              <div className={`panel chat-panel ${isNight ? 'vampire-chat' : ''}`}>
+                <h4>{isNight ? '🧛 Vampire Chat' : '💬 Chat'}</h4>
+                <div className="chat-messages" ref={chatMessagesRef}>
+                  {gameChat.length > 0 ? (
+                    gameChat.map((msg, i) => (
+                      <div key={i} className={`chat-message ${msg.senderId === myId ? 'own-message' : ''}`}>
+                        <span className="chat-sender">{msg.senderName}:</span>
+                        <span className="chat-text">{msg.message}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="chat-empty">No messages yet...</div>
+                  )}
+                </div>
+                {canChat ? (
+                  <div className="chat-input-container">
+                    <input
+                      type="text"
+                      className="chat-input"
+                      placeholder={isNight ? 'Message fellow vampires...' : 'Type a message...'}
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyPress={e => {
+                        if (e.key === 'Enter' && chatInput.trim()) {
+                          socket.emit('chat_message', { code: gameState.code, message: chatInput.trim() });
+                          setChatInput('');
+                        }
+                      }}
+                    />
+                    <button
+                      className="btn-send"
+                      onClick={() => {
+                        if (chatInput.trim()) {
+                          socket.emit('chat_message', { code: gameState.code, message: chatInput.trim() });
+                          setChatInput('');
+                        }
+                      }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                ) : !myPlayer?.alive ? (
+                  <div className="chat-disabled">Dead players cannot chat</div>
+                ) : null}
+
+                {/* Voice input button - only during DAY_DISCUSS phase */}
+                {gameState.state === 'DAY_DISCUSS' && myPlayer?.alive && gameState.enableSTT && sttAvailable && (
+                  gameState.voiceInputMode === 'voice-activity' ? (
+                    <div className="voice-vad-container">
+                      <div className="vad-status-indicator">
+                        <div className="vad-status-text">
+                          {isRecording ? '🔴 Speaking...' : '🎤 Listening...'}
+                        </div>
+                        <div className="audio-level-bar">
+                          <div className="audio-level-fill" style={{ width: `${audioLevel}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className={`voice-btn ${isRecording ? 'recording' : ''}`}
+                      onMouseDown={startVoiceRecording}
+                      onMouseUp={stopVoiceRecording}
+                      onMouseLeave={() => isRecording && stopVoiceRecording()}
+                      onTouchStart={startVoiceRecording}
+                      onTouchEnd={stopVoiceRecording}
+                      title="Hold to speak"
+                    >
+                      {isRecording ? '🔴 Recording...' : '🎤 Hold to Speak'}
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })()}
+          <div className="panel logs-panel">
+            <h4>Game Logs</h4>
+            <div className="scroll-box">
+              {gameState?.logs.slice().reverse().map((l, i) => <div key={i} className="log-entry">{l}</div>)}
+            </div>
+          </div>
+          <div className="panel private-panel">
+            <h4>Private Notes</h4>
+            <div className="scroll-box private-text">
+              <pre>{privateMsg || "No private info yet..."}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
