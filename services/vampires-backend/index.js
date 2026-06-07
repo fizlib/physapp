@@ -193,14 +193,28 @@ function emitClassroomState(classroomId) {
   );
 
   const session = classroomSessions.get(classroomId);
+  const connectedStudents = getClassroomStudents(classroomId);
+  const studentById = new Map(connectedStudents.map(student => [student.id, student]));
   getClassroomStudents(classroomId).forEach(student => {
     if (!student.socketId) return;
+    const groupIndex = (session?.previewGroups || [])
+      .findIndex(studentIds => studentIds.includes(student.id));
+    const ownGroup = groupIndex >= 0
+      ? [{
+          groupNumber: groupIndex + 1,
+          students: session.previewGroups[groupIndex].map(studentId => ({
+            id: studentId,
+            name: studentById.get(studentId)?.name || 'Disconnected student',
+          })),
+        }]
+      : [];
+
     io.to(student.socketId).emit('classroom_session_state', {
       classroomId,
       status: session?.status || 'waiting',
       targetSize: session?.targetSize || 10,
       connectedStudents: [],
-      previewGroups: [],
+      previewGroups: ownGroup,
       games: [],
     });
   });
@@ -226,7 +240,7 @@ function sanitizeSettings(settings = {}) {
     nightTime: clampInteger(settings.nightTime, 60, 10, 300),
     votingTime: clampInteger(settings.votingTime, 15, 5, 120),
     revealRole: settings.revealRole !== false,
-    chatEnabled: settings.chatEnabled !== false,
+    chatEnabled: settings.chatEnabled === true,
     enableAI: Boolean(settings.enableAI),
     enableTTS: Boolean(settings.enableAI && settings.enableTTS),
     enableSTT: Boolean(settings.enableAI && settings.enableSTT),
@@ -240,6 +254,19 @@ function sanitizeSettings(settings = {}) {
       ? settings.npcAllowedRoles
       : {},
   };
+}
+
+function canControlGame(socket, game) {
+  if (!game) return false;
+
+  const hostPlayer = game.players.find(player => player.socketId === socket.id);
+  if (hostPlayer && game.host === hostPlayer.id) return true;
+
+  const session = game.classroomId ? classroomSessions.get(game.classroomId) : null;
+  return socket.data.profile.role === 'teacher'
+    && game.host === socket.data.user.id
+    && session?.teacherId === socket.data.user.id
+    && session.gameCodes.includes(game.code);
 }
 
 function sanitizeRoleConfig(roleConfig = {}) {
@@ -1053,19 +1080,25 @@ class Game {
       // Default calculation based on percentages
       const investCount = Math.max(1, Math.floor(total * 0.1));
       const lookoutCount = Math.max(1, Math.floor(total * 0.1));
-      const doctorCount = Math.max(1, Math.floor(total * 0.1)); // Add 1 doctor roughly 10%
+      const doctorCount = Math.max(1, Math.floor(total * 0.1));
       const jailorCount = total >= 6 ? 1 : 0; // Add Jailor for 6+ players
-      const vampCount = Math.max(1, Math.floor(total * 0.15)); // Slightly more vamps
-      const jesterCount = 1;
+      const vampCount = Math.min(
+        Math.max(1, Math.floor(total * 0.15)),
+        Math.max(1, total - 1)
+      );
+      const jesterCount = total >= 5 ? 1 : 0;
+      const goodSlots = Math.max(0, total - vampCount - jesterCount);
+      const goodRolePool = [];
 
-      for (let i = 0; i < investCount; i++) pool.push({ role: 'Investigator', align: 'good' });
-      for (let i = 0; i < lookoutCount; i++) pool.push({ role: 'Lookout', align: 'good' });
-      for (let i = 0; i < doctorCount; i++) pool.push({ role: 'Doctor', align: 'good' });
-      for (let i = 0; i < jailorCount; i++) pool.push({ role: 'Jailor', align: 'good' });
+      for (let i = 0; i < investCount; i++) goodRolePool.push({ role: 'Investigator', align: 'good' });
+      for (let i = 0; i < lookoutCount; i++) goodRolePool.push({ role: 'Lookout', align: 'good' });
+      for (let i = 0; i < doctorCount; i++) goodRolePool.push({ role: 'Doctor', align: 'good' });
+      for (let i = 0; i < jailorCount; i++) goodRolePool.push({ role: 'Jailor', align: 'good' });
+
+      pool.push(...shuffle(goodRolePool).slice(0, goodSlots));
+      while (pool.length < goodSlots) pool.push({ role: 'Citizen', align: 'good' });
       for (let i = 0; i < vampCount; i++) pool.push({ role: 'Vampire', align: 'evil' });
       for (let i = 0; i < jesterCount; i++) pool.push({ role: 'Jester', align: 'neutral' });
-
-      while (pool.length < total) pool.push({ role: 'Citizen', align: 'good' });
     }
 
     pool = shuffle(pool);
@@ -1565,7 +1598,7 @@ class Game {
       timer: this.timer,
       winner: this.winner,
       logs: this.logs,
-      chatEnabled: this.settings.chatEnabled !== false,
+      chatEnabled: this.settings.chatEnabled === true,
       enableSTT: this.settings.enableSTT || false,
       voiceInputMode: this.settings.voiceInputMode || 'push-to-talk',
       gameChat: this.gameChat
@@ -1637,13 +1670,11 @@ io.use(async (socket, next) => {
   try {
     const accessToken = socket.handshake.auth?.accessToken;
     if (!accessToken) {
-      console.log('[Auth] No access token provided');
       return next(new Error('Authentication required.'));
     }
 
     const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
     if (authError || !authData.user) {
-      console.log('[Auth] Invalid token:', authError?.message);
       return next(new Error('Invalid or expired session.'));
     }
 
@@ -1654,16 +1685,13 @@ io.use(async (socket, next) => {
       .maybeSingle();
 
     if (profileError || !profile || !profile.approved) {
-      console.log('[Auth] Profile issue:', { profileError, hasProfile: !!profile, approved: profile?.approved });
       return next(new Error('Approved profile required.'));
     }
 
     if (profile.role !== 'teacher' && profile.role !== 'student') {
-      console.log('[Auth] Unsupported role:', profile.role);
       return next(new Error('Unsupported profile role.'));
     }
 
-    console.log(`[Auth] Authenticated: ${profile.role} ${getProfileName(profile, authData.user)} (${authData.user.id})`);
     socket.data.user = authData.user;
     socket.data.profile = profile;
     socket.data.displayName = getProfileName(profile, authData.user);
@@ -1676,11 +1704,9 @@ io.use(async (socket, next) => {
 
 io.on('connection', async (socket) => {
   const identity = socket.data;
-  console.log(`[Connection] New connection: ${identity.profile.role} ${identity.displayName} (socket=${socket.id})`);
 
   if (identity.profile.role === 'student') {
     const classroomId = await getActiveStudentClassroom(identity.user.id);
-    console.log(`[Connection] Student ${identity.displayName} active classroom: ${classroomId || 'NONE'}`);
     if (!classroomId) {
       socket.emit('classroom_error', 'No active classroom is assigned to this student.');
       return;
@@ -1710,8 +1736,6 @@ io.on('connection', async (socket) => {
       joinedAt: previous?.joinedAt || Date.now(),
     });
 
-    console.log(`[Connection] Student ${identity.displayName} added to presence for classroom ${classroomId}. Total presence: ${presence.size}`);
-
     const session = classroomSessions.get(classroomId);
     if (!session || session.status !== 'running' || !attachStudentToAssignedGame(socket, session)) {
       socket.emit('classroom_session_state', {
@@ -1727,10 +1751,8 @@ io.on('connection', async (socket) => {
   }
 
   socket.on('teacher_watch_classroom', async ({ classroomId } = {}) => {
-    console.log(`[Connection] teacher_watch_classroom: teacher=${identity.displayName}, classroomId=${classroomId}`);
     const classroom = await verifyTeacherClassroom(socket, classroomId);
     if (!classroom) {
-      console.log(`[Connection] Teacher ${identity.displayName} does NOT own classroom ${classroomId}`);
       socket.emit('classroom_error', 'You do not own this classroom.');
       return;
     }
@@ -1744,9 +1766,7 @@ io.on('connection', async (socket) => {
     socket.join(classroomRoom(classroomId));
     socket.join(classroomTeacherRoom(classroomId));
     getClassroomSession(classroomId, socket.data.user.id);
-    const state = serializeClassroomSession(classroomId);
-    console.log(`[Connection] Sending teacher state: ${state.connectedStudents.length} students, status=${state.status}`);
-    socket.emit('classroom_session_state', state);
+    socket.emit('classroom_session_state', serializeClassroomSession(classroomId));
   });
 
   socket.on('prepare_classroom_games', async ({
@@ -2292,11 +2312,11 @@ io.on('connection', async (socket) => {
   // --- HOST: GET PLAYER ROLE ---
   socket.on('get_player_role', ({ code, targetId }) => {
     const game = games[code];
-    const player = game?.players.find(p => p.socketId === socket.id);
-    if (game && player && game.host === player.id) {
+    if (canControlGame(socket, game)) {
       const target = game.players.find(p => p.id === targetId);
       if (target) {
         socket.emit('player_role_info', {
+          code,
           playerId: target.id,
           name: target.name,
           role: target.role,
@@ -2311,8 +2331,7 @@ io.on('connection', async (socket) => {
   // --- HOST: CHANGE PLAYER ROLE ---
   socket.on('change_player_role', ({ code, targetId, newRole }) => {
     const game = games[code];
-    const player = game?.players.find(p => p.socketId === socket.id);
-    if (game && player && game.host === player.id) {
+    if (canControlGame(socket, game)) {
       const target = game.players.find(p => p.id === targetId);
       if (target) {
         // Role alignment mapping
@@ -2348,6 +2367,7 @@ io.on('connection', async (socket) => {
 
         // Confirm to the host
         socket.emit('player_role_info', {
+          code,
           playerId: target.id,
           name: target.name,
           role: target.role,
@@ -2368,8 +2388,7 @@ io.on('connection', async (socket) => {
   // --- HOST: KILL/REVIVE PLAYER ---
   socket.on('set_player_alive_status', ({ code, targetId, alive }) => {
     const game = games[code];
-    const player = game?.players.find(p => p.socketId === socket.id);
-    if (game && player && game.host === player.id) {
+    if (canControlGame(socket, game)) {
       const target = game.players.find(p => p.id === targetId);
       if (target) {
         target.alive = alive;
@@ -2384,6 +2403,7 @@ io.on('connection', async (socket) => {
 
         // Update host modal view
         socket.emit('player_role_info', {
+          code,
           playerId: target.id,
           name: target.name,
           role: target.role,

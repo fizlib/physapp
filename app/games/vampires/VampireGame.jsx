@@ -141,7 +141,7 @@ export default function VampireGame({
       nightTime: 60,
       votingTime: 15,
       revealRole: true,
-      chatEnabled: true,
+      chatEnabled: false,
       enableAI: false,
       enableTTS: false,
       enableSTT: false,
@@ -1159,21 +1159,6 @@ export default function VampireGame({
                     }}
                   />
                   Enable Chat
-                </label>
-              </div>
-              <div className="game-setting-item checkbox-setting">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.enableAI || false}
-                    onChange={e => {
-                      const newSettings = { ...settings, enableAI: e.target.checked };
-                      setSettings(newSettings);
-                      localStorage.setItem('vampire_settings', JSON.stringify(newSettings));
-                      socket.emit('update_settings', { code, settings: newSettings });
-                    }}
-                  />
-                  Enable AI NPCs
                 </label>
               </div>
               {settings.enableAI && (

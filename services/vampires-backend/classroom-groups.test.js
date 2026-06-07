@@ -18,6 +18,11 @@ test('uses floor(studentCount / targetSize) games and balances leftovers', () =>
 });
 
 test('rejects invalid minimums', () => {
-  assert.throws(() => splitStudentsIntoGames(students(4), 5), /At least 5/);
-  assert.throws(() => splitStudentsIntoGames(students(10), 4), /at least 5/);
+  assert.throws(() => splitStudentsIntoGames(students(1), 2), /At least 2/);
+  assert.throws(() => splitStudentsIntoGames(students(10), 1), /at least 2/);
+});
+
+test('allows games with two students', () => {
+  const groups = splitStudentsIntoGames(students(2), 2, () => 0.5);
+  assert.deepEqual(groups.map((group) => group.length), [2]);
 });

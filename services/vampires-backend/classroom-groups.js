@@ -10,12 +10,12 @@ function shuffleCopy(items, random = Math.random) {
 }
 
 function splitStudentsIntoGames(students, targetSize, random = Math.random) {
-  if (!Number.isInteger(targetSize) || targetSize < 5) {
-    throw new Error('Students per game must be a whole number of at least 5.');
+  if (!Number.isInteger(targetSize) || targetSize < 2) {
+    throw new Error('Students per game must be a whole number of at least 2.');
   }
 
-  if (!Array.isArray(students) || students.length < 5) {
-    throw new Error('At least 5 connected students are required.');
+  if (!Array.isArray(students) || students.length < 2) {
+    throw new Error('At least 2 connected students are required.');
   }
 
   const gameCount = Math.max(1, Math.floor(students.length / targetSize));

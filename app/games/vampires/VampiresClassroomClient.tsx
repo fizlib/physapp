@@ -63,7 +63,6 @@ interface GameSettings {
     votingTime: number
     revealRole: boolean
     chatEnabled: boolean
-    enableAI: boolean
     enableTTS: boolean
     enableSTT: boolean
     voiceInputMode: "push-to-talk" | "voice-activity"
@@ -73,6 +72,16 @@ interface GameSettings {
     npcNationality: "english" | "lithuanian"
     npcAllowedRoles: Record<string, boolean>
     theme: GameTheme
+}
+
+interface PlayerControl {
+    code: string
+    playerId: string
+    name: string
+    role: string | null
+    alignment: "good" | "evil" | "neutral" | null
+    isNPC: boolean
+    alive: boolean
 }
 
 interface RoleConfig {
@@ -89,15 +98,12 @@ interface RoleConfig {
 const GAME_SERVER_URL = process.env.NEXT_PUBLIC_VAMPIRES_SERVER_URL
     || "https://http--vampires-classroom-backend--k46wscvdzqkf.code.run"
 
-console.log("[Vampires] GAME_SERVER_URL =", GAME_SERVER_URL)
-
 const DEFAULT_SETTINGS: GameSettings = {
     discussionTime: 120,
     nightTime: 60,
     votingTime: 15,
     revealRole: true,
-    chatEnabled: true,
-    enableAI: false,
+    chatEnabled: false,
     enableTTS: false,
     enableSTT: false,
     voiceInputMode: "push-to-talk",
@@ -158,6 +164,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
     const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS)
     const [roleConfig, setRoleConfig] = useState<RoleConfig>(DEFAULT_ROLE_CONFIG)
     const [elevenlabsModels, setElevenlabsModels] = useState<Array<{ id: string; name: string }>>([])
+    const [selectedPlayer, setSelectedPlayer] = useState<PlayerControl | null>(null)
 
     useEffect(() => {
         const supabase = createClient()
@@ -165,16 +172,13 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
         let cancelled = false
 
         const connect = async () => {
-            console.log(`[Vampires] Connecting as ${role}, userId=${userId}`)
             const { data: { session: authSession } } = await supabase.auth.getSession()
             if (cancelled) return
 
             if (!authSession?.access_token) {
-                console.error("[Vampires] No access token available")
                 setError("Authentication session is unavailable. Please sign in again.")
                 return
             }
-            console.log("[Vampires] Got access token, connecting to", GAME_SERVER_URL)
 
             activeSocket = io(GAME_SERVER_URL, {
                 transports: ["websocket", "polling"],
@@ -185,25 +189,16 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
             })
 
             activeSocket.on("connect", () => {
-                console.log("[Vampires] Socket connected, id =", activeSocket?.id)
                 setConnected(true)
                 setError(null)
             })
-            activeSocket.on("disconnect", (reason) => {
-                console.log("[Vampires] Socket disconnected, reason =", reason)
-                setConnected(false)
-            })
+            activeSocket.on("disconnect", () => setConnected(false))
             activeSocket.on("connect_error", (socketError) => {
-                console.error("[Vampires] connect_error:", socketError.message)
                 setConnected(false)
                 setError(socketError.message || "Could not connect to the game server.")
             })
-            activeSocket.on("classroom_error", (message: string) => {
-                console.error("[Vampires] classroom_error:", message)
-                setError(message)
-            })
+            activeSocket.on("classroom_error", (message: string) => setError(message))
             activeSocket.on("classroom_session_state", (state: ClassroomSessionState) => {
-                console.log("[Vampires] classroom_session_state:", JSON.stringify(state))
                 setSession(state)
                 setTargetSize(state.targetSize || 10)
                 if (role === "student" && state.status !== "running") {
@@ -211,18 +206,14 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                 }
             })
             activeSocket.on("game_assigned", (nextAssignment: GameAssignment) => {
-                console.log("[Vampires] game_assigned:", nextAssignment)
                 setAssignment(nextAssignment)
                 setError(null)
             })
             activeSocket.on("classroom_session_reset", () => {
-                console.log("[Vampires] classroom_session_reset")
                 setAssignment(null)
             })
-            activeSocket.on("session_replaced", (message: string) => {
-                console.error("[Vampires] session_replaced:", message)
-                setError(message)
-            })
+            activeSocket.on("session_replaced", (message: string) => setError(message))
+            activeSocket.on("player_role_info", (player: PlayerControl) => setSelectedPlayer(player))
             activeSocket.on("elevenlabs_options", (data: { models?: Array<{ id: string; name: string }> }) => {
                 setElevenlabsModels(data.models || [])
             })
@@ -239,17 +230,13 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
     }, [role])
 
     useEffect(() => {
-        if (!socket || !connected || role !== "teacher" || !selectedClassroomId) {
-            console.log(`[Vampires] teacher_watch skipped: socket=${!!socket}, connected=${connected}, role=${role}, classroomId=${selectedClassroomId}`)
-            return
-        }
-        console.log(`[Vampires] Emitting teacher_watch_classroom for classroomId=${selectedClassroomId}`)
+        if (!socket || !connected || role !== "teacher" || !selectedClassroomId) return
         socket.emit("teacher_watch_classroom", { classroomId: selectedClassroomId })
     }, [connected, role, selectedClassroomId, socket])
 
     const connectedStudents = session?.connectedStudents || []
     const unassignedStudents = connectedStudents.filter(student => !student.assignedGameCode)
-    const canPrepare = connectedStudents.length >= 5 && session?.status !== "running"
+    const canPrepare = connectedStudents.length >= 2 && session?.status !== "running"
     const canStart = Boolean(session?.previewGroups.length) && session?.status !== "running"
     const customRoleTotal = useMemo(
         () => ROLE_NAMES.reduce((total, roleName) => total + roleConfig[roleName], 0),
@@ -262,7 +249,10 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
         socket.emit("prepare_classroom_games", {
             classroomId: selectedClassroomId,
             targetSize,
-            settings,
+            settings: {
+                ...settings,
+                enableAI: npcCount > 0,
+            },
             roleConfig,
             npcCount,
         })
@@ -290,6 +280,8 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
     }
 
     if (role === "student") {
+        const preparedGroup = session?.previewGroups[0]
+
         return (
             <main className="vampires-stage vampires-waiting">
                 <div className="vampires-waiting-card">
@@ -297,6 +289,12 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                     <h1>Vampires</h1>
                     <p>Laukiama, kol mokytojas pradės žaidimą...</p>
                     <span>{connected ? "Prisijungta prie klasės laukiamojo" : "Jungiamasi prie žaidimo serverio"}</span>
+                    {preparedGroup && (
+                        <div className="vampires-student-group">
+                            <strong>Jūsų grupė</strong>
+                            <span>{preparedGroup.students.map(student => student.name).join(", ")}</span>
+                        </div>
+                    )}
                     {error && <div className="vampires-error">{error}</div>}
                 </div>
             </main>
@@ -330,6 +328,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                     onChange={(event) => {
                                         setSession(null)
                                         setAssignment(null)
+                                        setSelectedPlayer(null)
                                         setSelectedClassroomId(event.target.value)
                                     }}
                                     disabled={session?.status === "running"}
@@ -368,10 +367,18 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                         </div>
                                         <div className="vampires-roster">
                                             {game.players.map(player => (
-                                                <div key={player.id} className={!player.connected ? "offline" : ""}>
-                                                    <span>{player.isNPC ? "AI" : player.name}</span>
+                                                <button
+                                                    type="button"
+                                                    key={player.id}
+                                                    className={!player.connected ? "offline" : ""}
+                                                    onClick={() => socket?.emit("get_player_role", {
+                                                        code: game.code,
+                                                        targetId: player.id,
+                                                    })}
+                                                >
+                                                    <span>{player.isNPC ? "NPC" : player.name}</span>
                                                     <small>{player.alive ? "alive" : "out"}{!player.connected ? " · disconnected" : ""}</small>
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                         <div className="vampires-actions">
@@ -436,8 +443,8 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                     </div>
 
                                     <div className="vampires-form-grid">
-                                        <NumberField label="Students per game" min={5} max={50} value={targetSize} onChange={setTargetSize} />
-                                        <NumberField label="AI players per game" min={0} max={20} value={npcCount} onChange={setNpcCount} />
+                                        <NumberField label="Students per game" min={2} max={50} value={targetSize} onChange={setTargetSize} />
+                                        <NumberField label="NPCs per game" min={0} max={20} value={npcCount} onChange={setNpcCount} />
                                         <NumberField label="Discussion time" min={10} max={600} value={settings.discussionTime} onChange={value => setSettings(current => ({ ...current, discussionTime: value }))} />
                                         <NumberField label="Night time" min={10} max={300} value={settings.nightTime} onChange={value => setSettings(current => ({ ...current, nightTime: value }))} />
                                         <NumberField label="Voting time" min={5} max={120} value={settings.votingTime} onChange={value => setSettings(current => ({ ...current, votingTime: value }))} />
@@ -454,10 +461,9 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                     <div className="vampires-toggle-grid">
                                         <Toggle label="Reveal eliminated roles" checked={settings.revealRole} onChange={checked => setSettings(current => ({ ...current, revealRole: checked }))} />
                                         <Toggle label="Enable chat" checked={settings.chatEnabled} onChange={checked => setSettings(current => ({ ...current, chatEnabled: checked }))} />
-                                        <Toggle label="Enable AI NPCs" checked={settings.enableAI} onChange={checked => setSettings(current => ({ ...current, enableAI: checked, enableTTS: checked ? current.enableTTS : false, enableSTT: checked ? current.enableSTT : false }))} />
                                     </div>
 
-                                    {settings.enableAI && (
+                                    {npcCount > 0 && (
                                         <div className="vampires-advanced">
                                             <div className="vampires-form-grid">
                                                 <label>
@@ -507,7 +513,7 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                                 )}
                                             </div>
                                             <div className="vampires-role-options">
-                                                <span>Roles allowed for AI players</span>
+                                                <span>Roles allowed for NPCs</span>
                                                 {Object.keys(settings.npcAllowedRoles).map(roleName => (
                                                     <Toggle
                                                         key={roleName}
@@ -564,8 +570,8 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                             Start {session?.previewGroups.length || 0} game{session?.previewGroups.length === 1 ? "" : "s"}
                                         </button>
                                     </div>
-                                    {!canPrepare && connectedStudents.length < 5 && (
-                                        <p className="vampires-hint">At least 5 connected students are required.</p>
+                                    {!canPrepare && connectedStudents.length < 2 && (
+                                        <p className="vampires-hint">At least 2 connected students are required.</p>
                                     )}
                                     <div className="vampires-preview-groups">
                                         {session?.previewGroups.map(group => (
@@ -576,6 +582,83 @@ export function VampiresClassroomClient({ userId, role, displayName, classrooms 
                                         ))}
                                     </div>
                                 </section>
+                            </div>
+                        )}
+                        {selectedPlayer && (
+                            <div className="modal-overlay" onClick={() => setSelectedPlayer(null)}>
+                                <div className="modal-content role-modal" onClick={event => event.stopPropagation()}>
+                                    <h2>{selectedPlayer.name}</h2>
+                                    {selectedPlayer.isNPC && <span className="npc-badge">NPC</span>}
+                                    <div className="role-info-display">
+                                        <div className={`role-value large ${selectedPlayer.alignment || ""}`}>
+                                            {selectedPlayer.role || "No role assigned"}
+                                        </div>
+                                        <p className="alignment-text">
+                                            Alignment: <strong>{selectedPlayer.alignment || "Unknown"}</strong>
+                                        </p>
+                                        <p className="status-text">
+                                            Status: <strong className={selectedPlayer.alive ? "status-alive" : "status-dead"}>
+                                                {selectedPlayer.alive ? "Alive" : "Dead"}
+                                            </strong>
+                                        </p>
+                                    </div>
+                                    <div className="role-change-section">
+                                        <h4>Change role</h4>
+                                        <div className="role-change-buttons">
+                                            {["Investigator", "Lookout", "Doctor", "Jailor", "Citizen", "Vampire", "Vampire Framer", "Jester"].map(roleName => {
+                                                const alignment = roleName === "Vampire" || roleName === "Vampire Framer"
+                                                    ? "evil"
+                                                    : roleName === "Jester" ? "neutral" : "good"
+
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        key={roleName}
+                                                        className={`btn-role-change ${alignment} ${selectedPlayer.role === roleName ? "active" : ""}`}
+                                                        disabled={selectedPlayer.role === roleName}
+                                                        onClick={() => socket?.emit("change_player_role", {
+                                                            code: selectedPlayer.code,
+                                                            targetId: selectedPlayer.playerId,
+                                                            newRole: roleName,
+                                                        })}
+                                                    >
+                                                        {roleName}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="role-change-section">
+                                        <h4>Lifecycle</h4>
+                                        <div className="role-change-buttons">
+                                            <button
+                                                type="button"
+                                                className="btn-role-change evil"
+                                                disabled={!selectedPlayer.alive}
+                                                onClick={() => socket?.emit("set_player_alive_status", {
+                                                    code: selectedPlayer.code,
+                                                    targetId: selectedPlayer.playerId,
+                                                    alive: false,
+                                                })}
+                                            >
+                                                Kill
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn-role-change good"
+                                                disabled={selectedPlayer.alive}
+                                                onClick={() => socket?.emit("set_player_alive_status", {
+                                                    code: selectedPlayer.code,
+                                                    targetId: selectedPlayer.playerId,
+                                                    alive: true,
+                                                })}
+                                            >
+                                                Revive
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button className="btn-secondary" onClick={() => setSelectedPlayer(null)}>Close</button>
+                                </div>
                             </div>
                         )}
                     </>
