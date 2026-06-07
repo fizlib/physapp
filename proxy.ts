@@ -44,13 +44,13 @@ export async function proxy(request: NextRequest) {
     const nextUrl = request.nextUrl
     const isTeacherRoute = nextUrl.pathname.startsWith('/teacher')
     const isStudentRoute = nextUrl.pathname.startsWith('/student')
-    const isVampiresRoute = nextUrl.pathname.startsWith('/games/vampires')
+    const isGamesRoute = nextUrl.pathname === '/games' || nextUrl.pathname.startsWith('/games/')
     const isAuthRoute = nextUrl.pathname.startsWith('/login')
     const isChangePasswordRoute = nextUrl.pathname === '/change-password'
     const isRootRoute = nextUrl.pathname === '/'
 
     // 1. If user is NOT logged in and tries to access a protected route -> Redirect to Login
-    if (!user && (isTeacherRoute || isStudentRoute || isVampiresRoute)) {
+    if (!user && (isTeacherRoute || isStudentRoute || isGamesRoute)) {
         const url = nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
@@ -66,7 +66,7 @@ export async function proxy(request: NextRequest) {
         let mustChangePassword = false
 
         // Fetch profile only if we are on a relevant route to save DB calls on static assets/other routes
-        if (isTeacherRoute || isStudentRoute || isVampiresRoute || isAuthRoute || isRootRoute || isChangePasswordRoute) {
+        if (isTeacherRoute || isStudentRoute || isGamesRoute || isAuthRoute || isRootRoute || isChangePasswordRoute) {
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('role, must_change_password')

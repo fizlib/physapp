@@ -1,7 +1,9 @@
-# Vampires Classroom Backend
+# Classroom Games Backend
 
-Authenticated Socket.IO backend for the learning-platform route
-`/games/vampires`.
+Authenticated Socket.IO backend for the learning-platform routes:
+
+- `/games/vampires` on the default Socket.IO namespace
+- `/games/coffee` on the `/coffee` namespace
 
 ## Local checks
 
@@ -59,14 +61,16 @@ ELEVENLABS_API_KEY2
 - Liveness probe: HTTP `GET /healthz` on port `3001`
 - CI and CD: enabled
 
-Classroom sessions are stored in memory. More than one replica would split
-students between separate Socket.IO processes, and a restart intentionally
-clears active games.
+Classroom sessions for both games are stored in memory. More than one replica
+would split students between separate Socket.IO processes, and a restart
+intentionally clears active games.
 
 ## Learning platform
 
-Set this Vercel runtime variable and redeploy the platform:
+Set this shared Vercel runtime variable and redeploy the platform:
 
 ```text
-NEXT_PUBLIC_VAMPIRES_SERVER_URL=https://http--vampires-classroom-backend--k46wscvdzqkf.code.run
+NEXT_PUBLIC_CLASSROOM_GAMES_SERVER_URL=https://http--vampires-classroom-backend--k46wscvdzqkf.code.run
 ```
+
+`NEXT_PUBLIC_VAMPIRES_SERVER_URL` remains supported as a legacy fallback.

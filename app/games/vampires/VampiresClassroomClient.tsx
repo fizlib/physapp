@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { io, type Socket } from "socket.io-client"
 import { createClient } from "@/lib/supabase/client"
+import { CLASSROOM_GAMES_SERVER_URL } from "@/lib/classroom-games"
 import VampireGame from "./VampireGame"
 
 type UserRole = "teacher" | "student"
@@ -95,8 +96,7 @@ interface RoleConfig {
     Jester: number
 }
 
-const GAME_SERVER_URL = process.env.NEXT_PUBLIC_VAMPIRES_SERVER_URL
-    || "https://http--vampires-classroom-backend--k46wscvdzqkf.code.run"
+const GAME_SERVER_URL = CLASSROOM_GAMES_SERVER_URL
 
 const DEFAULT_SETTINGS: GameSettings = {
     discussionTime: 120,

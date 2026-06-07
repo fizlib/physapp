@@ -1,0 +1,859 @@
+.coffee-stage,
+.coffee-stage * {
+    box-sizing: border-box;
+}
+
+.coffee-stage {
+    --coffee-ink: #382619;
+    --coffee-brown: #70452d;
+    --coffee-cream: #fbf6ec;
+    --coffee-paper: rgba(255, 253, 248, 0.9);
+    --coffee-line: #e8dbc8;
+    --coffee-sage: #7f956c;
+    --coffee-sage-dark: #35502c;
+    --coffee-sage-soft: #edf1e8;
+    min-height: 100dvh;
+    color: var(--coffee-ink);
+    background:
+        radial-gradient(circle at 8% 0%, rgba(223, 192, 151, 0.25), transparent 28rem),
+        radial-gradient(circle at 100% 100%, rgba(134, 153, 113, 0.14), transparent 34rem),
+        var(--coffee-cream);
+    font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+.coffee-stage button,
+.coffee-stage input,
+.coffee-stage select {
+    font: inherit;
+}
+
+.coffee-stage button {
+    color: inherit;
+}
+
+.coffee-teacher-stage {
+    padding: 42px 24px 72px;
+}
+
+.coffee-teacher-shell {
+    width: min(1180px, 100%);
+    margin: 0 auto;
+}
+
+.coffee-teacher-header,
+.coffee-classroom-bar,
+.coffee-runtime-heading,
+.coffee-participant-name,
+.coffee-picker-head,
+.coffee-student-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.coffee-teacher-header {
+    align-items: flex-start;
+    margin-bottom: 26px;
+}
+
+.coffee-teacher-header h1 {
+    margin: 4px 0 8px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: clamp(2.3rem, 5vw, 4.6rem);
+    line-height: 0.96;
+    letter-spacing: -0.045em;
+}
+
+.coffee-teacher-header p {
+    max-width: 660px;
+    margin: 0;
+    color: #755f50;
+    font-size: 1.05rem;
+}
+
+.coffee-kicker,
+.coffee-section-heading > span {
+    color: var(--coffee-brown);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.coffee-connection {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 13px;
+    border: 1px solid var(--coffee-line);
+    border-radius: 999px;
+    color: #8a6d5a;
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.coffee-connection.online {
+    color: var(--coffee-sage-dark);
+    border-color: #cbd6c1;
+    background: var(--coffee-sage-soft);
+}
+
+.coffee-panel,
+.coffee-progress-card {
+    border: 1px solid var(--coffee-line);
+    border-radius: 20px;
+    background: var(--coffee-paper);
+    box-shadow: 0 20px 55px rgba(89, 58, 36, 0.06);
+}
+
+.coffee-panel {
+    padding: 24px;
+}
+
+.coffee-classroom-bar {
+    margin-bottom: 20px;
+}
+
+.coffee-classroom-bar label,
+.coffee-number-field {
+    display: grid;
+    gap: 8px;
+    color: #765b48;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.coffee-classroom-bar select,
+.coffee-number-field input {
+    min-width: 240px;
+    height: 44px;
+    padding: 0 13px;
+    border: 1px solid #d9cab7;
+    border-radius: 10px;
+    outline: none;
+    color: var(--coffee-ink);
+    background: #fffdf8;
+    font-size: 0.96rem;
+    font-weight: 650;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.coffee-classroom-bar select:focus,
+.coffee-number-field input:focus,
+.coffee-search input:focus {
+    border-color: var(--coffee-sage);
+    box-shadow: 0 0 0 3px rgba(127, 149, 108, 0.16);
+}
+
+.coffee-connected-count {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--coffee-sage-dark);
+}
+
+.coffee-connected-count div {
+    display: grid;
+}
+
+.coffee-connected-count strong {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.coffee-connected-count span {
+    color: #796858;
+    font-size: 0.8rem;
+}
+
+.coffee-teacher-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.coffee-launch-panel {
+    grid-column: 1 / -1;
+}
+
+.coffee-section-heading {
+    margin-bottom: 20px;
+}
+
+.coffee-section-heading h2,
+.coffee-runtime-heading h2 {
+    margin: 4px 0 0;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.65rem;
+}
+
+.coffee-roster {
+    display: grid;
+    gap: 9px;
+    max-height: 380px;
+    overflow: auto;
+}
+
+.coffee-roster > div,
+.coffee-participant-grid article {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border: 1px solid #eee2d2;
+    border-radius: 12px;
+    background: #fffdf8;
+}
+
+.coffee-roster > div strong {
+    flex: 1;
+}
+
+.coffee-roster small {
+    color: var(--coffee-sage-dark);
+}
+
+.coffee-roster p {
+    color: #806b5c;
+}
+
+.coffee-roster code {
+    color: var(--coffee-brown);
+    font-weight: 700;
+}
+
+.coffee-avatar {
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    flex: none;
+    border-radius: 50%;
+    color: var(--coffee-sage-dark);
+    background: var(--coffee-sage-soft);
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 850;
+}
+
+.coffee-settings-panel {
+    display: flex;
+    flex-direction: column;
+}
+
+.coffee-number-field input {
+    width: 160px;
+    min-width: 0;
+}
+
+.coffee-number-field small {
+    color: #8a7768;
+    font-weight: 500;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.coffee-slot-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.coffee-slot-preview span {
+    padding: 8px 11px;
+    border: 1px solid #e9dbc8;
+    border-radius: 999px;
+    background: #fffaf1;
+    font-weight: 750;
+}
+
+.coffee-launch-panel p {
+    max-width: 720px;
+    color: #756253;
+}
+
+.coffee-primary-button,
+.coffee-danger-button {
+    min-height: 44px;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 11px;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.coffee-primary-button {
+    color: white !important;
+    background: var(--coffee-sage-dark);
+    box-shadow: 0 8px 22px rgba(53, 80, 44, 0.2);
+}
+
+.coffee-primary-button.compact {
+    min-height: 40px;
+}
+
+.coffee-primary-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+
+.coffee-danger-button {
+    color: #8d341f !important;
+    border: 1px solid #e6bbaa;
+    background: #fff2ec;
+}
+
+.coffee-warning,
+.coffee-error {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid #e6c9a4;
+    border-radius: 11px;
+    color: #7b4a1e;
+    background: #fff7e7;
+}
+
+.coffee-error {
+    border-color: #e9b8aa;
+    color: #8d341f;
+    background: #fff1ec;
+}
+
+.coffee-empty {
+    text-align: center;
+    color: #806b5c;
+}
+
+.coffee-result-banner,
+.coffee-full-banner {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 20px;
+    padding: 20px 22px;
+    border: 1px solid #cad6bf;
+    border-radius: 18px;
+    color: var(--coffee-sage-dark);
+    background: linear-gradient(135deg, #f3f6ed, #fbfcf8);
+}
+
+.coffee-result-banner.dead-end {
+    color: #7f3824;
+    border-color: #e5b9a9;
+    background: #fff3ed;
+}
+
+.coffee-result-banner > span,
+.coffee-full-banner > span {
+    display: grid;
+    width: 50px;
+    height: 50px;
+    place-items: center;
+    flex: none;
+    border-radius: 50%;
+    color: white;
+    background: var(--coffee-sage);
+}
+
+.coffee-result-banner.dead-end > span {
+    background: #a85b43;
+}
+
+.coffee-result-banner h2,
+.coffee-full-banner h2 {
+    margin: 0 0 4px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.55rem;
+}
+
+.coffee-result-banner p,
+.coffee-full-banner p {
+    margin: 0;
+    color: #6e6256;
+}
+
+.coffee-progress-card {
+    margin-bottom: 20px;
+    padding: 20px 22px;
+}
+
+.coffee-progress-card h2 {
+    margin: 0 0 8px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.35rem;
+}
+
+.coffee-progress-card p {
+    margin: 8px 0;
+}
+
+.coffee-progress-track {
+    height: 13px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #f0e3d0;
+}
+
+.coffee-progress-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #789166, #94a680);
+    transition: width 240ms ease;
+}
+
+.coffee-runtime-heading {
+    align-items: flex-end;
+    margin-bottom: 20px;
+}
+
+.coffee-participant-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.coffee-participant-grid article {
+    justify-content: space-between;
+}
+
+.coffee-participant-name {
+    justify-content: flex-start;
+    min-width: 0;
+    gap: 10px;
+}
+
+.coffee-participant-name > div {
+    display: grid;
+    min-width: 0;
+}
+
+.coffee-participant-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coffee-participant-name small.online {
+    color: var(--coffee-sage-dark);
+}
+
+.coffee-participant-name small.offline {
+    color: #a54d38;
+}
+
+.coffee-filled-count {
+    color: var(--coffee-sage-dark);
+    font-size: 1.1rem;
+}
+
+.coffee-late-students {
+    display: grid;
+    gap: 4px;
+    margin-top: 18px;
+    padding: 14px;
+    border-radius: 12px;
+    color: #7c6654;
+    background: #f8eee0;
+}
+
+.coffee-late-students span {
+    font-size: 0.9rem;
+}
+
+.coffee-student-stage {
+    padding: 22px 16px 32px;
+}
+
+.coffee-student-shell {
+    width: min(540px, 100%);
+    margin: 0 auto;
+}
+
+.coffee-student-header {
+    align-items: flex-start;
+    margin: 6px 4px 22px;
+}
+
+.coffee-student-header h1 {
+    margin: 0 0 10px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: clamp(2.15rem, 10vw, 3rem);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+}
+
+.coffee-student-header > svg {
+    flex: none;
+    color: var(--coffee-brown);
+}
+
+.coffee-student-header strong {
+    font-size: 1rem;
+}
+
+.coffee-student-stage .coffee-progress-card {
+    box-shadow: none;
+}
+
+.coffee-student-error {
+    width: 100%;
+    cursor: pointer;
+    text-align: left;
+}
+
+.coffee-student-error span {
+    flex: 1;
+}
+
+.coffee-calendar h2 {
+    margin: 24px 4px 12px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.28rem;
+}
+
+.coffee-calendar-list {
+    display: grid;
+    gap: 9px;
+}
+
+.coffee-calendar-row {
+    display: grid;
+    grid-template-columns: 78px minmax(0, 1fr);
+    min-height: 64px;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px 8px 16px;
+    border: 1px solid var(--coffee-line);
+    border-radius: 13px;
+    background: rgba(255, 253, 248, 0.84);
+}
+
+.coffee-calendar-row.confirmed {
+    grid-template-columns: 78px minmax(0, 1fr) 38px;
+    border-color: #d4ddcb;
+    background: linear-gradient(90deg, #f8f8f1, #eff3e9);
+}
+
+.coffee-calendar-row.pending {
+    grid-template-columns: 78px minmax(0, 1fr) auto;
+    border-color: #e5c99e;
+    background: #fff6e7;
+}
+
+.coffee-slot-time {
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.16rem;
+}
+
+.coffee-partner-name {
+    overflow: hidden;
+    color: var(--coffee-sage-dark);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coffee-check {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border-radius: 50%;
+    color: white;
+    background: var(--coffee-sage);
+}
+
+.coffee-find-button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+    color: #76675b !important;
+    background: transparent;
+}
+
+.coffee-find-button > span {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.coffee-find-button i {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 50%;
+    background: #f1e4d1;
+}
+
+.coffee-find-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.38;
+}
+
+.coffee-pending-copy {
+    display: grid;
+    min-width: 0;
+}
+
+.coffee-pending-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.coffee-pending-copy small {
+    color: #a24f23;
+    font-size: 0.73rem;
+}
+
+.coffee-cancel {
+    padding: 5px;
+    border: 0;
+    cursor: pointer;
+    color: #a24f23 !important;
+    background: transparent;
+    font-size: 0.78rem !important;
+    text-decoration: underline;
+}
+
+.coffee-instructions {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin: 28px 18px 0;
+    color: #5f5147;
+}
+
+.coffee-instructions svg {
+    flex: none;
+    color: var(--coffee-sage);
+}
+
+.coffee-instructions p {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.coffee-picker-overlay {
+    position: fixed;
+    z-index: 50;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(48, 32, 21, 0.48);
+    backdrop-filter: blur(4px);
+}
+
+.coffee-picker {
+    width: min(520px, 100%);
+    max-height: min(76dvh, 680px);
+    padding: 20px;
+    overflow: hidden;
+    border: 1px solid #e6d6c1;
+    border-radius: 22px;
+    background: #fffaf1;
+    box-shadow: 0 26px 70px rgba(51, 32, 19, 0.24);
+}
+
+.coffee-picker-head {
+    align-items: flex-start;
+}
+
+.coffee-picker-head span {
+    color: var(--coffee-brown);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.coffee-picker-head h2 {
+    margin: 2px 0 0;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.55rem;
+}
+
+.coffee-picker-head button {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    background: #f0e4d4;
+}
+
+.coffee-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 18px 0 12px;
+    padding: 0 12px;
+    border: 1px solid #ddcdb9;
+    border-radius: 12px;
+    background: white;
+}
+
+.coffee-search input {
+    width: 100%;
+    height: 46px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+}
+
+.coffee-choice-list {
+    display: grid;
+    max-height: 48dvh;
+    gap: 8px;
+    overflow: auto;
+}
+
+.coffee-choice-list button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    border: 1px solid #eadfce;
+    border-radius: 12px;
+    cursor: pointer;
+    background: #fffefb;
+    text-align: left;
+}
+
+.coffee-choice-list button:hover {
+    border-color: #b9c7ae;
+    background: #f4f7f0;
+}
+
+.coffee-choice-list p {
+    color: #806e60;
+    text-align: center;
+}
+
+.coffee-waiting-stage {
+    display: grid;
+    place-items: center;
+}
+
+.coffee-waiting-card {
+    display: grid;
+    width: min(460px, 100%);
+    justify-items: center;
+    padding: 38px 28px;
+    border: 1px solid var(--coffee-line);
+    border-radius: 24px;
+    background: rgba(255, 253, 248, 0.86);
+    box-shadow: 0 30px 80px rgba(89, 58, 36, 0.1);
+    text-align: center;
+}
+
+.coffee-mark {
+    display: grid;
+    width: 76px;
+    height: 76px;
+    place-items: center;
+    margin-bottom: 18px;
+    border-radius: 50%;
+    color: var(--coffee-brown);
+    background: #f2e3cf;
+}
+
+.coffee-waiting-card h1 {
+    margin: 0 0 8px;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 2.2rem;
+    line-height: 1;
+}
+
+.coffee-waiting-card p {
+    max-width: 330px;
+    color: #756457;
+    line-height: 1.55;
+}
+
+.coffee-waiting-card .coffee-connection {
+    margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+    .coffee-teacher-grid,
+    .coffee-participant-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .coffee-teacher-stage {
+        padding: 24px 14px 48px;
+    }
+
+    .coffee-teacher-header,
+    .coffee-classroom-bar,
+    .coffee-runtime-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .coffee-teacher-grid,
+    .coffee-participant-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .coffee-classroom-bar select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .coffee-calendar-row {
+        grid-template-columns: 68px minmax(0, 1fr);
+    }
+
+    .coffee-calendar-row.confirmed {
+        grid-template-columns: 68px minmax(0, 1fr) 34px;
+    }
+
+    .coffee-calendar-row.pending {
+        grid-template-columns: 68px minmax(0, 1fr);
+    }
+
+    .coffee-calendar-row.pending .coffee-cancel {
+        grid-column: 2;
+        justify-self: start;
+        padding: 0;
+    }
+
+    .coffee-student-header > svg {
+        width: 54px;
+    }
+}
+
+@media (min-width: 641px) {
+    .coffee-picker-overlay {
+        align-items: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .coffee-progress-track span {
+        transition: none;
+    }
+}

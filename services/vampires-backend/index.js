@@ -13,6 +13,7 @@ const GoogleSTTController = require('./stt');
 const DeepgramSTTController = require('./deepgram-stt');
 const GameLogger = require('./game-logger');
 const { splitStudentsIntoGames } = require('./classroom-groups');
+const { registerCoffeeNamespace } = require('./coffee-namespace');
 
 // Initialize TTS controllers (singletons) if credentials are available
 const googleTTSController = new GoogleTTSController();
@@ -1675,7 +1676,7 @@ class Game {
   }
 }
 
-io.use(async (socket, next) => {
+async function authenticateSocket(socket, next) {
   try {
     const accessToken = socket.handshake.auth?.accessToken;
     if (!accessToken) {
@@ -1709,7 +1710,10 @@ io.use(async (socket, next) => {
     console.error('[Auth] Socket authentication failed:', error);
     return next(new Error('Authentication failed.'));
   }
-});
+}
+
+io.use(authenticateSocket);
+registerCoffeeNamespace({ io, supabase, authenticateSocket });
 
 io.on('connection', async (socket) => {
   const identity = socket.data;

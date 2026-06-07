@@ -35,8 +35,13 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## Vampires classroom game
+## Standalone classroom games
 
-The standalone frontend is available at `/games/vampires`. Its authenticated
-Socket.IO backend and Northflank deployment settings are in
-`services/vampires-backend`.
+The authenticated standalone frontends are available at:
+
+- `/games/vampires`
+- `/games/coffee`
+
+Both use the Socket.IO service and Northflank deployment settings in
+`services/vampires-backend`. Vampires uses the default namespace and Coffee
+uses `/coffee`.
