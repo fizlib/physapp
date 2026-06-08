@@ -140,7 +140,7 @@ test('perfect matching solver accepts completable graphs and rejects dead ends',
 
 test('ends an attempt when a remaining slot has no perfect pairing', () => {
   const session = new CoffeeGameSession('classroom-1', 'teacher-1');
-  session.start(students(6), 4);
+  session.start(students(6), 4, 'mathematical');
 
   confirmMeeting(session, 'student-3', 'student-4', 1, 1_000);
   confirmMeeting(session, 'student-3', 'student-5', 2, 2_000);
@@ -150,4 +150,86 @@ test('ends an attempt when a remaining slot has no perfect pairing', () => {
   assert.equal(result.status, 'dead_end');
   assert.equal(session.status, 'dead_end');
   assert.equal(session.pending.size, 0);
+});
+
+test('exhausted mode continues after a mathematical dead end while legal meetings remain', () => {
+  const session = new CoffeeGameSession('classroom-1', 'teacher-1');
+  session.start(students(6), 4, 'exhausted');
+
+  confirmMeeting(session, 'student-3', 'student-4', 1, 1_000);
+  confirmMeeting(session, 'student-3', 'student-5', 2, 2_000);
+  confirmMeeting(session, 'student-4', 'student-5', 3, 3_000);
+  const result = confirmMeeting(session, 'student-1', 'student-2', 0, 4_000);
+
+  assert.equal(session.hasDeadEnd(), true);
+  assert.equal(session.hasAnyLegalMeeting(), true);
+  assert.equal(result.status, 'running');
+  assert.equal(session.status, 'running');
+});
+
+test('exhausted mode stops only after no legal meeting remains', () => {
+  const session = new CoffeeGameSession('classroom-1', 'teacher-1');
+  session.start(students(6), 4, 'exhausted');
+
+  confirmMeeting(session, 'student-3', 'student-4', 1, 1_000);
+  confirmMeeting(session, 'student-3', 'student-5', 2, 2_000);
+  confirmMeeting(session, 'student-4', 'student-5', 3, 3_000);
+  confirmMeeting(session, 'student-1', 'student-2', 0, 4_000);
+
+  let timestamp = 5_000;
+  while (session.status === 'running') {
+    let nextMeeting = null;
+
+    for (let slotIndex = 0; slotIndex < session.slotCount && !nextMeeting; slotIndex += 1) {
+      for (
+        let firstIndex = 0;
+        firstIndex < session.participantOrder.length && !nextMeeting;
+        firstIndex += 1
+      ) {
+        for (
+          let secondIndex = firstIndex + 1;
+          secondIndex < session.participantOrder.length;
+          secondIndex += 1
+        ) {
+          const firstId = session.participantOrder[firstIndex];
+          const secondId = session.participantOrder[secondIndex];
+          if (session.isLegalPairAtSlot(firstId, secondId, slotIndex)) {
+            nextMeeting = { firstId, secondId, slotIndex };
+            break;
+          }
+        }
+      }
+    }
+
+    assert.ok(nextMeeting, 'running exhausted-mode session should have a legal meeting');
+    confirmMeeting(
+      session,
+      nextMeeting.firstId,
+      nextMeeting.secondId,
+      nextMeeting.slotIndex,
+      timestamp
+    );
+    timestamp += 1_000;
+  }
+
+  assert.equal(session.status, 'dead_end');
+  assert.equal(session.hasAnyLegalMeeting(), false);
+  assert.ok(session.remainingMeetings > 0);
+});
+
+test('wins in either stop mode and defaults invalid modes to mathematical', () => {
+  for (const stopMode of ['mathematical', 'exhausted']) {
+    const session = new CoffeeGameSession(`classroom-${stopMode}`, 'teacher-1');
+    session.start(students(2), 1, stopMode);
+    confirmMeeting(session, 'student-1', 'student-2', 0);
+    assert.equal(session.status, 'won');
+  }
+
+  const missingMode = new CoffeeGameSession('classroom-missing', 'teacher-1');
+  missingMode.start(students(4), 2);
+  assert.equal(missingMode.stopMode, 'mathematical');
+
+  const invalidMode = new CoffeeGameSession('classroom-invalid', 'teacher-1');
+  invalidMode.start(students(4), 2, 'unknown');
+  assert.equal(invalidMode.stopMode, 'mathematical');
 });

@@ -103,6 +103,7 @@ class CoffeeGameSession {
     this.status = 'waiting';
     this.slotCount = 6;
     this.slotLabels = generateSlotLabels(this.slotCount);
+    this.stopMode = 'mathematical';
     this.participantOrder = [];
     this.participants = new Map();
     this.pending = new Map();
@@ -111,7 +112,7 @@ class CoffeeGameSession {
     this.finishedAt = null;
   }
 
-  start(participants, slotCount, now = Date.now()) {
+  start(participants, slotCount, stopMode = 'mathematical', now = Date.now()) {
     if (!Array.isArray(participants) || participants.length < 2) {
       throw new CoffeeGameError(
         'NOT_ENOUGH_STUDENTS',
@@ -142,6 +143,7 @@ class CoffeeGameSession {
     this.status = 'running';
     this.slotCount = slotCount;
     this.slotLabels = generateSlotLabels(slotCount);
+    this.stopMode = stopMode === 'exhausted' ? 'exhausted' : 'mathematical';
     this.participantOrder = participants.map(participant => participant.id);
     this.participants = new Map(participants.map(participant => [
       participant.id,
@@ -160,6 +162,7 @@ class CoffeeGameSession {
 
   reset() {
     this.status = 'waiting';
+    this.stopMode = 'mathematical';
     this.participantOrder = [];
     this.participants.clear();
     this.pending.clear();
@@ -351,11 +354,37 @@ class CoffeeGameSession {
       return;
     }
 
-    if (this.hasDeadEnd()) {
+    const shouldStop = this.stopMode === 'exhausted'
+      ? !this.hasAnyLegalMeeting()
+      : this.hasDeadEnd();
+
+    if (shouldStop) {
       this.status = 'dead_end';
       this.finishedAt = now;
       this.pending.clear();
     }
+  }
+
+  hasAnyLegalMeeting() {
+    for (let firstIndex = 0; firstIndex < this.participantOrder.length; firstIndex += 1) {
+      const firstId = this.participantOrder[firstIndex];
+
+      for (
+        let secondIndex = firstIndex + 1;
+        secondIndex < this.participantOrder.length;
+        secondIndex += 1
+      ) {
+        const secondId = this.participantOrder[secondIndex];
+
+        for (let slotIndex = 0; slotIndex < this.slotCount; slotIndex += 1) {
+          if (this.isLegalPairAtSlot(firstId, secondId, slotIndex)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   hasDeadEnd() {

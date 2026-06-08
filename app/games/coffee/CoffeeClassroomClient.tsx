@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
     Check,
     CircleAlert,
@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/client"
 
 type UserRole = "teacher" | "student"
 type CoffeeStatus = "waiting" | "running" | "won" | "dead_end"
+type CoffeeStopMode = "mathematical" | "exhausted"
 
 interface Classroom {
     id: string
@@ -60,6 +61,7 @@ interface CoffeeState {
     status: CoffeeStatus
     slotCount: number
     slotLabels: string[]
+    stopMode: CoffeeStopMode
     confirmedMeetings: number
     totalMeetings: number
     remainingMeetings: number
@@ -91,6 +93,8 @@ export function CoffeeClassroomClient({ userId, role, displayName, classrooms }:
     const [error, setError] = useState<string | null>(null)
     const [selectedClassroomId, setSelectedClassroomId] = useState(classrooms[0]?.id || "")
     const [slotCount, setSlotCount] = useState(6)
+    const [stopMode, setStopMode] = useState<CoffeeStopMode>("mathematical")
+    const previousStatusRef = useRef<CoffeeStatus | null>(null)
 
     useEffect(() => {
         const supabase = createClient()
@@ -125,6 +129,14 @@ export function CoffeeClassroomClient({ userId, role, displayName, classrooms }:
             })
             activeSocket.on("coffee_state", (nextState: CoffeeState) => {
                 setState(nextState)
+                const previousStatus = previousStatusRef.current
+                if (
+                    nextState.status !== "waiting"
+                    || (previousStatus !== null && previousStatus !== "waiting")
+                ) {
+                    setStopMode(nextState.stopMode || "mathematical")
+                }
+                previousStatusRef.current = nextState.status
             })
             activeSocket.on("coffee_error", (coffeeError: CoffeeError) => {
                 setError(coffeeError.message)
@@ -160,10 +172,14 @@ export function CoffeeClassroomClient({ userId, role, displayName, classrooms }:
                 setSelectedClassroomId={classroomId => {
                     setState(null)
                     setError(null)
+                    setStopMode("mathematical")
+                    previousStatusRef.current = null
                     setSelectedClassroomId(classroomId)
                 }}
                 slotCount={slotCount}
                 setSlotCount={setSlotCount}
+                stopMode={stopMode}
+                setStopMode={setStopMode}
                 socket={socket}
                 state={state}
             />
@@ -190,6 +206,8 @@ function TeacherCoffeeView({
     setSelectedClassroomId,
     slotCount,
     setSlotCount,
+    stopMode,
+    setStopMode,
     socket,
     state,
 }: {
@@ -200,6 +218,8 @@ function TeacherCoffeeView({
     setSelectedClassroomId: (classroomId: string) => void
     slotCount: number
     setSlotCount: (slotCount: number) => void
+    stopMode: CoffeeStopMode
+    setStopMode: (stopMode: CoffeeStopMode) => void
     socket: Socket | null
     state: CoffeeState | null
 }) {
@@ -213,7 +233,11 @@ function TeacherCoffeeView({
 
     const startAttempt = () => {
         if (!socket || !selectedClassroomId) return
-        socket.emit("coffee_start", { classroomId: selectedClassroomId, slotCount: effectiveSlotCount })
+        socket.emit("coffee_start", {
+            classroomId: selectedClassroomId,
+            slotCount: effectiveSlotCount,
+            stopMode,
+        })
     }
 
     const resetAttempt = (confirmFirst: boolean) => {
@@ -293,20 +317,37 @@ function TeacherCoffeeView({
                                         <span>2 žingsnis</span>
                                         <h2>Žaidimo nustatymai</h2>
                                     </div>
-                                    <label className="coffee-number-field">
-                                        Susitikimų laikų skaičius
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={maximumSlots}
-                                            value={effectiveSlotCount}
-                                            onChange={event => {
-                                                const nextValue = Number(event.target.value) || 1
-                                                setSlotCount(Math.min(maximumSlots, Math.max(1, nextValue)))
-                                            }}
-                                        />
-                                        <small>Laikai prasidės 09:00 ir kartosis kas 30 minučių.</small>
-                                    </label>
+                                    <div className="coffee-settings-grid">
+                                        <label className="coffee-number-field">
+                                            Susitikimų laikų skaičius
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={maximumSlots}
+                                                value={effectiveSlotCount}
+                                                onChange={event => {
+                                                    const nextValue = Number(event.target.value) || 1
+                                                    setSlotCount(Math.min(maximumSlots, Math.max(1, nextValue)))
+                                                }}
+                                            />
+                                            <small>Laikai prasidės 09:00 ir kartosis kas 30 minučių.</small>
+                                        </label>
+                                        <label className="coffee-stop-field">
+                                            Kada baigti nepavykusį bandymą
+                                            <select
+                                                value={stopMode}
+                                                onChange={event => setStopMode(event.target.value as CoffeeStopMode)}
+                                            >
+                                                <option value="mathematical">
+                                                    Baigti, kai užpildyti visų kalendorių nebeįmanoma
+                                                </option>
+                                                <option value="exhausted">
+                                                    Leisti užpildyti visus dar įmanomus susitikimus
+                                                </option>
+                                            </select>
+                                            <small>Pasirinkimas taikomas tik kitam bandymui.</small>
+                                        </label>
+                                    </div>
                                     <div className="coffee-slot-preview">
                                         {createSlotLabels(effectiveSlotCount).map(label => <span key={label}>{label}</span>)}
                                     </div>
@@ -625,11 +666,11 @@ function ResultBanner({ status }: { status: CoffeeStatus }) {
         <section className={`coffee-result-banner ${won ? "won" : "dead-end"}`}>
             <span>{won ? <Check size={28} strokeWidth={3} /> : <CircleAlert size={28} />}</span>
             <div>
-                <h2>{won ? "Klasė laimėjo!" : "Klasė pateko į aklavietę"}</h2>
+                <h2>{won ? "Klasė laimėjo!" : "Bandymas nepavyko"}</h2>
                 <p>
                     {won
                         ? "Visų mokinių kalendoriai užpildyti."
-                        : "Likusių susitikimų nebeįmanoma teisėtai suderinti."}
+                        : "Nebėra būdo suderinti visų likusių susitikimų."}
                 </p>
             </div>
         </section>

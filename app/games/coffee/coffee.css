@@ -118,7 +118,8 @@
 }
 
 .coffee-classroom-bar label,
-.coffee-number-field {
+.coffee-number-field,
+.coffee-stop-field {
     display: grid;
     gap: 8px;
     color: #765b48;
@@ -129,7 +130,8 @@
 }
 
 .coffee-classroom-bar select,
-.coffee-number-field input {
+.coffee-number-field input,
+.coffee-stop-field select {
     min-width: 240px;
     height: 44px;
     padding: 0 13px;
@@ -146,6 +148,7 @@
 
 .coffee-classroom-bar select:focus,
 .coffee-number-field input:focus,
+.coffee-stop-field select:focus,
 .coffee-search input:focus {
     border-color: var(--coffee-sage);
     box-shadow: 0 0 0 3px rgba(127, 149, 108, 0.16);
@@ -252,11 +255,28 @@
     min-width: 0;
 }
 
-.coffee-number-field small {
+.coffee-number-field small,
+.coffee-stop-field small {
     color: #8a7768;
     font-weight: 500;
     letter-spacing: normal;
     text-transform: none;
+}
+
+.coffee-settings-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.7fr) minmax(280px, 1.3fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.coffee-stop-field select {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 44px;
+    padding-block: 10px;
+    white-space: normal;
 }
 
 .coffee-slot-preview {
@@ -817,7 +837,8 @@
     }
 
     .coffee-teacher-grid,
-    .coffee-participant-grid {
+    .coffee-participant-grid,
+    .coffee-settings-grid {
         grid-template-columns: 1fr;
     }
 

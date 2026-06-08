@@ -87,6 +87,7 @@ function registerCoffeeNamespace({ io, supabase, authenticateSocket }) {
       status: session?.status || 'waiting',
       slotCount: session?.slotCount || 6,
       slotLabels: session?.slotLabels || [],
+      stopMode: session?.stopMode || 'mathematical',
       connectedStudents,
       participants: (session?.participantOrder || []).map(studentId => {
         const participant = session.getParticipant(studentId);
@@ -113,6 +114,7 @@ function registerCoffeeNamespace({ io, supabase, authenticateSocket }) {
       isParticipant: Boolean(participant),
       slotCount: session?.slotCount || 6,
       slotLabels: session?.slotLabels || [],
+      stopMode: session?.stopMode || 'mathematical',
       participants: participant
         ? session.participantOrder.map(participantId => {
             const item = session.getParticipant(participantId);
@@ -273,7 +275,7 @@ function registerCoffeeNamespace({ io, supabase, authenticateSocket }) {
       socket.emit('coffee_state', serializeTeacherState(classroomId));
     });
 
-    socket.on('coffee_start', async ({ classroomId, slotCount } = {}) => {
+    socket.on('coffee_start', async ({ classroomId, slotCount, stopMode } = {}) => {
       try {
         const classroom = await verifyTeacherClassroom(socket, classroomId);
         if (!classroom) {
@@ -292,7 +294,7 @@ function registerCoffeeNamespace({ io, supabase, authenticateSocket }) {
           .sort((first, second) => first.name.localeCompare(second.name, 'lt'))
           .map(student => ({ id: student.id, name: student.name }));
 
-        session.start(participants, Number(slotCount));
+        session.start(participants, Number(slotCount), stopMode);
         emitAllStates(classroomId);
       } catch (error) {
         emitError(socket, error);
