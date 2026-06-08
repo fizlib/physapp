@@ -22,6 +22,11 @@ import {
     type ScoredAnswerMap,
     type ScoredQuestionOrderItem,
 } from '@/lib/ninth-grade-scored-test'
+import {
+    CLASSROOM_GAME_IDS,
+    CLASSROOM_GAMES,
+    type ClassroomGameId,
+} from '@/lib/classroom-games'
 
 // ... (keep existing code) ...
 
@@ -77,6 +82,12 @@ const AssignRandomGroupsSchema = z.object({
     studentIds: z.array(z.string().uuid()).min(1),
     questionsEnabled: z.boolean().default(false),
     questions: z.array(z.string()).default([]),
+})
+
+const SendGameInviteSchema = z.object({
+    classroomId: z.string().uuid(),
+    gameId: z.enum(CLASSROOM_GAME_IDS),
+    studentIds: z.array(z.string().uuid()).min(1),
 })
 
 const RANDOM_GROUP_QUESTION_INSTRUCTION = "Kai ateis tavo eilė, perskaityk klausimą kitiems grupės nariams. Išklausyk jų atsakymus. Po to, jei nori, gali pridėti savo mintį."
@@ -4679,6 +4690,7 @@ export async function assignRandomGroupsToStudents(
             title: "Nauja grupės užduotis",
             body: "",
             metadata: {
+                kind: "random_group",
                 batchId: batch.id,
                 classroomId: validated.data.classroomId,
                 classroomName,
@@ -4711,6 +4723,85 @@ export async function assignRandomGroupsToStudents(
         batchId: batch.id,
         createdAt: batch.created_at,
         groups,
+    }
+}
+
+export async function sendGameInviteToStudents(
+    classroomId: string,
+    gameId: ClassroomGameId,
+    studentIds: string[]
+): Promise<ActionState> {
+    const validated = SendGameInviteSchema.safeParse({ classroomId, gameId, studentIds })
+    if (!validated.success) {
+        return { success: false, error: "Invalid game invitation request" }
+    }
+
+    const selectedStudentIds = [...new Set(validated.data.studentIds)]
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { success: false, error: "Unauthorized" }
+
+    const { data: classroom } = await supabase
+        .from('classrooms')
+        .select('teacher_id, name')
+        .eq('id', validated.data.classroomId)
+        .single()
+
+    if (!classroom || classroom.teacher_id !== user.id) {
+        return { success: false, error: "Unauthorized to manage this classroom" }
+    }
+
+    const supabaseAdmin = createAdminClient()
+    const { data: enrollments, error: enrollmentsError } = await supabaseAdmin
+        .from('enrollments')
+        .select('student_id')
+        .eq('classroom_id', validated.data.classroomId)
+        .in('student_id', selectedStudentIds)
+
+    if (enrollmentsError) {
+        console.error(enrollmentsError)
+        return { success: false, error: "Failed to fetch selected students" }
+    }
+
+    const enrolledStudentIds = new Set((enrollments || []).map((enrollment) => enrollment.student_id))
+    if (
+        enrolledStudentIds.size !== selectedStudentIds.length
+        || selectedStudentIds.some((studentId) => !enrolledStudentIds.has(studentId))
+    ) {
+        return { success: false, error: "One or more selected students are not enrolled in this classroom" }
+    }
+
+    const game = CLASSROOM_GAMES[validated.data.gameId]
+    const classroomName = classroom.name || 'classroom'
+    const body = `Mokytojas kviečia prisijungti prie žaidimo „${game.name}“.`
+    const notificationRows = selectedStudentIds.map((studentId) => ({
+        student_id: studentId,
+        classroom_id: validated.data.classroomId,
+        title: "Kvietimas į žaidimą",
+        body,
+        metadata: {
+            kind: "game_invite",
+            classroomId: validated.data.classroomId,
+            classroomName,
+            gameId: validated.data.gameId,
+        },
+    }))
+
+    const { error: notificationsError } = await supabaseAdmin
+        .from('student_popup_notifications')
+        .insert(notificationRows)
+
+    if (notificationsError) {
+        console.error(notificationsError)
+        return { success: false, error: "Failed to notify students" }
+    }
+
+    revalidatePath(`/teacher/class/${validated.data.classroomId}`)
+    revalidatePath('/student')
+
+    return {
+        success: true,
+        message: `Invitation sent to ${selectedStudentIds.length} student${selectedStudentIds.length === 1 ? '' : 's'}`,
     }
 }
 

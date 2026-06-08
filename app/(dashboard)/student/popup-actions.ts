@@ -1,6 +1,10 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import {
+    isClassroomGameId,
+    type ClassroomGameId,
+} from '@/lib/classroom-games'
 import { z } from 'zod'
 
 const MarkPopupNotificationSeenSchema = z.object({
@@ -9,10 +13,12 @@ const MarkPopupNotificationSeenSchema = z.object({
 
 export type StudentPopupNotification = {
     id: string
+    kind: 'random_group' | 'game_invite'
     title: string
     body: string
     createdAt: string
     classroomName: string | null
+    gameId: ClassroomGameId | null
     groupNumber: number | null
     members: Array<{
         id: string | null
@@ -41,7 +47,9 @@ type ActionState = {
 function readPopupNotificationMetadata(metadata: unknown): Omit<StudentPopupNotification, 'id' | 'title' | 'body' | 'createdAt'> {
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
         return {
+            kind: 'random_group',
             classroomName: null,
+            gameId: null,
             groupNumber: null,
             members: [],
             assignedQuestions: [],
@@ -50,6 +58,7 @@ function readPopupNotificationMetadata(metadata: unknown): Omit<StudentPopupNoti
     }
 
     const value = metadata as Record<string, unknown>
+    const kind = value.kind === 'game_invite' ? 'game_invite' : 'random_group'
     const members = Array.isArray(value.members)
         ? value.members
             .filter((member): member is Record<string, unknown> => !!member && typeof member === 'object' && !Array.isArray(member))
@@ -69,7 +78,9 @@ function readPopupNotificationMetadata(metadata: unknown): Omit<StudentPopupNoti
         : []
 
     return {
+        kind,
         classroomName: typeof value.classroomName === 'string' ? value.classroomName : null,
+        gameId: isClassroomGameId(value.gameId) ? value.gameId : null,
         groupNumber: typeof value.groupNumber === 'number' && Number.isFinite(value.groupNumber) ? value.groupNumber : null,
         members,
         assignedQuestions,
