@@ -172,7 +172,6 @@ export function CoffeeClassroomClient({ userId, role, displayName, classrooms }:
 
     return (
         <StudentCoffeeView
-            connected={connected}
             displayName={displayName}
             error={error}
             setError={setError}
@@ -391,7 +390,6 @@ function TeacherCoffeeView({
 }
 
 function StudentCoffeeView({
-    connected,
     displayName,
     error,
     setError,
@@ -399,7 +397,6 @@ function StudentCoffeeView({
     state,
     userId,
 }: {
-    connected: boolean
     displayName: string
     error: string | null
     setError: (error: string | null) => void
@@ -434,15 +431,13 @@ function StudentCoffeeView({
         return (
             <main className="coffee-stage coffee-student-stage coffee-waiting-stage">
                 <section className="coffee-waiting-card">
-                    <div className="coffee-mark"><Coffee size={38} /></div>
+                    <div className="coffee-waiting-spinner" aria-hidden="true" />
                     <h1>Kavos susitikimų iššūkis</h1>
-                    <strong>{displayName}</strong>
                     <p>
                         {lateJoiner
                             ? "Šis bandymas jau prasidėjo. Likite čia ir laukite kito bandymo."
                             : "Laukiama, kol mokytojas pradės žaidimą."}
                     </p>
-                    <ConnectionBadge connected={connected} />
                     {error && <div className="coffee-error"><CircleAlert size={18} />{error}</div>}
                 </section>
             </main>

@@ -766,15 +766,22 @@
     text-align: center;
 }
 
-.coffee-mark {
-    display: grid;
-    width: 76px;
-    height: 76px;
-    place-items: center;
+.coffee-waiting-spinner {
+    width: 62px;
+    height: 62px;
     margin-bottom: 18px;
+    border: 5px solid #eadbc7;
+    border-top-color: var(--coffee-sage);
+    border-right-color: var(--coffee-brown);
     border-radius: 50%;
-    color: var(--coffee-brown);
-    background: #f2e3cf;
+    box-shadow: 0 10px 30px rgba(89, 58, 36, 0.12);
+    animation: coffeeWaitingSpin 0.9s linear infinite;
+}
+
+@keyframes coffeeWaitingSpin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .coffee-waiting-card h1 {
@@ -788,10 +795,6 @@
     max-width: 330px;
     color: #756457;
     line-height: 1.55;
-}
-
-.coffee-waiting-card .coffee-connection {
-    margin-top: 8px;
 }
 
 @media (max-width: 900px) {
@@ -853,7 +856,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .coffee-progress-track span {
+    .coffee-progress-track span,
+    .coffee-waiting-spinner {
         transition: none;
+        animation: none;
     }
 }
