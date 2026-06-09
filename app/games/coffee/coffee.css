@@ -571,6 +571,11 @@
     background: #fff6e7;
 }
 
+.coffee-calendar-row.bye {
+    border-color: #cad8bd;
+    background: var(--coffee-sage-soft);
+}
+
 .coffee-slot-time {
     font-family: var(--font-serif), Georgia, serif;
     font-size: 1.16rem;
@@ -629,6 +634,16 @@
 .coffee-pending-copy {
     display: grid;
     min-width: 0;
+}
+
+.coffee-bye-copy {
+    display: grid;
+    min-width: 0;
+    color: var(--coffee-sage-dark);
+}
+
+.coffee-bye-copy small {
+    color: #68795b;
 }
 
 .coffee-pending-copy strong {

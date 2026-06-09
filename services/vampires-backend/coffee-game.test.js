@@ -16,6 +16,55 @@ function confirmMeeting(session, firstId, secondId, slotIndex, now = 1_000) {
   return session.select(secondId, slotIndex, firstId, now + 1);
 }
 
+function buildOddRoundRobinRounds(studentIds) {
+  const byeMarker = '__coffee_bye__';
+  let rotation = [...studentIds, byeMarker];
+  const rounds = [];
+
+  for (let roundIndex = 0; roundIndex < studentIds.length; roundIndex += 1) {
+    const pairs = [];
+    let byeId = null;
+
+    for (let index = 0; index < rotation.length / 2; index += 1) {
+      const firstId = rotation[index];
+      const secondId = rotation[rotation.length - 1 - index];
+
+      if (firstId === byeMarker || secondId === byeMarker) {
+        byeId = firstId === byeMarker ? secondId : firstId;
+      } else {
+        pairs.push([firstId, secondId]);
+      }
+    }
+
+    rounds.push({ byeId, pairs });
+    rotation = [
+      rotation[0],
+      rotation[rotation.length - 1],
+      ...rotation.slice(1, -1),
+    ];
+  }
+
+  return rounds;
+}
+
+function completeOddSession(session, now = 1_000) {
+  const roundsByBye = new Map(
+    buildOddRoundRobinRounds(session.participantOrder)
+      .map(round => [round.byeId, round])
+  );
+  let timestamp = now;
+
+  session.byeBySlot.forEach((byeId, slotIndex) => {
+    const round = roundsByBye.get(byeId);
+    assert.ok(round, `expected a round for bye student ${byeId}`);
+
+    round.pairs.forEach(([firstId, secondId]) => {
+      confirmMeeting(session, firstId, secondId, slotIndex, timestamp);
+      timestamp += 10;
+    });
+  });
+}
+
 test('generates 30-minute slot labels from 09:00', () => {
   assert.deepEqual(
     generateSlotLabels(6),
@@ -23,12 +72,12 @@ test('generates 30-minute slot labels from 09:00', () => {
   );
 });
 
-test('validates participant parity and slot limits', () => {
+test('validates participant and slot limits while preserving even games', () => {
   const session = new CoffeeGameSession('classroom-1', 'teacher-1');
 
   assert.throws(
-    () => session.start(students(3), 2),
-    error => error.code === 'ODD_STUDENT_COUNT'
+    () => session.start(students(1), 1),
+    error => error.code === 'NOT_ENOUGH_STUDENTS'
   );
   assert.throws(
     () => session.start(students(4), 4),
@@ -38,6 +87,61 @@ test('validates participant parity and slot limits', () => {
   session.start(students(4), 3);
   assert.equal(session.totalMeetings, 6);
   assert.equal(session.remainingMeetings, 6);
+  assert.deepEqual(session.byeBySlot, [null, null, null]);
+});
+
+test('assigns unique rotating byes and blocks meetings during a bye slot', () => {
+  const session = new CoffeeGameSession('classroom-1', 'teacher-1');
+  session.start(students(17), 12);
+
+  assert.equal(session.totalMeetings, 96);
+  assert.equal(session.remainingMeetings, 96);
+  assert.equal(new Set(session.byeBySlot).size, 12);
+  assert.equal(session.byeBySlot.includes(null), false);
+  assert.equal(session.getFilledSlotCount('student-1'), 1);
+  assert.equal(session.getFilledSlotCount('student-13'), 0);
+
+  const byeId = session.byeBySlot[0];
+  const availableId = session.participantOrder.find(studentId => studentId !== byeId);
+
+  assert.throws(
+    () => session.select(byeId, 0, availableId),
+    error => error.code === 'BYE_SLOT'
+  );
+  assert.throws(
+    () => session.select(availableId, 0, byeId),
+    error => error.code === 'TARGET_BYE_SLOT'
+  );
+  assert.equal(session.isLegalPairAtSlot(byeId, availableId, 0), false);
+});
+
+test('completes odd classes with 17 and 31 students without a dead end', () => {
+  for (const studentCount of [17, 31]) {
+    const session = new CoffeeGameSession(`classroom-${studentCount}`, 'teacher-1');
+    session.start(students(studentCount), 12);
+
+    assert.equal(session.hasDeadEnd(), false);
+    completeOddSession(session);
+
+    assert.equal(session.status, 'won');
+    assert.equal(session.confirmedMeetings, Math.floor(studentCount / 2) * 12);
+    assert.equal(session.remainingMeetings, 0);
+    session.participantOrder.forEach(studentId => {
+      assert.equal(session.getFilledSlotCount(studentId), 12);
+    });
+  }
+});
+
+test('starts large classes without a 15 or 16 student cap', () => {
+  for (const studentCount of [30, 31, 32]) {
+    const session = new CoffeeGameSession(`classroom-${studentCount}`, 'teacher-1');
+    session.start(students(studentCount), 12);
+
+    assert.equal(session.status, 'running');
+    assert.equal(session.participants.size, studentCount);
+    assert.equal(session.totalMeetings, Math.floor(studentCount / 2) * 12);
+    assert.equal(session.hasDeadEnd(), false);
+  }
 });
 
 test('confirms only reciprocal selections for the same slot', () => {

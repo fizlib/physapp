@@ -132,6 +132,7 @@ function registerCoffeeNamespace({ io, supabase, authenticateSocket }) {
             return {
               slotIndex,
               label: session.slotLabels[slotIndex],
+              bye: session.isBye(studentId, slotIndex),
               partner: partner ? { id: partner.id, name: partner.name } : null,
               pending: ownPending && pendingTarget
                 ? {

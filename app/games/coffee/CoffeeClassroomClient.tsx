@@ -48,6 +48,7 @@ interface StudentChoice {
 interface CalendarSlot {
     slotIndex: number
     label: string
+    bye: boolean
     partner: StudentChoice | null
     pending: {
         targetId: string
@@ -228,7 +229,6 @@ function TeacherCoffeeView({
     const maximumSlots = Math.min(12, Math.max(1, connectedStudents.length - 1))
     const effectiveSlotCount = Math.min(slotCount, maximumSlots)
     const canStart = connectedStudents.length >= 2
-        && connectedStudents.length % 2 === 0
         && state?.status === "waiting"
 
     const startAttempt = () => {
@@ -359,9 +359,9 @@ function TeacherCoffeeView({
                                         <h2>Pradėti bandymą</h2>
                                     </div>
                                     <p>Bus įtraukti visi šiuo metu prisijungę mokiniai. Prasidėjus bandymui sąrašas bus užrakintas.</p>
-                                    {connectedStudents.length % 2 !== 0 && connectedStudents.length > 0 && (
+                                    {connectedStudents.length % 2 !== 0 && connectedStudents.length >= 3 && (
                                         <div className="coffee-warning">
-                                            Reikia lyginio mokinių skaičiaus. Dabar prisijungė {connectedStudents.length}.
+                                            Kai mokinių skaičius nelyginis, kiekvienu laiku vis kitas mokinys turės laisvą laiką.
                                         </div>
                                     )}
                                     <button className="coffee-primary-button" disabled={!canStart} onClick={startAttempt}>
@@ -534,12 +534,18 @@ function StudentCoffeeView({
                                     key={slot.slotIndex}
                                     className={[
                                         "coffee-calendar-row",
+                                        slot.bye ? "bye" : "",
                                         slot.partner ? "confirmed" : "",
                                         slot.pending ? "pending" : "",
                                     ].filter(Boolean).join(" ")}
                                 >
                                     <strong className="coffee-slot-time">{slot.label}</strong>
-                                    {slot.partner ? (
+                                    {slot.bye ? (
+                                        <div className="coffee-bye-copy">
+                                            <strong>Laisvas laikas</strong>
+                                            <small>Šiuo metu susitikimo rinktis nereikia.</small>
+                                        </div>
+                                    ) : slot.partner ? (
                                         <>
                                             <strong className="coffee-partner-name">{slot.partner.name}</strong>
                                             <span className="coffee-check"><Check size={20} strokeWidth={3} /></span>

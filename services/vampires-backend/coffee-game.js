@@ -106,6 +106,7 @@ class CoffeeGameSession {
     this.stopMode = 'mathematical';
     this.participantOrder = [];
     this.participants = new Map();
+    this.byeBySlot = [];
     this.pending = new Map();
     this.confirmedMeetings = 0;
     this.generation = 0;
@@ -117,13 +118,6 @@ class CoffeeGameSession {
       throw new CoffeeGameError(
         'NOT_ENOUGH_STUDENTS',
         'Žaidimui reikia bent 2 prisijungusių mokinių.'
-      );
-    }
-
-    if (participants.length % 2 !== 0) {
-      throw new CoffeeGameError(
-        'ODD_STUDENT_COUNT',
-        'Žaidimą galima pradėti tik su lyginiu mokinių skaičiumi.'
       );
     }
 
@@ -145,6 +139,12 @@ class CoffeeGameSession {
     this.slotLabels = generateSlotLabels(slotCount);
     this.stopMode = stopMode === 'exhausted' ? 'exhausted' : 'mathematical';
     this.participantOrder = participants.map(participant => participant.id);
+    this.byeBySlot = participants.length % 2 === 0
+      ? Array(slotCount).fill(null)
+      : Array.from(
+          { length: slotCount },
+          (_, slotIndex) => this.participantOrder[slotIndex]
+        );
     this.participants = new Map(participants.map(participant => [
       participant.id,
       {
@@ -164,6 +164,7 @@ class CoffeeGameSession {
     this.status = 'waiting';
     this.stopMode = 'mathematical';
     this.participantOrder = [];
+    this.byeBySlot = [];
     this.participants.clear();
     this.pending.clear();
     this.confirmedMeetings = 0;
@@ -172,7 +173,7 @@ class CoffeeGameSession {
   }
 
   get totalMeetings() {
-    return (this.participants.size * this.slotCount) / 2;
+    return Math.floor(this.participants.size / 2) * this.slotCount;
   }
 
   get remainingMeetings() {
@@ -185,7 +186,18 @@ class CoffeeGameSession {
 
   getFilledSlotCount(studentId) {
     const participant = this.getParticipant(studentId);
-    return participant ? participant.calendar.filter(Boolean).length : 0;
+    if (!participant) return 0;
+
+    return participant.calendar.reduce(
+      (count, partnerId, slotIndex) => (
+        count + (Boolean(partnerId) || this.isBye(studentId, slotIndex) ? 1 : 0)
+      ),
+      0
+    );
+  }
+
+  isBye(studentId, slotIndex) {
+    return this.byeBySlot[slotIndex] === studentId;
   }
 
   haveMet(firstId, secondId) {
@@ -204,6 +216,8 @@ class CoffeeGameSession {
       && Number.isInteger(slotIndex)
       && slotIndex >= 0
       && slotIndex < this.slotCount
+      && !this.isBye(firstId, slotIndex)
+      && !this.isBye(secondId, slotIndex)
       && !first.calendar[slotIndex]
       && !second.calendar[slotIndex]
       && !this.haveMet(firstId, secondId)
@@ -235,6 +249,20 @@ class CoffeeGameSession {
 
     if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= this.slotCount) {
       throw new CoffeeGameError('INVALID_SLOT', 'Pasirinktas laikas neegzistuoja.');
+    }
+
+    if (this.isBye(studentId, slotIndex)) {
+      throw new CoffeeGameError(
+        'BYE_SLOT',
+        'Šis laikas jums yra laisvas, todėl susitikimo rinktis nereikia.'
+      );
+    }
+
+    if (this.isBye(targetId, slotIndex)) {
+      throw new CoffeeGameError(
+        'TARGET_BYE_SLOT',
+        'Pasirinktas mokinys šiuo laiku turi laisvą laiką.'
+      );
     }
 
     if (student.calendar[slotIndex]) {
@@ -392,7 +420,8 @@ class CoffeeGameSession {
 
     for (let slotIndex = 0; slotIndex < this.slotCount; slotIndex += 1) {
       const unmatchedIds = this.participantOrder.filter(studentId => (
-        !this.getParticipant(studentId).calendar[slotIndex]
+        !this.isBye(studentId, slotIndex)
+        && !this.getParticipant(studentId).calendar[slotIndex]
       ));
 
       const completable = hasPerfectMatching(
