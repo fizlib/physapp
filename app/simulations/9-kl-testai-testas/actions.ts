@@ -569,18 +569,6 @@ export async function startScoredSimulationForClass(input: { assignmentId: strin
     const startedAt = new Date()
     const startedAtIso = startedAt.toISOString()
 
-    await supabaseAdmin
-        .from('simulation_test_attempts')
-        .delete()
-        .eq('assignment_id', parsed.data.assignmentId)
-        .in('student_id', enrolledStudentIds)
-
-    await supabaseAdmin
-        .from('assignment_progress')
-        .delete()
-        .eq('assignment_id', parsed.data.assignmentId)
-        .in('student_id', enrolledStudentIds)
-
     const rows = selectedStudentIds.map((studentId) => {
         const order = buildScoredQuestionOrder()
         return {
@@ -596,14 +584,41 @@ export async function startScoredSimulationForClass(input: { assignmentId: strin
         }
     })
 
-    const { error } = await supabaseAdmin
-        .from('simulation_test_attempts')
-        .insert(rows)
+    const { data: restartResults, error } = await supabaseAdmin
+        .rpc('restart_scored_simulation_attempts', {
+            p_assignment_id: parsed.data.assignmentId,
+            p_student_ids: selectedStudentIds,
+            p_attempt_rows: rows,
+        })
 
     if (error) {
-        console.error('Scored simulation class start error:', error)
+        console.error('Scored simulation class start error:', {
+            assignmentId: parsed.data.assignmentId,
+            selectedStudentCount: selectedStudentIds.length,
+            error,
+        })
         return { status: 'error', message: 'Nepavyko pradėti testo.' }
     }
+
+    const restartResult = Array.isArray(restartResults) ? restartResults[0] : null
+    const insertedAttempts = Number(restartResult?.inserted_attempts ?? 0)
+
+    if (insertedAttempts !== selectedStudentIds.length) {
+        console.error('Scored simulation class start count mismatch:', {
+            assignmentId: parsed.data.assignmentId,
+            selectedStudentCount: selectedStudentIds.length,
+            restartResult,
+        })
+        return { status: 'error', message: 'Nepavyko pradėti testo.' }
+    }
+
+    console.info('Scored simulation class started:', {
+        assignmentId: parsed.data.assignmentId,
+        selectedStudentCount: selectedStudentIds.length,
+        deletedAttempts: Number(restartResult?.deleted_attempts ?? 0),
+        deletedProgress: Number(restartResult?.deleted_progress ?? 0),
+        insertedAttempts,
+    })
 
     revalidatePath(`/teacher/class/${assignment.classroom_id}/collection/${collection.id}`)
     revalidatePath(`/student/class/${assignment.classroom_id}/collection/${collection.id}`)
