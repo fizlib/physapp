@@ -6,6 +6,9 @@ import { SettingsForm } from "./SettingsForm"
 import { GeminiKeysManager } from "./GeminiKeysManager"
 
 export default async function AdminSettingsPage() {
+    const maintenanceModeEnabledStr = await getSiteSetting('maintenance_mode_enabled')
+    const maintenanceModeEnabled = (maintenanceModeEnabledStr ?? 'false').toLowerCase() === 'true'
+
     const registrationEnabledStr = await getSiteSetting('registration_enabled')
     const registrationEnabled = registrationEnabledStr === 'true' // Default to true if not set or string 'true'
 
@@ -34,6 +37,7 @@ export default async function AdminSettingsPage() {
 
             <div className="grid gap-6">
                 <SettingsForm
+                    initialMaintenanceModeEnabled={maintenanceModeEnabled}
                     initialRegistrationEnabled={registrationEnabled}
                     initialTestModePollingEnabled={testModePollingEnabled}
                     initialVirtualKeyboardToggleEnabled={virtualKeyboardToggleEnabled}

@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface SettingsFormProps {
+    initialMaintenanceModeEnabled: boolean
     initialRegistrationEnabled: boolean
     initialTestModePollingEnabled: boolean
     initialVirtualKeyboardToggleEnabled: boolean
@@ -15,16 +16,37 @@ interface SettingsFormProps {
 }
 
 export function SettingsForm({
+    initialMaintenanceModeEnabled,
     initialRegistrationEnabled,
     initialTestModePollingEnabled,
     initialVirtualKeyboardToggleEnabled,
     initialTabBlockPollingEnabled
 }: SettingsFormProps) {
+    const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(initialMaintenanceModeEnabled)
     const [registrationEnabled, setRegistrationEnabled] = useState(initialRegistrationEnabled)
     const [testModePollingEnabled, setTestModePollingEnabled] = useState(initialTestModePollingEnabled)
     const [virtualKeyboardToggleEnabled, setVirtualKeyboardToggleEnabled] = useState(initialVirtualKeyboardToggleEnabled)
     const [tabBlockPollingEnabled, setTabBlockPollingEnabled] = useState(initialTabBlockPollingEnabled)
     const [isLoading, setIsLoading] = useState(false)
+
+    const handleMaintenanceModeToggle = async (checked: boolean) => {
+        setIsLoading(true)
+        setMaintenanceModeEnabled(checked)
+
+        const result = await updateSiteSetting('maintenance_mode_enabled', String(checked))
+
+        if (result?.error) {
+            setMaintenanceModeEnabled(!checked)
+            toast.error("Error", { description: "Failed to update maintenance mode." })
+        } else {
+            toast.success("Success", {
+                description: checked
+                    ? "The site is now available only to admins."
+                    : "The site is now available to everyone."
+            })
+        }
+        setIsLoading(false)
+    }
 
     const handleRegistrationToggle = async (checked: boolean) => {
         setIsLoading(true)
@@ -88,6 +110,26 @@ export function SettingsForm({
 
     return (
         <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Maintenance Mode</CardTitle>
+                    <CardDescription>
+                        When enabled, only admins can use the site. Everyone else sees the site update screen.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch
+                            id="maintenance-mode"
+                            checked={maintenanceModeEnabled}
+                            onCheckedChange={handleMaintenanceModeToggle}
+                            disabled={isLoading}
+                        />
+                        <Label htmlFor="maintenance-mode">Enable Maintenance Mode</Label>
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Registration</CardTitle>

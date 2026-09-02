@@ -40,6 +40,15 @@ export async function proxy(request: NextRequest) {
     const { data, error: userError } = await supabase.auth.getUser()
     const user = userError ? null : data.user
 
+    // Fail open if this setting cannot be read so a transient database error does
+    // not make the whole application unavailable.
+    const { data: maintenanceSetting } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'maintenance_mode_enabled')
+        .maybeSingle()
+    const maintenanceModeEnabled = maintenanceSetting?.value?.toLowerCase() === 'true'
+
     // Protected routes pattern
     const nextUrl = request.nextUrl
     const isTeacherRoute = nextUrl.pathname.startsWith('/teacher')
@@ -48,6 +57,47 @@ export async function proxy(request: NextRequest) {
     const isAuthRoute = nextUrl.pathname.startsWith('/login')
     const isChangePasswordRoute = nextUrl.pathname === '/change-password'
     const isRootRoute = nextUrl.pathname === '/'
+    const isMaintenanceRoute = nextUrl.pathname === '/maintenance'
+
+    let role = null
+    let mustChangePassword = false
+    let isAdmin = false
+
+    // Maintenance mode needs the admin flag on every route. Outside maintenance
+    // mode, keep the existing optimization and only load profiles where routing
+    // decisions need them.
+    const needsProfile = !!user && (
+        maintenanceModeEnabled ||
+        isTeacherRoute ||
+        isStudentRoute ||
+        isGamesRoute ||
+        isAuthRoute ||
+        isRootRoute ||
+        isChangePasswordRoute
+    )
+
+    if (user && needsProfile) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role, must_change_password, is_admin')
+            .eq('id', user.id)
+            .single()
+
+        if (profile) {
+            role = profile.role
+            mustChangePassword = profile.must_change_password
+            isAdmin = !!profile.is_admin
+        }
+    }
+
+    // Authenticated admins keep full access. Everyone else is sent to the single
+    // maintenance page before any normal authentication redirects are applied.
+    if (maintenanceModeEnabled && !isAdmin && !isMaintenanceRoute) {
+        const url = nextUrl.clone()
+        url.pathname = '/maintenance'
+        url.search = ''
+        return NextResponse.redirect(url)
+    }
 
     // 1. If user is NOT logged in and tries to access a protected route -> Redirect to Login
     if (!user && (isTeacherRoute || isStudentRoute || isGamesRoute)) {
@@ -58,27 +108,6 @@ export async function proxy(request: NextRequest) {
 
     // 2. If user IS logged in
     if (user) {
-        // Optimization: Only fetch profile if we absolutely need to check roles or password status
-        // We need role for: Root Redirect, Auth Redirect, Cross-Role Access Check
-        // We need password status for: Global Password Check
-
-        let role = null
-        let mustChangePassword = false
-
-        // Fetch profile only if we are on a relevant route to save DB calls on static assets/other routes
-        if (isTeacherRoute || isStudentRoute || isGamesRoute || isAuthRoute || isRootRoute || isChangePasswordRoute) {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role, must_change_password')
-                .eq('id', user.id)
-                .single()
-
-            if (profile) {
-                role = profile.role
-                mustChangePassword = profile.must_change_password
-            }
-        }
-
         // 2x. Forced Password Change Check
         if (mustChangePassword && !isChangePasswordRoute) {
             const url = nextUrl.clone()
